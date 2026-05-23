@@ -49,8 +49,7 @@ class Settings(BaseSettings):
     # --- Demo mode (public showcase instance) ---
     demo_mode: bool = False
     demo_banner_text: str = (
-        "DEMO INSTANCE — synthetic data, coordinates München-shifted. "
-        "Real project: github.com/uholzer4711/polestar-dash"
+        "DEMO INSTANCE — synthetic data, coordinates München-shifted."
     )
 
     @property

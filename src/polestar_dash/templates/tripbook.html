@@ -145,7 +145,7 @@
     </table>
 
     {% set mappable = imports|selectattr('start_lat')|selectattr('end_lat')|list %}
-    {% if mappable %}
+    {% if mappable or charge_locations %}
       <div class="card-label mt-8 mb-4">Map</div>
       <div id="trip-map" style="height:480px;border:1px solid var(--ujh-line);background:var(--ujh-line)"></div>
       <script>
@@ -193,6 +193,55 @@
             L.circleMarker(t.start, {radius: 4, color: ink2, fillColor: ink2, fillOpacity: 1, weight: 0}).addTo(map);
             L.circleMarker(t.end,   {radius: 5, color: accent, fillColor: accent, fillOpacity: 1, weight: 0}).addTo(map).bindPopup(popup);
             all.push(t.start, t.end);
+          }
+
+          // Charging locations (clustered): orange filled square per place,
+          // size scales with cumulative kWh. Hover shows aggregated stats;
+          // click shows the per-session list.
+          const charges = [
+            {% for c in charge_locations %}
+              {
+                lat: {{ c.lat }}, lng: {{ c.lng }},
+                addr: {{ (c.address or "")|tojson }},
+                count: {{ c.count }}, kwh: {{ c.kwh }}, cost: {{ c.cost_eur }},
+                first_at: {{ c.first_at|tojson }}, last_at: {{ c.last_at|tojson }},
+                sessions: [
+                  {% for sx in c.sessions %}
+                    { id: {{ sx.id }}, at: {{ sx.at|tojson }}, kwh: {{ sx.kwh or 0 }},
+                      soc_start: {{ sx.soc_start if sx.soc_start is not none else 'null' }},
+                      soc_end:   {{ sx.soc_end   if sx.soc_end   is not none else 'null' }} }{{ "," if not loop.last }}
+                  {% endfor %}
+                ],
+              }{{ "," if not loop.last }}
+            {% endfor %}
+          ];
+          function fmtTs(s) {
+            const iso = /Z|[+\-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z';
+            return new Date(iso).toLocaleString();
+          }
+          const maxKwh = charges.reduce((m, c) => Math.max(m, c.kwh), 1);
+          for (const c of charges) {
+            // sqrt-scale radius 6..16 px so a 5x kWh place isn't 5x the area.
+            const r = 6 + 10 * Math.sqrt(c.kwh / maxKwh);
+            const m = L.circleMarker([c.lat, c.lng], {
+              radius: r,
+              color: accent, weight: 2,
+              fillColor: accent, fillOpacity: 0.55,
+            }).addTo(map);
+            const headline = c.addr ? c.addr : `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
+            const tip = `<b>${headline}</b><br>` +
+                        `${c.count} charge${c.count===1?'':'s'} · <b>${c.kwh.toFixed(1)} kWh</b>` +
+                        (c.cost > 0 ? ` · €${c.cost.toFixed(2)}` : '') +
+                        `<br><span class="muted">${fmtTs(c.first_at)} → ${fmtTs(c.last_at)}</span>`;
+            m.bindTooltip(tip, {direction: 'top', offset: [0, -r], sticky: true});
+            const rows = c.sessions.slice(0, 10).map(sx => {
+              const soc = (sx.soc_start != null && sx.soc_end != null)
+                ? ` · ${sx.soc_start}→${sx.soc_end}%` : '';
+              return `<a href="/sessions/${sx.id}">${fmtTs(sx.at)}</a> · ${sx.kwh.toFixed(1)} kWh${soc}`;
+            }).join('<br>');
+            const more = c.sessions.length > 10 ? `<br><span class="muted">+ ${c.sessions.length - 10} more</span>` : '';
+            m.bindPopup(`${tip}<hr style="border:0;border-top:1px solid var(--ujh-line);margin:6px 0">${rows}${more}`);
+            all.push([c.lat, c.lng]);
           }
           if (all.length) map.fitBounds(L.latLngBounds(all).pad(0.2));
         });

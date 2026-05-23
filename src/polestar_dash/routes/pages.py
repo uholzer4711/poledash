@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
 
 from ..config import get_settings
-from ..db.models import FetchError
+from ..db.models import ChargeSession, FetchError, JourneyImport
 from ..db.session import get_engine
 from ..journey_import import fleet_avg_kwh_per_km, list_imports
 from ..routes_stats import list_routes
@@ -16,6 +16,103 @@ from ..tripbook import detect_trips
 
 router = APIRouter()
 templates = make_templates()
+
+
+def _charge_locations(days: int, vin: str | None, price_ct: float) -> list[dict]:
+    """Cluster ChargeSessions by inferred location (~10 m) for the tripbook map.
+
+    ChargeSessions have no coordinates of their own, so we attach a location by
+    matching against JourneyImport rows: the closest trip *end* before the
+    session start, or failing that the closest trip *start* after the session
+    end. The car was parked at one of those points.
+    """
+    since = datetime.utcnow() - timedelta(days=days)
+    window = timedelta(hours=4)
+    with Session(get_engine()) as s:
+        stmt = select(ChargeSession).where(ChargeSession.started_at >= since)
+        if vin:
+            stmt = stmt.where(ChargeSession.vin == vin)
+        sessions = s.exec(stmt).all()
+        # Pull a slightly wider import window so we can match sessions near the
+        # edges of the requested range.
+        imp_stmt = select(JourneyImport).where(
+            JourneyImport.started_at >= since - timedelta(days=2)
+        )
+        if vin:
+            imp_stmt = imp_stmt.where(JourneyImport.vin == vin)
+        imports = s.exec(imp_stmt).all()
+
+    def _locate(cs: ChargeSession) -> tuple[float, float, str | None] | None:
+        best = None
+        best_diff = window
+        for j in imports:
+            if j.end_lat is None or j.end_lng is None:
+                continue
+            diff = abs(j.ended_at - cs.started_at)
+            if diff <= best_diff:
+                best_diff = diff
+                best = (j.end_lat, j.end_lng, j.end_address)
+        if best is not None:
+            return best
+        ref = cs.ended_at or cs.started_at
+        best_diff = window
+        for j in imports:
+            if j.start_lat is None or j.start_lng is None:
+                continue
+            diff = abs(j.started_at - ref)
+            if diff <= best_diff:
+                best_diff = diff
+                best = (j.start_lat, j.start_lng, j.start_address)
+        return best
+
+    clusters: dict[tuple[float, float], dict] = {}
+    for cs in sessions:
+        loc = _locate(cs)
+        if loc is None:
+            continue
+        lat, lng, addr = loc
+        key = (round(lat, 4), round(lng, 4))  # ~11 m bucket
+        eff_price = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else price_ct
+        kwh = cs.energy_kwh or 0
+        c = clusters.get(key)
+        if c is None:
+            c = {
+                "lat": lat,
+                "lng": lng,
+                "address": (addr or "").split(",")[0] if addr else None,
+                "count": 0,
+                "kwh": 0.0,
+                "cost_eur": 0.0,
+                "first_at": cs.started_at,
+                "last_at": cs.started_at,
+                "sessions": [],
+            }
+            clusters[key] = c
+        c["count"] += 1
+        c["kwh"] += kwh
+        c["cost_eur"] += kwh * eff_price / 100.0
+        if cs.started_at < c["first_at"]:
+            c["first_at"] = cs.started_at
+        if cs.started_at > c["last_at"]:
+            c["last_at"] = cs.started_at
+        c["sessions"].append(
+            {
+                "id": cs.id,
+                "at": cs.started_at.isoformat(),
+                "kwh": round(kwh, 1),
+                "soc_start": cs.soc_start,
+                "soc_end": cs.soc_end,
+            }
+        )
+
+    for c in clusters.values():
+        c["kwh"] = round(c["kwh"], 1)
+        c["cost_eur"] = round(c["cost_eur"], 2)
+        c["first_at"] = c["first_at"].isoformat()
+        c["last_at"] = c["last_at"].isoformat()
+        # Keep most-recent first inside the popup.
+        c["sessions"].sort(key=lambda r: r["at"], reverse=True)
+    return list(clusters.values())
 
 
 @router.get("/tripbook", response_class=HTMLResponse)
@@ -93,6 +190,8 @@ def tripbook_page(
         )
         v["cost_eur"] = round(v["kwh"] * price_ct / 100.0, 2)
 
+    charge_locations = _charge_locations(days=days, vin=vin, price_ct=price_ct)
+
     imp_km = round(sum((j.distance_km or 0) for j in imports), 1)
     imp_kwh = round(sum((j.consumption_kwh or 0) for j in imports), 2)
     imp_cost = round(imp_kwh * price_ct / 100.0, 2)
@@ -118,6 +217,7 @@ def tripbook_page(
             "imp_kwh": imp_kwh,
             "imp_cost": imp_cost,
             "imp_avg_kwh_per_100km": imp_avg,
+            "charge_locations": charge_locations,
         },
     )
 
@@ -151,8 +251,9 @@ def settings_page(request: Request):
         ("ntfy.sh push", bool(s.ntfy_topic), ntfy_note),
         ("Telegram", bool(s.telegram_bot_token and s.telegram_chat_id), tg_note),
         ("MQTT / Home Assistant", bool(s.mqtt_host), mqtt_note),
-        ("Prometheus /metrics", True, "scrape /metrics"),
     ]
+    if not s.demo_mode:
+        integrations.append(("Prometheus /metrics", True, "scrape /metrics"))
     address_labels = get_address_labels()
     return templates.TemplateResponse(
         request,

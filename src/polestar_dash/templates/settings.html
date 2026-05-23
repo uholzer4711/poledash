@@ -313,6 +313,7 @@
     {% endfor %}
   </div>
 
+  {% if not demo_mode %}
   <div class="card mb-6">
     <div class="card-label">Grafana dashboards</div>
     <p>Drop-in dashboards for the Prometheus <code>/metrics</code> scrape.
@@ -385,6 +386,7 @@
       Import one or pick favorites; UIDs are distinct (<code>poledash-main</code>, <code>poledash-cockpit</code>, <code>poledash-charging-lab</code>, <code>poledash-fleet-pulse</code>, <code>poledash-eco-impact</code>, <code>poledash-mission-control</code>).
     </div>
   </div>
+  {% endif %}
 
   <div class="card-label mb-4">Active configuration</div>
   <div class="card grid grid-2">
