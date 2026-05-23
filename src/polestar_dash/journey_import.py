@@ -151,6 +151,12 @@ def upsert(records: list[dict], vin: str | None = None) -> tuple[int, int]:
             )
             if vin is not None:
                 stmt = stmt.where(JourneyImport.vin == vin)
+            else:
+                # Without an explicit IS NULL, SQL's three-valued logic lets
+                # rows with vin=NULL slip past the equality filter, so a
+                # re-import of the same CSV with no VIN selected would
+                # accumulate duplicates.
+                stmt = stmt.where(JourneyImport.vin.is_(None))
             if s.exec(stmt).first() is not None:
                 skipped += 1
                 continue
@@ -180,6 +186,9 @@ def tag_co2_for_imports() -> int:
     return updated
 
 
+_CALIB_WINDOW = timedelta(days=730)  # 2 years — keeps the calibration current
+
+
 def fleet_avg_kwh_per_km() -> float:
     """Energy per km derived from imported trips, with a sensible default.
 
@@ -187,9 +196,10 @@ def fleet_avg_kwh_per_km() -> float:
     even 1 % — without this, the kWh column on those trips reads as `—`."""
     from .db.models import JourneyImport as J
 
+    cutoff = datetime.utcnow() - _CALIB_WINDOW
     try:
         with Session(get_engine()) as s:
-            rows = list(s.exec(select(J)).all())
+            rows = list(s.exec(select(J).where(J.started_at >= cutoff)).all())
         total_e = sum(
             (j.consumption_kwh or 0)
             for j in rows
@@ -217,8 +227,9 @@ def calibrate_battery_kwh(min_soc_drop: int = 4) -> float | None:
     """
     from .db.models import JourneyImport as J
 
+    cutoff = datetime.utcnow() - _CALIB_WINDOW
     with Session(get_engine()) as s:
-        rows = list(s.exec(select(J)).all())
+        rows = list(s.exec(select(J).where(J.started_at >= cutoff)).all())
 
     total_e = 0.0
     total_drop = 0

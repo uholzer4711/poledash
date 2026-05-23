@@ -66,6 +66,18 @@ def _ensure_columns(engine) -> None:
                 continue
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
 
+    # Indexes — create_all skips index creation on tables that already exist.
+    # CREATE INDEX IF NOT EXISTS is the cleanest forward-only equivalent.
+    index_plan: list[tuple[str, str, str]] = [
+        # name, table, columns
+        ("ix_chargesession_vin_started", "chargesession", "vin, started_at"),
+        ("ix_chargesession_is_complete", "chargesession", "is_complete"),
+    ]
+    with engine.begin() as conn:
+        for name, table, cols in index_plan:
+            if table in tables:
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
+
 
 def init_engine(db_path: Path):
     global _engine

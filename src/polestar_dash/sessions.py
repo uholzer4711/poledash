@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from .db.models import ChargeSession, VehicleSnapshot
@@ -38,9 +39,14 @@ def _open_session(session: Session, vin: str) -> ChargeSession | None:
     return session.exec(stmt).first()
 
 
-def _previous_snapshot(
+def previous_snapshot(
     session: Session, vin: str, before: datetime
 ) -> VehicleSnapshot | None:
+    """Most recent VehicleSnapshot strictly before `before` for this VIN.
+
+    Public so scheduler.poll_once can do the lookup once and share the result
+    with both update_session and run_anomaly_checks (avoids three identical
+    indexed queries per poll)."""
     stmt = (
         select(VehicleSnapshot)
         .where(VehicleSnapshot.vin == vin, VehicleSnapshot.fetched_at < before)
@@ -50,6 +56,29 @@ def _previous_snapshot(
     return session.exec(stmt).first()
 
 
+def _power_aggregates(
+    session: Session, vin: str, start: datetime, end: datetime
+) -> tuple[int | None, int | None]:
+    """Compute (avg_w, peak_w) of charging_power_w across the session window.
+
+    SQL-side SUM/COUNT/MAX is both faster and *correct*, replacing the old
+    running-average hack that drifted with poll cadence."""
+    stmt = select(
+        func.avg(VehicleSnapshot.charging_power_w),
+        func.max(VehicleSnapshot.charging_power_w),
+    ).where(
+        VehicleSnapshot.vin == vin,
+        VehicleSnapshot.fetched_at >= start,
+        VehicleSnapshot.fetched_at <= end,
+        VehicleSnapshot.charging_power_w.is_not(None),
+    )
+    avg_w, peak_w = session.exec(stmt).one()
+    return (
+        int(avg_w) if avg_w is not None else None,
+        int(peak_w) if peak_w is not None else None,
+    )
+
+
 def _odo_stationary(a: float | None, b: float | None) -> bool:
     if a is None or b is None:
         # Missing odometer → assume stationary (don't block charge detection).
@@ -57,18 +86,24 @@ def _odo_stationary(a: float | None, b: float | None) -> bool:
     return abs(a - b) <= ODO_STATIONARY_TOL_KM
 
 
-def update_session(snap: Snapshot) -> ChargeSession | None:
+def update_session(
+    snap: Snapshot, *, prev: VehicleSnapshot | None = None
+) -> ChargeSession | None:
     """Update the open ChargeSession for this VIN based on a new snapshot.
 
     Returns the session that was just *closed* (so the caller can notify), or
     None if nothing was closed this tick.
+
+    Callers (scheduler.poll_once) may pass a pre-fetched `prev` snapshot to
+    avoid duplicating the indexed lookup; other entry points let us fetch it.
     """
     status = snap.charging_status
     closed: ChargeSession | None = None
 
     with Session(get_engine()) as s:
         cs = _open_session(s, snap.vin)
-        prev = _previous_snapshot(s, snap.vin, snap.fetched_at)
+        if prev is None:
+            prev = previous_snapshot(s, snap.vin, snap.fetched_at)
 
         soc_delta = None
         if (
@@ -135,30 +170,17 @@ def update_session(snap: Snapshot) -> ChargeSession | None:
                     "api" if api_charging else "inferred",
                 )
             else:
-                if snap.charging_power_w and (
-                    cs.peak_power_w is None or snap.charging_power_w > cs.peak_power_w
-                ):
-                    cs.peak_power_w = snap.charging_power_w
-                # True running average across all observed ticks during the
-                # session: estimate sample count from start..now / poll
-                # interval and use it to weight the new sample. The old
-                # (a+b)//2 form weighted the latest sample exponentially and
-                # silently skewed the avg toward the end of the session.
-                if snap.charging_power_w is not None:
-                    if cs.avg_power_w is None:
-                        cs.avg_power_w = snap.charging_power_w
-                    else:
-                        elapsed_min = max(
-                            1,
-                            (snap.fetched_at - cs.started_at).total_seconds() / 60,
-                        )
-                        # Best guess at sample count for this session so far
-                        # (fast-poll cadence while charging). Clamped to ≥ 1.
-                        approx_n = max(1, int(elapsed_min / 2))
-                        cs.avg_power_w = int(
-                            (cs.avg_power_w * approx_n + snap.charging_power_w)
-                            / (approx_n + 1)
-                        )
+                # Recompute avg/peak from the persisted snapshot stream
+                # (cheap indexed scan on a few rows) — drift-free, cadence-
+                # independent, replaces a running-average hack that silently
+                # skewed toward the end of the session.
+                avg_w, peak_w = _power_aggregates(
+                    s, snap.vin, cs.started_at, snap.fetched_at
+                )
+                if avg_w is not None:
+                    cs.avg_power_w = avg_w
+                if peak_w is not None:
+                    cs.peak_power_w = peak_w
                 cs.soc_end = snap.soc_percent
                 cs.range_end_km = snap.range_km
                 s.add(cs)
@@ -173,6 +195,15 @@ def update_session(snap: Snapshot) -> ChargeSession | None:
                 cs.soc_end = max(cs.soc_end or 0, snap.soc_percent)
             if snap.range_km is not None:
                 cs.range_end_km = max(cs.range_end_km or 0, snap.range_km)
+            # Final pass over the full session window in case the latest tick
+            # delivered the actual peak/avg samples.
+            avg_w, peak_w = _power_aggregates(
+                s, snap.vin, cs.started_at, snap.fetched_at
+            )
+            if avg_w is not None:
+                cs.avg_power_w = avg_w
+            if peak_w is not None:
+                cs.peak_power_w = peak_w
             if cs.soc_start is not None and cs.soc_end is not None:
                 delta = max(0, cs.soc_end - cs.soc_start)
                 cs.energy_kwh = round(delta / 100 * DEFAULT_BATTERY_KWH, 1)

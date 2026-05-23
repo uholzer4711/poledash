@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from bisect import bisect_left
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Query, Request
@@ -42,28 +43,43 @@ def _charge_locations(days: int, vin: str | None, price_ct: float) -> list[dict]
             imp_stmt = imp_stmt.where(JourneyImport.vin == vin)
         imports = s.exec(imp_stmt).all()
 
-    def _locate(cs: ChargeSession) -> tuple[float, float, str | None] | None:
+    # Pre-sort once and bisect on the timestamps — turns the per-session
+    # match from O(n_imports) into O(log n_imports). Only the two neighbours
+    # around the target time can be closest, so we just inspect those.
+    ends_sorted = sorted(
+        (j for j in imports if j.end_lat is not None and j.end_lng is not None),
+        key=lambda j: j.ended_at,
+    )
+    end_keys = [j.ended_at for j in ends_sorted]
+    starts_sorted = sorted(
+        (j for j in imports if j.start_lat is not None and j.start_lng is not None),
+        key=lambda j: j.started_at,
+    )
+    start_keys = [j.started_at for j in starts_sorted]
+
+    def _nearest(keys: list[datetime], rows: list[JourneyImport], target: datetime):
+        if not keys:
+            return None
+        i = bisect_left(keys, target)
         best = None
         best_diff = window
-        for j in imports:
-            if j.end_lat is None or j.end_lng is None:
-                continue
-            diff = abs(j.ended_at - cs.started_at)
-            if diff <= best_diff:
-                best_diff = diff
-                best = (j.end_lat, j.end_lng, j.end_address)
-        if best is not None:
-            return best
-        ref = cs.ended_at or cs.started_at
-        best_diff = window
-        for j in imports:
-            if j.start_lat is None or j.start_lng is None:
-                continue
-            diff = abs(j.started_at - ref)
-            if diff <= best_diff:
-                best_diff = diff
-                best = (j.start_lat, j.start_lng, j.start_address)
+        for cand_i in (i - 1, i):
+            if 0 <= cand_i < len(rows):
+                diff = abs(keys[cand_i] - target)
+                if diff <= best_diff:
+                    best_diff = diff
+                    best = rows[cand_i]
         return best
+
+    def _locate(cs: ChargeSession) -> tuple[float, float, str | None] | None:
+        j = _nearest(end_keys, ends_sorted, cs.started_at)
+        if j is not None:
+            return (j.end_lat, j.end_lng, j.end_address)
+        ref = cs.ended_at or cs.started_at
+        j = _nearest(start_keys, starts_sorted, ref)
+        if j is not None:
+            return (j.start_lat, j.start_lng, j.start_address)
+        return None
 
     clusters: dict[tuple[float, float], dict] = {}
     for cs in sessions:

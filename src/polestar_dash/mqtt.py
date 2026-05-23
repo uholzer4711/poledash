@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from contextlib import suppress
 from dataclasses import asdict
 
 from .config import get_settings
@@ -14,6 +13,10 @@ from .polestar.fetcher import Snapshot
 log = logging.getLogger(__name__)
 
 _published_discovery: set[str] = set()  # vin → already announced
+# Strong refs to in-flight publish tasks. Without this, Python is free to GC a
+# pending Task while still scheduled (asyncio only weak-refs them), and the
+# publish silently disappears.
+_pending: set[asyncio.Task] = set()
 
 
 def _client_kwargs() -> dict | None:
@@ -122,7 +125,13 @@ def schedule_publish(snap: Snapshot) -> None:
         log.warning("schedule_publish called outside an event loop; dropping")
         return
     task = loop.create_task(publish_snapshot(snap))
-    # Swallow exceptions so they don't bubble as "task was never awaited"
-    task.add_done_callback(lambda t: t.exception() if not t.cancelled() else None)
-    with suppress(Exception):
-        pass
+    _pending.add(task)
+
+    def _done(t: asyncio.Task) -> None:
+        _pending.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            # publish_snapshot already logs; this just consumes the exception
+            # so it doesn't surface as "Task exception was never retrieved".
+            pass
+
+    task.add_done_callback(_done)

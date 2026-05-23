@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
 
@@ -108,7 +109,13 @@ class ChargeSession(SQLModel, table=True):
     note: str | None = None  # free text (location, operator, …)
     co2_g_per_kwh: int | None = None  # AT grid mix at session start
 
-    is_complete: bool = False  # set True when charging_status transitions to Done/Idle
+    is_complete: bool = Field(default=False, index=True)  # set True when charging_status transitions to Done/Idle
+
+    # Composite for the hot query: list/aggregate sessions per VIN over a
+    # time window. SQLite picks single-column indexes too slowly here.
+    __table_args__ = (
+        Index("ix_chargesession_vin_started", "vin", "started_at"),
+    )
 
 
 class AppSetting(SQLModel, table=True):

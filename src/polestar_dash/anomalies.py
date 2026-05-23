@@ -145,7 +145,12 @@ def _check_low_soc_unplugged(snap: Snapshot) -> None:
     try:
         from zoneinfo import ZoneInfo
 
-        local = snap.fetched_at.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("Europe/Vienna"))
+        ts = snap.fetched_at
+        # Only stamp UTC when the datetime is naive; otherwise we'd silently
+        # clobber whatever timezone the caller already attached.
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=ZoneInfo("UTC"))
+        local = ts.astimezone(ZoneInfo("Europe/Vienna"))
     except Exception:  # noqa: BLE001
         local = snap.fetched_at
     if not (LOW_SOC_REMINDER_HOUR_FROM <= local.hour <= LOW_SOC_REMINDER_HOUR_TO):
@@ -164,8 +169,12 @@ def _check_low_soc_unplugged(snap: Snapshot) -> None:
     )
 
 
-def run_anomaly_checks(snap: Snapshot) -> None:
-    prev = _prev_snapshot(snap.vin, snap)
+def run_anomaly_checks(snap: Snapshot, *, prev: VehicleSnapshot | None = None) -> None:
+    # Caller (scheduler.poll_once) can pass `prev` to avoid re-running the
+    # same indexed lookup that update_session already did. Falls back to a
+    # local read for any other entry point.
+    if prev is None:
+        prev = _prev_snapshot(snap.vin, snap)
     if prev is not None:
         _check_soc_drop(snap, prev)
         _check_power_collapse(snap, prev)

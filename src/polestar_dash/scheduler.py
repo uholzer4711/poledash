@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -18,8 +18,13 @@ from .notify import notify
 from .polestar.client import PolestarClient
 from .polestar.fetcher import Snapshot, fetch_snapshot
 from .anomalies import run_anomaly_checks
-from .sessions import CHARGING_STATES, update_session
+from .sessions import CHARGING_STATES, previous_snapshot, update_session
 from .telegram import telegram_send
+
+# Retention for the raw-JSON safety net. Structured rows in VehicleSnapshot
+# stay forever; the verbatim API payloads we keep just long enough to debug
+# field-mapping gaps and to recover from a bad migration.
+RAW_RETENTION_DAYS = 90
 
 log = logging.getLogger(__name__)
 
@@ -121,12 +126,21 @@ async def poll_once(client: PolestarClient) -> None:
 
             # Each post-fetch step is isolated — a crash in notify or MQTT
             # should not lose the snapshot or break the poll cadence.
+            # Read the previous snapshot *before* persisting the new one so
+            # both update_session and run_anomaly_checks see the same view,
+            # and so we don't repeat the indexed lookup three times.
+            try:
+                with Session(get_engine()) as _s:
+                    prev = previous_snapshot(_s, snap.vin, snap.fetched_at)
+            except Exception:  # noqa: BLE001
+                log.exception("previous_snapshot lookup failed for VIN %s", vin)
+                prev = None
             try:
                 _persist(snap)
             except Exception:  # noqa: BLE001
                 log.exception("Persist failed for VIN %s", vin)
             try:
-                closed = update_session(snap)
+                closed = update_session(snap, prev=prev)
             except Exception:  # noqa: BLE001
                 log.exception("update_session failed for VIN %s", vin)
                 closed = None
@@ -139,7 +153,7 @@ async def poll_once(client: PolestarClient) -> None:
             except Exception:  # noqa: BLE001
                 log.exception("MQTT publish failed for VIN %s", vin)
             try:
-                run_anomaly_checks(snap)
+                run_anomaly_checks(snap, prev=prev)
             except Exception:  # noqa: BLE001
                 log.exception("Anomaly checks failed for VIN %s", vin)
 
@@ -165,7 +179,7 @@ def _reschedule(client: PolestarClient, *, charging: bool) -> None:
     if sched is None:
         return
     interval = s.fast_poll_interval_min if charging else s.poll_interval_min
-    next_run = datetime.now() + timedelta(minutes=interval)
+    next_run = datetime.utcnow() + timedelta(minutes=interval)
     sched.add_job(
         poll_once,
         DateTrigger(run_date=next_run),
@@ -181,12 +195,28 @@ def _reschedule(client: PolestarClient, *, charging: bool) -> None:
 _SCHEDULER: AsyncIOScheduler | None = None
 
 
+def _prune_raw_snapshots() -> None:
+    """Delete RawSnapshot rows older than RAW_RETENTION_DAYS to keep the DB
+    from growing unbounded (~20 KB/poll × every 2–10 min = >1 GB/year)."""
+    cutoff = datetime.utcnow() - timedelta(days=RAW_RETENTION_DAYS)
+    with Session(get_engine()) as s:
+        result = s.exec(
+            RawSnapshot.__table__.delete().where(RawSnapshot.fetched_at < cutoff)
+        )
+        s.commit()
+    log.info("Pruned %s RawSnapshot rows older than %s days",
+             getattr(result, "rowcount", "?"), RAW_RETENTION_DAYS)
+
+
 def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOScheduler:
     global _SCHEDULER
-    sched = AsyncIOScheduler()
+    # Pin to UTC — every timestamp we write uses utcnow(), and APScheduler
+    # interprets naive datetimes in *its* timezone. Without this, deploying
+    # the image with TZ=Europe/Vienna would offset every reschedule by 2h.
+    sched = AsyncIOScheduler(timezone=timezone.utc)
     sched.add_job(
         poll_once,
-        DateTrigger(run_date=datetime.now()),  # immediately
+        DateTrigger(run_date=datetime.utcnow()),  # immediately
         args=[client],
         id=JOB_ID,
         max_instances=1,
@@ -197,6 +227,14 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
         run_backup,
         CronTrigger(hour=3, minute=15),
         id="daily-backup",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    sched.add_job(
+        _prune_raw_snapshots,
+        CronTrigger(hour=3, minute=45),
+        id="raw-retention",
         max_instances=1,
         coalesce=True,
         replace_existing=True,
