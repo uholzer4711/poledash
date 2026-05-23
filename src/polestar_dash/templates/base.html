@@ -21,7 +21,10 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
   {% block head_extra %}{% endblock %}
 </head>
-<body>
+<body{% if demo_mode %} data-demo="1"{% endif %}>
+  {% if demo_mode %}
+  <div class="demo-banner" role="status">{{ demo_banner_text }}</div>
+  {% endif %}
   <div class="shell">
     <div class="topbar">
       <div><span class="live-dot" id="live-dot"></span><span id="live-text">LIVE</span></div>

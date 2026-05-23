@@ -29,7 +29,12 @@ def _localtime(dt: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
 
 
 def make_templates() -> Jinja2Templates:
+    from .config import get_settings
+
+    s = get_settings()
     t = Jinja2Templates(directory=str(_TEMPLATES_DIR))
     t.env.filters["localtime"] = _localtime
     t.env.filters["address_label"] = label_for
+    t.env.globals["demo_mode"] = s.demo_mode
+    t.env.globals["demo_banner_text"] = s.demo_banner_text
     return t

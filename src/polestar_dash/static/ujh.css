@@ -447,3 +447,18 @@ canvas { background: transparent; }
   .topbar, .navbar, footer.foot, .no-print { display: none !important; }
   table.index td, table.index th { color: black !important; border-color: #ccc !important; }
 }
+
+/* Demo-instance banner — only renders when demo_mode is on. */
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+  width: 100%;
+  padding: 8px 16px;
+  background: var(--ujh-accent, #ff5b14);
+  color: #000;
+  font: 500 13px/1.3 var(--ujh-mono);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+body[data-demo="1"] { padding-top: 0; }

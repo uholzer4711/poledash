@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     mqtt_base_topic: str = "poledash"
     mqtt_ha_discovery: bool = True
 
+    # --- Demo mode (public showcase instance) ---
+    demo_mode: bool = False
+    demo_banner_text: str = (
+        "DEMO INSTANCE — synthetic data, coordinates München-shifted. "
+        "Real project: github.com/uholzer4711/polestar-dash"
+    )
+
     @property
     def vin_list(self) -> list[str]:
         return [v.strip() for v in self.polestar_vins.split(",") if v.strip()]
