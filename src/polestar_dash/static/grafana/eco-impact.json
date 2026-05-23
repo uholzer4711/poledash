@@ -1,0 +1,136 @@
+{
+  "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true, "name": "Annotations & Alerts", "type": "dashboard"}]},
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "liveNow": false,
+  "panels": [
+    {
+      "type": "text", "id": 100, "transparent": true,
+      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
+      "options": {"mode": "html", "content": "<div style=\"font-family:'JetBrains Mono',monospace;color:#b8babf;letter-spacing:.2em;font-size:11px;text-transform:uppercase\">poledash · eco impact</div><div style=\"font-family:'Inter Tight',Inter,sans-serif;color:#f3f4f6;font-size:34px;font-weight:600\">CO<sub>2</sub>, kWh &amp; <span style=\"color:#ff5b14\">money</span></div><div style=\"font-family:'JetBrains Mono',monospace;color:#8a8d93;font-size:11px\">Energy delivered, efficiency, equivalent petrol saved.</div>"}
+    },
+
+    {
+      "type": "stat", "title": "kWh delivered · 30d", "id": 1,
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 3},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "sum_over_time(poledash_charging_power_w[30d]) / 1000 / 720", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "kwatth", "decimals": 1, "color": {"mode": "fixed", "fixedColor": "#ff5b14"}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name", "justifyMode": "center"}
+    },
+    {
+      "type": "stat", "title": "Odometer", "id": 2,
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 3},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "poledash_odometer_km", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "lengthkm", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "#f3f4f6"}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name", "justifyMode": "center"}
+    },
+    {
+      "type": "stat", "title": "Avg consumption", "id": 3,
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 3},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "poledash_avg_consumption_kwh_per_100km", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "none", "decimals": 1, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "#9bd66b", "value": null}, {"color": "#ffd166", "value": 20}, {"color": "#ff5b14", "value": 25}]}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name", "justifyMode": "center"}
+    },
+    {
+      "type": "stat", "title": "Petrol-equivalent saved · 30d", "id": 4,
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 3},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "(poledash_odometer_km - (poledash_odometer_km offset 30d)) * 0.07", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "lengthm", "decimals": 1, "color": {"mode": "fixed", "fixedColor": "#9bd66b"}, "custom": {}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name", "justifyMode": "center"}
+    },
+
+    {
+      "type": "gauge", "title": "Efficiency score (lower = better)", "id": 5,
+      "gridPos": {"h": 9, "w": 8, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "poledash_avg_consumption_kwh_per_100km", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "none", "decimals": 1, "min": 10, "max": 35, "thresholds": {"mode": "absolute", "steps": [{"color": "#9bd66b", "value": null}, {"color": "#ffd166", "value": 18}, {"color": "#ff5b14", "value": 24}, {"color": "#e0344c", "value": 30}]}}},
+      "options": {"showThresholdLabels": true, "showThresholdMarkers": true, "reduceOptions": {"calcs": ["lastNotNull"]}}
+    },
+    {
+      "type": "timeseries", "title": "Consumption trend (kWh/100km)", "id": 6,
+      "gridPos": {"h": 9, "w": 16, "x": 8, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {"expr": "poledash_avg_consumption_kwh_per_100km", "legendFormat": "actual", "refId": "A"},
+        {"expr": "avg_over_time(poledash_avg_consumption_kwh_per_100km[7d])", "legendFormat": "7d avg", "refId": "B"}
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "none", "decimals": 1, "custom": {"drawStyle": "line", "lineWidth": 2, "fillOpacity": 10, "spanNulls": true}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "actual"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#ff5b14"}}]},
+          {"matcher": {"id": "byName", "options": "7d avg"}, "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": "#f3f4f6"}}, {"id": "custom.lineWidth", "value": 3}]}
+        ]
+      },
+      "options": {"legend": {"showLegend": true, "placement": "bottom"}}
+    },
+
+    {
+      "type": "timeseries", "title": "Range vs SoC (range factor)", "id": 7,
+      "gridPos": {"h": 9, "w": 12, "x": 0, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "poledash_range_km / poledash_soc_percent", "legendFormat": "km / % SoC", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "none", "decimals": 2, "color": {"mode": "fixed", "fixedColor": "#9bd66b"}, "custom": {"drawStyle": "line", "lineInterpolation": "smooth", "lineWidth": 2, "fillOpacity": 18, "spanNulls": true, "gradientMode": "opacity"}}},
+      "options": {"legend": {"showLegend": false}}
+    },
+    {
+      "type": "timeseries", "title": "Cumulative odometer", "id": 8,
+      "gridPos": {"h": 9, "w": 12, "x": 12, "y": 17},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "poledash_odometer_km", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "lengthkm", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "#f3f4f6"}, "custom": {"drawStyle": "line", "lineWidth": 3, "fillOpacity": 12, "spanNulls": true, "gradientMode": "opacity"}}},
+      "options": {"legend": {"showLegend": false}}
+    },
+
+    {
+      "type": "stat", "title": "km driven · 7d", "id": 9,
+      "gridPos": {"h": 5, "w": 6, "x": 0, "y": 26},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "poledash_odometer_km - (poledash_odometer_km offset 7d)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "lengthkm", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "#ff5b14"}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name"}
+    },
+    {
+      "type": "stat", "title": "kWh used · 7d (est.)", "id": 10,
+      "gridPos": {"h": 5, "w": 6, "x": 6, "y": 26},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "(poledash_odometer_km - (poledash_odometer_km offset 7d)) * poledash_avg_consumption_kwh_per_100km / 100", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "kwatth", "decimals": 1, "color": {"mode": "fixed", "fixedColor": "#9bd66b"}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name"}
+    },
+    {
+      "type": "stat", "title": "CO₂ saved · vs 6L petrol/100km", "id": 11,
+      "gridPos": {"h": 5, "w": 6, "x": 12, "y": 26},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "(poledash_odometer_km - (poledash_odometer_km offset 30d)) * 0.06 * 2.31", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "mass.kg", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "#9bd66b"}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name"}
+    },
+    {
+      "type": "stat", "title": "€ vs petrol · 30d (1.65 €/L)", "id": 12,
+      "gridPos": {"h": 5, "w": 6, "x": 18, "y": 26},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [{"expr": "(poledash_odometer_km - (poledash_odometer_km offset 30d)) * 0.06 * 1.65", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "currencyEUR", "decimals": 0, "color": {"mode": "fixed", "fixedColor": "#ffd166"}}},
+      "options": {"graphMode": "area", "colorMode": "value", "textMode": "value_and_name"}
+    }
+  ],
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "tags": ["polestar", "poledash", "eco"],
+  "templating": {"list": []},
+  "time": {"from": "now-30d", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Polestar · Eco Impact",
+  "uid": "poledash-eco-impact",
+  "version": 1,
+  "weekStart": "",
+  "__inputs": [{"name": "DS_PROMETHEUS", "label": "Prometheus", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus"}],
+  "__requires": [{"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.4.0"}, {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"}, {"type": "panel", "id": "stat", "name": "Stat", "version": ""}, {"type": "panel", "id": "timeseries", "name": "Time series", "version": ""}, {"type": "panel", "id": "gauge", "name": "Gauge", "version": ""}, {"type": "panel", "id": "text", "name": "Text", "version": ""}]
+}

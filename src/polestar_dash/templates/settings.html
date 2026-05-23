@@ -1,0 +1,404 @@
+{% extends "base.html" %}
+{% block title %}Settings · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">06 / SETTINGS</div>
+    <h1>Status &amp; <em class="accent">integrations</em></h1>
+  </div>
+
+  <div class="card mb-6">
+    <div class="card-label">Electricity price (your tariff)</div>
+    <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:160px">
+        <label>Default price (ct / kWh)</label>
+        <input id="default_price" type="number" min="0" max="500" step="0.1" value="{{ "%.1f"|format(default_price_ct) }}">
+      </div>
+      <button class="btn accent" onclick="savePrice()">Save <span class="arrow">→</span></button>
+      <span id="price_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">saved</span>
+    </div>
+    <div class="stat-sub mt-4">
+      Used for all <b>session cost</b> and <b>tripbook cost</b> calculations.
+      Each charging session can override this on the <a href="/sessions">Sessions</a> page.
+    </div>
+  </div>
+  <script>
+    async function savePrice() {
+      const v = document.getElementById('default_price').value;
+      const r = await fetch('/api/app-settings/price?value=' + encodeURIComponent(v), {method:'POST'});
+      if (!r.ok) return alert('save failed: ' + r.status);
+      const el = document.getElementById('price_saved');
+      el.style.opacity = 1;
+      setTimeout(() => { el.style.opacity = 0; }, 1500);
+    }
+  </script>
+
+  <div class="card mb-6">
+    <div class="card-label">Address labels</div>
+    <div class="stat-sub mb-4">
+      Friendly names for frequent destinations. Shown on <a href="/tripbook">/tripbook</a>
+      as <span class="accent">orange</span> on the address with the label as
+      a hover tooltip. One label per line, format:
+      <code class="accent">Label: pattern1, pattern2, …</code>.
+      Patterns are case-insensitive substring matches.
+    </div>
+    <form id="al_form" onsubmit="return saveLabels(event)">
+      <textarea id="al_text" rows="6" style="width:100%;font-family:var(--ujh-mono);font-size:14px">{% for label, patterns in address_labels.items() %}{{ label }}: {{ patterns|join(', ') }}
+{% endfor %}</textarea>
+      <div class="flex gap-4 mt-4" style="align-items:center">
+        <button class="btn accent" type="submit">Save <span class="arrow">→</span></button>
+        <span id="al_result" class="mono-xs muted"></span>
+      </div>
+    </form>
+  </div>
+  <script>
+    async function saveLabels(ev) {
+      ev.preventDefault();
+      const out = document.getElementById('al_result');
+      const text = document.getElementById('al_text').value;
+      const payload = {};
+      for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const idx = trimmed.indexOf(':');
+        if (idx < 0) { out.textContent = `bad line: "${trimmed}" — need "Label: pattern"`; return false; }
+        const label = trimmed.slice(0, idx).trim();
+        const patterns = trimmed.slice(idx + 1).split(',').map(p => p.trim()).filter(Boolean);
+        if (label && patterns.length) payload[label] = patterns;
+      }
+      const r = await fetch('/api/address-labels', {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) { out.textContent = 'error: ' + r.status; return false; }
+      out.textContent = 'saved · reload tripbook to see changes';
+      return false;
+    }
+  </script>
+
+  <div class="card mb-6">
+    <div class="card-label">Address map</div>
+    <div class="stat-sub mb-4">
+      Every dot is a unique start- or end-address from imported trips.
+      <span class="accent">Colored</span> = already labeled, <b>grey</b> = unassigned.
+      Click a dot to assign it to an existing label or create a new one — one
+      label can hold many addresses, so e.g. <code>Arbeit</code> can cover all
+      your parking spots near the office.
+    </div>
+    <div class="flex gap-4 mb-4" style="flex-wrap:wrap;align-items:center">
+      <label class="mono-xs" style="display:flex;gap:6px;align-items:center">
+        <input type="checkbox" id="am_only_near" onchange="amRender()">
+        only unassigned within 500&nbsp;m of a labeled point
+      </label>
+      <label class="mono-xs" style="display:flex;gap:6px;align-items:center">
+        <input type="checkbox" id="am_show_radius" onchange="amRender()">
+        show 500&nbsp;m radius
+      </label>
+      <span id="am_stats" class="mono-xs muted"></span>
+    </div>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <div id="am_map" style="width:100%;height:480px;background:var(--ujh-bg-elev)"></div>
+    <div id="am_msg" class="mono-xs muted mt-2"></div>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Capture Leaflet immediately — date-fns (deferred, runs before
+    // DOMContentLoaded) reassigns window.L to its Locale helper, which would
+    // otherwise shadow Leaflet by the time amInit fires.
+    const Leaflet = window.L;
+    (function () {
+      let amMap = null;
+      let amLayer = null;
+      let amRadiusLayer = null;
+      let amPoints = [];
+      let amLabels = {};
+
+      function cssVar(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+      // Hash → palette. First entry stays the brand orange so a single label
+      // (often the most-visited) still pops; rest are visually distinct.
+      function palette() {
+        const accent = cssVar('--ujh-accent') || '#ff5b14';
+        return [accent, '#4ea1ff', '#7bd389', '#e6c544', '#c779ff', '#46c8c0', '#ff7aa5'];
+      }
+      function colorForLabel(label) {
+        if (!label) return '#888';
+        const pal = palette();
+        let h = 0;
+        for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) >>> 0;
+        return pal[h % pal.length];
+      }
+      function haversineM(a, b) {
+        const R = 6371000, toRad = d => d * Math.PI / 180;
+        const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+        const s = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+        return 2 * R * Math.asin(Math.sqrt(s));
+      }
+
+      function popupHtml(p) {
+        const labelNames = Object.keys(amLabels).sort();
+        const opts = ['<option value="">— unassigned —</option>']
+          .concat(labelNames.map(l => `<option value="${l}"${l === p.label ? ' selected' : ''}>${l}</option>`))
+          .join('');
+        const safe = p.address.replace(/"/g, '&quot;');
+        const lastSeen = (p.last_seen || '').slice(0, 10);
+        return `
+          <div style="font-family:var(--ujh-sans);min-width:240px">
+            <div style="font-weight:600;margin-bottom:4px">${p.address}</div>
+            <div class="mono-xs muted" style="margin-bottom:8px">
+              ${p.count}× · last ${lastSeen}
+            </div>
+            <label class="mono-xs">Label</label>
+            <select id="am_lbl_sel" style="width:100%;margin-bottom:6px">${opts}</select>
+            <label class="mono-xs">new label (optional)</label>
+            <input id="am_lbl_new" type="text" placeholder="e.g. Arbeit" style="width:100%;margin-bottom:6px">
+            <label class="mono-xs">pattern (stored as substring)</label>
+            <input id="am_pat" type="text" value="${safe}" style="width:100%;margin-bottom:8px">
+            <button class="btn accent" onclick="amAssign('${safe.replace(/'/g, "\\'")}')">Save <span class="arrow">→</span></button>
+            <span id="am_pop_msg" class="mono-xs muted" style="margin-left:8px"></span>
+          </div>`;
+      }
+
+      window.amAssign = async function(origAddress) {
+        const sel = document.getElementById('am_lbl_sel');
+        const fresh = document.getElementById('am_lbl_new').value.trim();
+        const pattern = document.getElementById('am_pat').value.trim();
+        const label = fresh || sel.value;
+        const msg = document.getElementById('am_pop_msg');
+        if (!pattern) { msg.textContent = 'pattern empty'; return; }
+        msg.textContent = 'saving…';
+        // Always send the original full address first to unassign it cleanly,
+        // then (if pattern differs) assign the edited pattern.
+        try {
+          if (pattern !== origAddress) {
+            await fetch('/api/address-labels/assign', {
+              method: 'POST', headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({pattern: origAddress, label: ''}),
+            });
+          }
+          const r = await fetch('/api/address-labels/assign', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pattern, label}),
+          });
+          if (!r.ok) { msg.textContent = 'error ' + r.status; return; }
+          amLabels = await r.json();
+          await amLoadPoints();
+          amRender();
+          amMap.closePopup();
+          // also refresh the textarea so the two UIs stay in sync
+          const ta = document.getElementById('al_text');
+          if (ta) {
+            ta.value = Object.entries(amLabels)
+              .map(([l, ps]) => `${l}: ${ps.join(', ')}`).join('\n') + '\n';
+          }
+        } catch (e) { msg.textContent = 'error: ' + e; }
+      };
+
+      async function amLoadPoints() {
+        const r = await fetch('/api/address-points?days=3650');
+        amPoints = r.ok ? await r.json() : [];
+      }
+
+      window.amRender = function () {
+        if (!amMap) return;
+        if (amLayer) amLayer.remove();
+        if (amRadiusLayer) amRadiusLayer.remove();
+        amLayer = Leaflet.layerGroup().addTo(amMap);
+        amRadiusLayer = Leaflet.layerGroup().addTo(amMap);
+        const onlyNear = document.getElementById('am_only_near').checked;
+        const showRadius = document.getElementById('am_show_radius').checked;
+        const labeled = amPoints.filter(p => p.label);
+        let unlabeled = amPoints.filter(p => !p.label);
+        if (onlyNear && labeled.length) {
+          unlabeled = unlabeled.filter(u =>
+            labeled.some(l => haversineM(l, u) <= 500)
+          );
+        }
+        const visible = labeled.concat(unlabeled);
+        visible.forEach(p => {
+          const color = colorForLabel(p.label);
+          const m = Leaflet.circleMarker([p.lat, p.lng], {
+            radius: p.label ? 8 : 6,
+            color, fillColor: color,
+            fillOpacity: p.label ? 0.85 : 0.5,
+            weight: p.label ? 2 : 1,
+          });
+          m.bindPopup(() => popupHtml(p));
+          m.addTo(amLayer);
+          if (showRadius && p.label) {
+            Leaflet.circle([p.lat, p.lng], {
+              radius: 500, color, weight: 1, fillOpacity: 0.05,
+            }).addTo(amRadiusLayer);
+          }
+        });
+        document.getElementById('am_stats').textContent =
+          `${labeled.length} labeled · ${unlabeled.length} unassigned${onlyNear ? ' (filtered)' : ''}`;
+        if (visible.length) {
+          amMap.fitBounds(Leaflet.latLngBounds(visible.map(p => [p.lat, p.lng])).pad(0.2));
+        }
+      };
+
+      async function amInit() {
+        const el = document.getElementById('am_map');
+        if (!el || typeof Leaflet === 'undefined') return;
+        amMap = Leaflet.map(el).setView([48.2082, 16.3738], 11);  // Vienna fallback
+        Leaflet.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap', maxZoom: 19,
+        }).addTo(amMap);
+        try {
+          const lr = await fetch('/api/address-labels');
+          amLabels = lr.ok ? await lr.json() : {};
+          await amLoadPoints();
+          if (!amPoints.length) {
+            document.getElementById('am_msg').textContent =
+              'no geocoded addresses yet — import a Polestar journey CSV above first.';
+          }
+          amRender();
+        } catch (e) {
+          document.getElementById('am_msg').textContent = 'load error: ' + e;
+        }
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', amInit);
+      } else { amInit(); }
+    })();
+  </script>
+
+  <div class="card mb-6">
+    <div class="card-label">Journey log import (Polestar app CSV)</div>
+    <div class="stat-sub mb-4">
+      Upload the CSV exported from the Polestar app's <em class="accent">Journey log</em>.
+      Gives us <b>real kWh</b>, geocoded addresses, and crisp trip boundaries —
+      shown as a separate section on <a href="/tripbook">/tripbook</a>. Re-upload
+      to add new rows; duplicates are skipped.
+    </div>
+    <form id="ji_form" enctype="multipart/form-data" onsubmit="return uploadJourney(event)">
+      <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="flex:2;min-width:240px">
+          <label>CSV file</label>
+          <input type="file" name="file" accept=".csv,text/csv" required>
+        </div>
+        <div class="field" style="flex:1;min-width:120px">
+          <label>TZ offset (h)</label>
+          <input type="number" name="tz_offset_hours" step="0.5" value="2" title="CSV times are local; subtract this many hours to normalise to UTC. Vienna summer = 2, winter = 1.">
+        </div>
+        <button class="btn accent" type="submit">Import <span class="arrow">→</span></button>
+        <span id="ji_result" class="mono-xs muted"></span>
+      </div>
+    </form>
+  </div>
+  <script>
+    async function uploadJourney(ev) {
+      ev.preventDefault();
+      const fd = new FormData(document.getElementById('ji_form'));
+      const out = document.getElementById('ji_result');
+      out.textContent = 'uploading…';
+      const r = await fetch('/api/journey-import', { method: 'POST', body: fd });
+      if (!r.ok) { out.textContent = 'error: ' + r.status + ' ' + (await r.text()); return false; }
+      const j = await r.json();
+      out.textContent = `parsed ${j.parsed}, inserted ${j.inserted}, skipped ${j.skipped}`;
+      return false;
+    }
+  </script>
+
+  <div class="grid grid-2 mb-6">
+    {% for name, enabled, note in integrations %}
+      <div class="card">
+        <div class="flex-between">
+          <h2>{{ name }}</h2>
+          <span class="badge {% if enabled %}live{% endif %}"><span class="dot"></span>{{ "enabled" if enabled else "disabled" }}</span>
+        </div>
+        <div class="stat-sub">{{ note }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="card mb-6">
+    <div class="card-label">Grafana dashboards</div>
+    <p>Drop-in dashboards for the Prometheus <code>/metrics</code> scrape.
+       In Grafana <em>Dashboards → New → Import</em> → paste JSON URL or upload file. Each has its own UID, import as many as you like.</p>
+
+    <div class="grid grid-2 mt-4" style="gap:16px">
+      <div class="card" style="background:#1a1c20">
+        <div class="card-label">Main</div>
+        <h2 style="margin:0 0 4px">Polestar · poledash</h2>
+        <div class="stat-sub mb-2">The original. 15 panels: SoC, power, range, consumption, odometer, service due, AC/DC current &amp; voltage, charging timeline, power-vs-SoC scatter, heatmap.</div>
+        <div class="flex gap-4" style="flex-wrap:wrap">
+          <a class="btn accent" href="/static/grafana-dashboard.json" download>Download <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana-dashboard.json" target="_blank">View raw <span class="arrow">→</span></a>
+        </div>
+      </div>
+
+      <div class="card" style="background:#1a1c20">
+        <div class="card-label">Presentation</div>
+        <h2 style="margin:0 0 4px">Cockpit</h2>
+        <div class="stat-sub mb-2">Big-screen showcase. Giant SoC gauge centerpiece, hero stats, smooth SoC trajectory, charging timeline. Built for demos &amp; presentations.</div>
+        <div class="flex gap-4" style="flex-wrap:wrap">
+          <a class="btn accent" href="/static/grafana/cockpit.json" download>Download <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/cockpit.json" target="_blank">View raw <span class="arrow">→</span></a>
+        </div>
+      </div>
+
+      <div class="card" style="background:#1a1c20">
+        <div class="card-label">Deep technical</div>
+        <h2 style="margin:0 0 4px">Charging Lab</h2>
+        <div class="stat-sub mb-2">Charging forensics: P×SoC curve, power-density heatmap, voltage/current/power waveforms, AC↔DC state strip, P=U·I sanity check, ΔSoC bars, minutes-to-full prediction.</div>
+        <div class="flex gap-4" style="flex-wrap:wrap">
+          <a class="btn accent" href="/static/grafana/charging-lab.json" download>Download <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/charging-lab.json" target="_blank">View raw <span class="arrow">→</span></a>
+        </div>
+      </div>
+
+      <div class="card" style="background:#1a1c20">
+        <div class="card-label">Rhythm</div>
+        <h2 style="margin:0 0 4px">Fleet Pulse</h2>
+        <div class="stat-sub mb-2">30-day rhythm view: long charging timeline, hour-of-day activity &amp; SoC heatmaps, weekly min/avg/max SoC band, sessions/24h, polling cadence bars.</div>
+        <div class="flex gap-4" style="flex-wrap:wrap">
+          <a class="btn accent" href="/static/grafana/fleet-pulse.json" download>Download <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/fleet-pulse.json" target="_blank">View raw <span class="arrow">→</span></a>
+        </div>
+      </div>
+
+      <div class="card" style="background:#1a1c20">
+        <div class="card-label">Sustainability</div>
+        <h2 style="margin:0 0 4px">Eco Impact</h2>
+        <div class="stat-sub mb-2">kWh delivered, efficiency score gauge, consumption trend with 7d-avg overlay, range-factor (km/% SoC), CO₂ saved vs petrol, €-equivalent. The "look how much we saved" board.</div>
+        <div class="flex gap-4" style="flex-wrap:wrap">
+          <a class="btn accent" href="/static/grafana/eco-impact.json" download>Download <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/eco-impact.json" target="_blank">View raw <span class="arrow">→</span></a>
+        </div>
+      </div>
+
+      <div class="card" style="background:#1a1c20">
+        <div class="card-label">Ops</div>
+        <h2 style="margin:0 0 4px">Mission Control</h2>
+        <div class="stat-sub mb-2">Dense cyberpunk grid: 24 panels, 8 micro-stats, status strip, sparklines, twin scatter+heatmap, gauges for U/I/P, service countdown. 10s refresh.</div>
+        <div class="flex gap-4" style="flex-wrap:wrap">
+          <a class="btn accent" href="/static/grafana/mission-control.json" download>Download <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/mission-control.json" target="_blank">View raw <span class="arrow">→</span></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-sub mt-4">
+      All boards use orange (<code>#ff5b14</code>) only for live charging signals — matches poledash design tokens.
+      Import one or pick favorites; UIDs are distinct (<code>poledash-main</code>, <code>poledash-cockpit</code>, <code>poledash-charging-lab</code>, <code>poledash-fleet-pulse</code>, <code>poledash-eco-impact</code>, <code>poledash-mission-control</code>).
+    </div>
+  </div>
+
+  <div class="card-label mb-4">Active configuration</div>
+  <div class="card grid grid-2">
+    <div><span class="mono-xs">Poll idle</span><br><span class="num">{{ s.poll_interval_min }} min</span></div>
+    <div><span class="mono-xs">Poll charging</span><br><span class="num">{{ s.fast_poll_interval_min }} min</span></div>
+    <div><span class="mono-xs">Low-SoC alert</span><br><span class="num">≤ {{ s.notify_low_soc }}%</span></div>
+    <div><span class="mono-xs">Service alert</span><br><span class="num">≤ {{ s.notify_service_days }} days</span></div>
+    <div><span class="mono-xs">MQTT base topic</span><br><code>{{ s.mqtt_base_topic }}</code></div>
+    <div><span class="mono-xs">DB path</span><br><code>{{ s.db_path }}</code></div>
+    <div><span class="mono-xs">Backup retention</span><br><span class="num">{{ s.backup_keep_days }} days</span></div>
+  </div>
+
+  <p class="stat-sub mt-6">
+    Change settings by editing <code>.env</code> on the host and running <code>docker restart polestar-dash</code>.
+    See <a href="/errors">recent errors</a>.
+  </p>
+{% endblock %}

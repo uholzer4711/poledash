@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Routes · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">08 / ROUTES</div>
+    <h1>Repeated <em class="accent">routes</em></h1>
+  </div>
+
+  <div class="flex-between mb-6 no-print">
+    <div class="flex gap-2">
+      {% for d in [30, 90, 365, 3650] %}
+        <a href="/routes?days={{ d }}&min_trips={{ min_trips }}" class="badge {% if d==days %}solid{% endif %}">{{ "All" if d == 3650 else (d|string + "D") }}</a>
+      {% endfor %}
+    </div>
+    <div class="flex gap-2">
+      {% for m, lbl in [(1, "All"), (2, "≥2"), (5, "≥5"), (10, "≥10")] %}
+        <a href="/routes?days={{ days }}&min_trips={{ m }}" class="badge {% if m==min_trips %}solid{% endif %}">{{ lbl }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if not routes %}
+    <p class="muted">No repeated routes yet. Import a journey-log CSV with at least 2 matching trips.</p>
+  {% else %}
+    <table class="index">
+      <thead>
+        <tr>
+          <th>From → To</th>
+          <th class="right">Trips</th>
+          <th class="right">Total km</th>
+          <th class="right">Avg km</th>
+          <th class="right">Avg duration</th>
+          <th class="right">kWh/100km</th>
+          <th class="right">Best / Worst</th>
+          <th class="right">Last</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in routes %}
+          <tr>
+            <td>
+              <span class="accent">{{ r.start }}</span>
+              <span class="muted">→</span>
+              <span class="accent">{{ r.end }}</span>
+            </td>
+            <td class="right tnum">{{ r.trips }}</td>
+            <td class="right tnum">{{ "%.1f"|format(r.total_km) }}</td>
+            <td class="right tnum">{% if r.avg_km %}{{ "%.1f"|format(r.avg_km) }}{% else %}—{% endif %}</td>
+            <td class="right tnum">
+              {% if r.avg_minutes %}{{ r.avg_minutes }} min{% else %}—{% endif %}
+              {% if r.min_minutes and r.max_minutes %}<span class="muted mono-xs">({{ r.min_minutes }}–{{ r.max_minutes }})</span>{% endif %}
+            </td>
+            <td class="right tnum">
+              {% if r.avg_kwh_per_100km %}<span class="accent">{{ r.avg_kwh_per_100km }}</span>{% else %}—{% endif %}
+            </td>
+            <td class="right tnum mono-xs">
+              {% if r.best_kwh_per_100km %}{{ r.best_kwh_per_100km }}{% else %}—{% endif %}
+              <span class="muted">/</span>
+              {% if r.worst_kwh_per_100km %}{{ r.worst_kwh_per_100km }}{% else %}—{% endif %}
+            </td>
+            <td class="right tnum mono-xs">{{ r.last_at|localtime('%Y-%m-%d') if r.last_at else '—' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

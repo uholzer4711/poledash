@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Errors · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">07 / ERRORS</div>
+    <h1>Recent <em class="accent">fetch errors</em></h1>
+  </div>
+  {% if not rows %}
+    <p class="muted">No errors in the last 14 days.</p>
+  {% else %}
+    <table class="index">
+      <thead><tr><th>When</th><th>VIN</th><th>Message</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td class="mono">{{ r.occurred_at|localtime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td class="mono">{{ r.vin or "—" }}</td>
+            <td><code class="accent">{{ r.message }}</code></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}

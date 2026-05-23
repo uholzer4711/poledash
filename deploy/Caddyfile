@@ -1,0 +1,17 @@
+# Reference Caddyfile. Copy to /etc/caddy/Caddyfile on your host, replace
+# the placeholder hostname and bcrypt hash, then `systemctl reload caddy`.
+
+poledash.example.com {
+    encode zstd gzip
+
+    # Generate the hash with: caddy hash-password
+    basic_auth {
+        admin $2a$14$REPLACE_ME_WITH_OUTPUT_OF_caddy_hash-password
+    }
+
+    reverse_proxy 127.0.0.1:8000
+
+    log {
+        output file /var/log/caddy/poledash.log
+    }
+}

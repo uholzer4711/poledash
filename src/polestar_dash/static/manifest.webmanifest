@@ -1,0 +1,12 @@
+{
+  "name": "poledash",
+  "short_name": "poledash",
+  "description": "Polestar 2 dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0d10",
+  "theme_color": "#0b0d10",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

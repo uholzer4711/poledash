@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Session #{{ session_id }} · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">03 / SESSION DETAIL</div>
+    <h1>Charging <em class="accent">curve</em></h1>
+    <p class="muted"><a href="/sessions">← back to all sessions</a></p>
+  </div>
+
+  <div id="stats" class="grid grid-4 mb-6">
+    <div class="card"><div class="card-label">SoC</div><div class="stat num" id="s_soc">—</div></div>
+    <div class="card"><div class="card-label">Duration</div><div class="stat num" id="s_dur">—</div></div>
+    <div class="card"><div class="card-label">Peak / Avg</div><div class="stat num" id="s_pa">—<span class="unit">kW</span></div></div>
+    <div class="card"><div class="card-label">Energy · Cost</div><div class="stat num" id="s_ec">—</div></div>
+  </div>
+
+  <div class="card mb-6">
+    <div class="flex-between">
+      <div class="mono-xs" id="s_meta">—</div>
+      <div class="mono-xs" id="s_type">—</div>
+    </div>
+    <div style="position:relative;height:360px;margin-top:16px">
+      <canvas id="chartPower"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Current &amp; voltage</div>
+    <div style="position:relative;height:240px;margin-top:8px">
+      <canvas id="chartIV"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const SID = {{ session_id }};
+
+    function asUTC(s) { return /[zZ]|[+\-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'; }
+    function fmtDt(s) { return s ? new Date(asUTC(s)).toLocaleString() : '—'; }
+    function fmtDur(min) {
+      if (min == null) return '—';
+      if (min < 60) return `${min} min`;
+      return `${Math.floor(min/60)} h ${min%60} min`;
+    }
+
+    // UJH palette — orange used only for the *live* power line; SoC stays neutral.
+    function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+    function palette() {
+      return {
+        orange: cssVar('--ujh-orange') || '#ff5b14',
+        ink:    cssVar('--ujh-ink')    || '#e8e8ea',
+        ink2:   cssVar('--ujh-ink-2')  || '#b8babf',
+        ink3:   cssVar('--ujh-ink-3')  || '#8a8d93',
+        line:   cssVar('--ujh-line')   || '#2a2c30',
+        line2:  cssVar('--ujh-line-2') || '#36393e',
+      };
+    }
+
+    function gridStyle(p) {
+      return {
+        color: p.line,
+        borderColor: p.line2,
+        tickColor: p.line2,
+      };
+    }
+
+    async function load() {
+      const r = await fetch(`/api/sessions/${SID}`);
+      if (!r.ok) { document.body.innerHTML += '<p class="muted">session not found</p>'; return; }
+      const j = await r.json();
+      const s = j.session, c = j.curve, st = j.stats;
+      const p = palette();
+
+      // Stats row
+      document.getElementById('s_soc').innerHTML =
+        `${s.soc_start ?? '–'}<span class="unit">→ ${s.soc_end ?? '–'} %</span>`;
+      document.getElementById('s_dur').textContent = fmtDur(st.duration_min);
+      document.getElementById('s_pa').innerHTML =
+        `${((st.peak_power_w||0)/1000).toFixed(1)} <span class="unit">/ ${((st.avg_power_w||0)/1000).toFixed(1)} kW</span>`;
+      document.getElementById('s_ec').innerHTML =
+        `${(s.energy_kwh ?? 0).toFixed(1)} <span class="unit">kWh · € ${s.cost_eur.toFixed(2)}</span>`;
+      document.getElementById('s_meta').textContent =
+        `${fmtDt(s.started_at)} → ${fmtDt(s.ended_at)} · ${st.samples} samples`;
+      document.getElementById('s_type').textContent =
+        `${st.charging_type ?? 'unknown'} · ${s.effective_price_ct_per_kwh.toFixed(1)} ct/kWh · ${s.is_complete ? 'complete' : 'LIVE'}`;
+
+      // Build datasets
+      const tPoints = c.map(x => x.t);
+      const powerKw = c.map(x => x.power_w != null ? x.power_w/1000 : null);
+      const soc     = c.map(x => x.soc);
+      const currI   = c.map(x => x.current_a);
+      const voltV   = c.map(x => x.voltage_v);
+
+      const liveColor = s.is_complete ? p.ink : p.orange;
+
+      new Chart(document.getElementById('chartPower'), {
+        type: 'line',
+        data: {
+          labels: tPoints,
+          datasets: [
+            {
+              label: 'Power (kW)',
+              data: powerKw,
+              yAxisID: 'y1',
+              borderColor: liveColor,
+              backgroundColor: liveColor + '22',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.25,
+              fill: true,
+              spanGaps: true,
+            },
+            {
+              label: 'SoC (%)',
+              data: soc,
+              yAxisID: 'y2',
+              borderColor: p.ink2,
+              borderWidth: 1.5,
+              borderDash: [4, 3],
+              pointRadius: 0,
+              tension: 0.15,
+              spanGaps: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } },
+            tooltip: { backgroundColor: '#000', borderColor: p.line2, borderWidth: 1, titleFont: { family: 'JetBrains Mono', size: 10 }, bodyFont: { family: 'Inter Tight' } },
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: { tooltipFormat: 'HH:mm', displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } },
+              grid: { color: p.line, drawBorder: false },
+              ticks: { color: p.ink3, font: { family: 'JetBrains Mono', size: 10 } },
+            },
+            y1: {
+              position: 'left',
+              title: { display: true, text: 'kW', color: p.ink3, font: { family: 'JetBrains Mono', size: 10 } },
+              grid: { color: p.line },
+              ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } },
+              beginAtZero: true,
+            },
+            y2: {
+              position: 'right',
+              title: { display: true, text: '%', color: p.ink3, font: { family: 'JetBrains Mono', size: 10 } },
+              grid: { display: false },
+              ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } },
+              min: 0, max: 100,
+            },
+          },
+        },
+      });
+
+      new Chart(document.getElementById('chartIV'), {
+        type: 'line',
+        data: {
+          labels: tPoints,
+          datasets: [
+            { label: 'Current (A)', data: currI, yAxisID: 'yA',
+              borderColor: p.ink, borderWidth: 1.5, pointRadius: 0, tension: 0.2, spanGaps: true },
+            { label: 'Voltage (V)', data: voltV, yAxisID: 'yV',
+              borderColor: p.ink3, borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, tension: 0.2, spanGaps: true },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } },
+          },
+          scales: {
+            x: {
+              type: 'time',
+              time: { tooltipFormat: 'HH:mm', displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } },
+              grid: { color: p.line },
+              ticks: { color: p.ink3, font: { family: 'JetBrains Mono', size: 10 } },
+            },
+            yA: { position: 'left',  grid: { color: p.line },
+                  ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } },
+                  title: { display: true, text: 'A', color: p.ink3 } },
+            yV: { position: 'right', grid: { display: false },
+                  ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } },
+                  title: { display: true, text: 'V', color: p.ink3 } },
+          },
+        },
+      });
+
+      // If live, re-poll every 30s — repaint just the data.
+      if (!s.is_complete) setTimeout(() => location.reload(), 30000);
+    }
+
+    function start() {
+      if (window.Chart) load();
+      else setTimeout(start, 100);
+    }
+    window.addEventListener('load', start);
+    window.addEventListener('themechange', () => location.reload());
+  </script>
+{% endblock %}

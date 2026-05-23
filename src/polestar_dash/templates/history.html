@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}History · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">02 / HISTORY</div>
+    <h1>Telemetry <em class="accent">timeseries</em></h1>
+  </div>
+
+  <div class="card mb-6">
+    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+      <div class="field">
+        <label>Field</label>
+        <select id="field">
+          <option value="soc_percent">SoC %</option>
+          <option value="range_km">Range km</option>
+          <option value="charging_power_w">Charging power W</option>
+          <option value="charging_current_a">Charging current A</option>
+          <option value="charging_voltage_v">Charging voltage V</option>
+          <option value="avg_consumption_kwh_per_100km">kWh/100km</option>
+          <option value="odometer_km">Odometer km</option>
+          <option value="avg_speed_kmh">Avg speed km/h</option>
+          <option value="minutes_to_full">Minutes to full</option>
+          <option value="minutes_to_target">Minutes to target</option>
+          <option value="minutes_to_minimum_soc">Minutes to min SoC</option>
+          <option value="target_soc_percent">Target SoC %</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Range</label>
+        <select id="days">
+          <option value="1">24 h</option>
+          <option value="7" selected>7 days</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="365">1 year</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-6"><canvas id="chart" height="120"></canvas></div>
+
+
+  <div class="card-label mb-4">Daily driving</div>
+  <div class="card mb-6"><canvas id="dailyChart" height="100"></canvas></div>
+
+  <div id="sessions" class="section-head" style="margin-top:48px">
+    <div class="num-tag">03 / SESSIONS</div>
+    <h1>Charging <em class="accent">sessions</em></h1>
+  </div>
+
+  <div id="sessTotals" class="grid grid-4 mb-6">
+    <div class="card"><div class="card-label">Sessions</div><div class="stat num" id="t_count">—</div></div>
+    <div class="card"><div class="card-label">Energy total</div><div class="stat num" id="t_kwh">—<span class="unit">kWh</span></div></div>
+    <div class="card"><div class="card-label">Cost total</div><div class="stat num">€ <span id="t_cost">—</span></div></div>
+    <div class="card"><div class="card-label">Default price</div><div class="stat num" id="t_default">—<span class="unit">ct/kWh</span></div><div class="stat-sub"><a href="/settings">change in settings</a></div></div>
+  </div>
+
+  <div id="sessList" class="grid"><p class="muted">Loading…</p></div>
+
+  <script>
+    function _asUTC(s) { return /[zZ]|[+\-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'; }
+    function _fmtDt(s) { return s ? new Date(_asUTC(s)).toLocaleString() : '—'; }
+    function _fmtDur(start, end) {
+      if (!start || !end) return '—';
+      const ms = new Date(_asUTC(end)) - new Date(_asUTC(start));
+      const m = Math.round(ms/60000);
+      if (m < 60) return `${m} min`;
+      return `${Math.floor(m/60)} h ${m%60} min`;
+    }
+    function _escAttr(s) { return (s ?? '').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+    let DEFAULT_PRICE = 50;
+
+    function renderSessions(items) {
+      const el = document.getElementById('sessList');
+      if (!items.length) { el.innerHTML = '<p class="muted">No charging sessions recorded yet.</p>'; return; }
+      el.innerHTML = items.map(s => `
+        <div class="card" data-id="${s.id}" style="padding:16px">
+          <div class="flex-between" style="flex-wrap:wrap;gap:8px;align-items:center">
+            <div class="card-label" style="margin:0">${_fmtDt(s.started_at)} → ${_fmtDt(s.ended_at)}</div>
+            <span class="badge ${s.is_complete ? '' : 'live'}"><span class="dot"></span>${s.is_complete ? 'complete' : 'live'}</span>
+          </div>
+          <div class="grid grid-4" style="margin-top:8px">
+            <div>
+              <div class="mono-xs">SoC</div>
+              <div class="stat num" style="font-size:24px">${s.soc_start ?? '–'}<span class="unit">→ ${s.soc_end ?? '–'} %</span></div>
+            </div>
+            <div>
+              <div class="mono-xs">Duration</div>
+              <div class="stat num" style="font-size:24px">${_fmtDur(s.started_at, s.ended_at)}</div>
+              <div class="stat-sub">peak ${((s.peak_power_w||0)/1000).toFixed(1)} / avg ${((s.avg_power_w||0)/1000).toFixed(1)} kW</div>
+            </div>
+            <div>
+              <div class="mono-xs">Energy</div>
+              <div class="stat num" style="font-size:24px">${(s.energy_kwh ?? 0).toFixed(1)}<span class="unit">kWh</span></div>
+            </div>
+            <div>
+              <div class="mono-xs">Cost</div>
+              <div class="stat num" style="font-size:24px">€ <em class="accent">${s.cost_eur.toFixed(2)}</em></div>
+              <div class="stat-sub">${s.effective_price_ct_per_kwh.toFixed(1)} ct/kWh · <span class="${s.price_source==='session' ? 'accent' : 'muted'}">${s.price_source}</span></div>
+            </div>
+          </div>
+          <div class="flex gap-4 mt-4" style="align-items:flex-end;flex-wrap:wrap">
+            <div class="field" style="min-width:140px">
+              <label>Price (ct/kWh)</label>
+              <input type="number" min="0" max="500" step="0.1" placeholder="def ${DEFAULT_PRICE.toFixed(1)}" value="${s.price_ct_per_kwh ?? ''}" data-field="price">
+            </div>
+            <div class="field" style="flex:1;min-width:180px">
+              <label>Note</label>
+              <input type="text" placeholder="e.g. Wallbox home, IONITY A4" value="${_escAttr(s.note)}" data-field="note">
+            </div>
+            <button class="btn ghost" onclick="saveSession(${s.id}, this)">Save <span class="arrow">→</span></button>
+            <button class="btn ghost" onclick="clearOverride(${s.id}, this)" title="Use default price">Reset <span class="arrow">→</span></button>
+            <a class="mono-xs" href="/sessions/${s.id}" style="margin-left:auto">View curve →</a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function loadSessions() {
+      const r = await fetch('/api/sessions?days=180');
+      const j = await r.json();
+      DEFAULT_PRICE = j.default_price_ct_per_kwh;
+      document.getElementById('t_count').textContent = j.totals.count;
+      document.getElementById('t_kwh').innerHTML = `${j.totals.kwh.toFixed(1)}<span class="unit">kWh</span>`;
+      document.getElementById('t_cost').textContent = j.totals.cost_eur.toFixed(2);
+      document.getElementById('t_default').innerHTML = `${DEFAULT_PRICE.toFixed(1)}<span class="unit">ct/kWh</span>`;
+      renderSessions(j.items);
+    }
+
+    function _rowInputs(btn) {
+      const card = btn.closest('.card');
+      return { id: card.dataset.id,
+        price: card.querySelector('[data-field=price]').value,
+        note: card.querySelector('[data-field=note]').value };
+    }
+    async function saveSession(id, btn) {
+      const inp = _rowInputs(btn);
+      const params = new URLSearchParams();
+      if (inp.price !== '') params.set('price_ct_per_kwh', inp.price);
+      params.set('note', inp.note);
+      const r = await fetch(`/api/sessions/${id}?${params}`, {method:'PATCH'});
+      if (!r.ok) return alert('save failed');
+      await loadSessions();
+    }
+    async function clearOverride(id, btn) {
+      const inp = _rowInputs(btn);
+      const params = new URLSearchParams();
+      params.set('note', inp.note);
+      const r = await fetch(`/api/sessions/${id}?${params}`, {method:'PATCH'});
+      if (!r.ok) return alert('reset failed');
+      await loadSessions();
+    }
+    window.addEventListener('load', loadSessions);
+  </script>
+
+  <script>
+    let chart, daily;
+    function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+    // Resolved fresh on every refresh() so a theme toggle re-colors the charts.
+    let ORANGE, INK3, LINE, INK;
+    function readTheme() {
+      ORANGE = cssVar('--ujh-orange') || '#ff5b14';
+      INK3   = cssVar('--ujh-ink-3')  || '#8a8d93';
+      LINE   = cssVar('--ujh-line')   || '#2a2c30';
+      INK    = cssVar('--ujh-ink')    || '#e8e8ea';
+    }
+
+    async function load() {
+      readTheme();
+      const field = document.getElementById('field').value;
+      const days = document.getElementById('days').value;
+      const r = await fetch(`/api/history?field=${field}&days=${days}`);
+      const j = await r.json();
+      const datasets = [{
+        label: field,
+        data: j.points.map(p => ({x: p.t, y: p.v})),
+        borderColor: INK,
+        backgroundColor: 'rgba(232,232,234,.06)',
+        fill: true, tension: 0, pointRadius: 0, yAxisID: 'y',
+        borderWidth: 1.5,
+      }];
+
+      const scales = {
+        x: { type: 'time', ticks: { color: INK3, font:{family:'JetBrains Mono', size:10} }, grid: { color: LINE } },
+        y: { ticks: { color: INK3, font:{family:'JetBrains Mono', size:10} }, grid: { color: LINE } }
+      };
+
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById('chart'), {
+        data: { datasets },
+        type: 'line',
+        options: {
+          responsive: true, scales,
+          plugins: { legend: { labels: { color: INK, font:{family:'JetBrains Mono', size:10} } } }
+        }
+      });
+    }
+
+    async function loadDaily() {
+      readTheme();
+      const days = document.getElementById('days').value;
+      const r = await fetch(`/api/daily?days=${days}`);
+      const rows = await r.json();
+      const data = {
+        labels: rows.map(d => d.day),
+        datasets: [
+          { label: 'km/day', data: rows.map(d => d.km), backgroundColor: INK },
+          { label: 'kWh (est)', data: rows.map(d => d.kwh_est), backgroundColor: ORANGE, yAxisID: 'y1' },
+        ]
+      };
+      if (daily) daily.destroy();
+      daily = new Chart(document.getElementById('dailyChart'), {
+        type: 'bar', data,
+        options: {
+          responsive: true,
+          scales: {
+            x: { ticks: { color: INK3, font:{family:'JetBrains Mono', size:10} }, grid: { color: LINE } },
+            y: { ticks: { color: INK3, font:{family:'JetBrains Mono', size:10} }, grid: { color: LINE }, title: { display: true, text: 'km', color:INK3 } },
+            y1: { position: 'right', ticks: { color: ORANGE, font:{family:'JetBrains Mono', size:10} }, grid: { display: false }, title: { display: true, text: 'kWh', color:ORANGE } }
+          },
+          plugins: { legend: { labels: { color: INK, font:{family:'JetBrains Mono', size:10} } } }
+        }
+      });
+    }
+    function refresh() { load(); loadDaily(); }
+    document.getElementById('field').addEventListener('change', load);
+    document.getElementById('days').addEventListener('change', refresh);
+    window.addEventListener('load', () => setTimeout(refresh, 200));
+    window.addEventListener('themechange', refresh);
+  </script>
+{% endblock %}

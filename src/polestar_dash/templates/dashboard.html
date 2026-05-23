@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">01 / DASHBOARD</div>
+    <h1>Live <em class="accent">telemetry</em></h1>
+  </div>
+  <div id="cards"
+       hx-get="/partials/cards"
+       hx-trigger="every 30s"
+       hx-swap="innerHTML">
+    {% include "partials/cards.html" %}
+  </div>
+{% endblock %}

@@ -1,0 +1,124 @@
+# polestar-dash
+
+Self-hosted web dashboard for your **Polestar 2**. Polls the (unofficial)
+Polestar consumer API in the background, stores the history in SQLite, and
+serves a single page with SoC, range, charging state, odometer, trips,
+sessions, anomalies and service warnings.
+
+Optional: **ntfy.sh / Telegram** push, **MQTT / Home Assistant**,
+**Prometheus / Grafana**.
+
+> Unofficial. Not affiliated with Polestar. Uses reverse-engineered endpoints
+> via [pypolestar](https://github.com/pypolestar/pypolestar) and may break.
+
+## Screenshots
+
+| Dashboard | History | Insights |
+|---|---|---|
+| ![](docs/screenshots/dashboard.png) | ![](docs/screenshots/history.png) | ![](docs/screenshots/insights.png) |
+
+| Tripbook | | |
+|---|---|---|
+| ![](docs/screenshots/tripbook.png) | | |
+
+## Prerequisites
+
+- Linux host with **Docker** + **Docker Compose** (VPS, NAS, Raspberry Pi 4+).
+- Polestar account credentials (same email + password as the mobile app).
+- ~100 MB disk + ~10 MB/month history.
+- Optional: reverse proxy (Caddy/Traefik/nginx) — the app has **no built-in auth**.
+
+## Install
+
+```bash
+git clone https://github.com/YOUR/polestar-dash.git
+cd polestar-dash
+cp .env.example .env
+$EDITOR .env       # set POLESTAR_EMAIL + POLESTAR_PASSWORD
+docker compose up -d
+```
+
+Open <http://localhost:8000>. Container binds to `127.0.0.1:8000`.
+
+> Passwords containing `$` must be wrapped in **single quotes** in `.env`.
+
+Update: `git pull && docker compose up -d --build`. Or add
+`--profile ops` for Watchtower auto-updates.
+
+## Pages
+
+| Path | Purpose |
+|---|---|
+| `/` | Live tiles: SoC, charging, range, consumption, vehicle info |
+| `/history` | Time-series + charging sessions |
+| `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
+| `/tripbook` | Trips from odometer, monthly kWh/100km, iCal feed |
+| `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector |
+| `/settings` `/errors` `/raw` | Settings, recent errors, raw API dump |
+| `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
+| `/metrics` | Prometheus exposition |
+
+The consumer API does **not** expose live GPS, TPMS or door/window state.
+
+## Configuration
+
+See [`.env.example`](.env.example). Most useful:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `POLESTAR_EMAIL` / `POLESTAR_PASSWORD` | — | Required |
+| `POLESTAR_VINS` | *(auto-discover)* | Comma-separated |
+| `POLL_INTERVAL_MIN` | `10` | Idle (floor: 5) |
+| `FAST_POLL_INTERVAL_MIN` | `2` | Charging (floor: 1) |
+| `NTFY_TOPIC` | — | Unguessable string |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | — | Bot push |
+| `MQTT_HOST` | — | Enables MQTT + HA discovery |
+| `BACKUP_KEEP_DAYS` | `14` | Daily SQLite backups |
+
+Electricity prices: set a default `ct/kWh` on `/settings` (defaults to 50);
+per-session overrides on the Sessions page get energy-weighted into the
+tripbook cost columns.
+
+Address labels: friendly names (`Home`, `Work`, …) for frequent destinations
+shown on `/tripbook` and `/routes`. Multiple addresses can hang off one label
+— useful when the same place reports slightly different geocoded strings.
+Manage them visually on `/settings` → *Address map* (Leaflet + OSM): every
+unique start/end point from imported trips appears as a dot, click to assign.
+
+## Reverse proxy (Caddy)
+
+```caddyfile
+poledash.example.com {
+    basic_auth {
+        admin $2a$14$...    # caddy hash-password
+    }
+    reverse_proxy 127.0.0.1:8000
+}
+```
+
+Reference: [`deploy/Caddyfile`](deploy/Caddyfile).
+
+## Rate limits
+
+Polestar publishes no documented rate limit. The upstream Home Assistant
+integration polls every 60 s with no widespread reports of issues; our
+defaults (2 min charging / 10 min idle) are conservative. If you ever see
+HTTP 429 in `/errors`, stop the container for an hour and restart with
+longer intervals.
+
+## How it works
+
+`pypolestar` does OAuth/PKCE login with your account, discovers your VINs,
+and queries Polestar's GraphQL + gRPC endpoints every tick. Each poll
+writes one typed row (`VehicleSnapshot`) and one full JSON dump
+(`RawSnapshot`) to SQLite. Everything else — dashboard, MQTT, Prometheus,
+notifications, sessions, tripbook — reads from there.
+
+## Acknowledgements
+
+[pypolestar](https://github.com/pypolestar/pypolestar) (MIT),
+ntfy.sh, APScheduler, FastAPI, Chart.js, htmx.
+
+## Licence
+
+MIT — see [`LICENSE`](LICENSE).

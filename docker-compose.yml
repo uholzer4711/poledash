@@ -1,0 +1,34 @@
+services:
+  polestar-dash:
+    build: .
+    image: polestar-dash:latest
+    container_name: polestar-dash
+    restart: unless-stopped
+    # Note: we deliberately do NOT use `env_file:` here.
+    # docker-compose performs $-substitution on env_file contents, which
+    # corrupts passwords containing `$`. Instead we mount .env into the
+    # container and let pydantic-settings / python-dotenv parse it directly.
+    ports:
+      # Bind to localhost by default — put a reverse proxy (Caddy/Traefik/nginx) in front
+      # if you want to expose this beyond the host. See README.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/data
+      - ./.env:/app/.env:ro
+    labels:
+      # Auto-update via Watchtower when the "ops" profile is started.
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # Optional: run `docker compose --profile ops up -d` to also start Watchtower,
+  # which periodically pulls the latest image and restarts the container.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: poledash-watchtower
+    restart: unless-stopped
+    profiles: ["ops"]
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "21600" # 6h
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
