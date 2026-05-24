@@ -465,8 +465,12 @@ async def journey_imports_enrich() -> dict:
 
 
 @router.get("/route-stats")
-def route_stats(days: int = Query(365, ge=1, le=3650), min_trips: int = Query(2, ge=1, le=20)) -> list[dict]:
-    rows = list_routes(days=days, min_trips=min_trips)
+def route_stats(
+    days: int = Query(365, ge=1, le=3650),
+    min_trips: int = Query(2, ge=1, le=20),
+    radius_km: float = Query(1.0, ge=0.0, le=25.0),
+) -> list[dict]:
+    rows = list_routes(days=days, min_trips=min_trips, radius_km=radius_km)
     return [
         {**r, "last_at": r["last_at"].isoformat() if r.get("last_at") else None}
         for r in rows
@@ -474,8 +478,13 @@ def route_stats(days: int = Query(365, ge=1, le=3650), min_trips: int = Query(2,
 
 
 @router.get("/route-trips")
-def route_trips(start: str, end: str, days: int = Query(365, ge=1, le=3650)) -> list[dict]:
-    return [j.model_dump(mode="json") for j in trips_for_route(start, end, days=days)]
+def route_trips(
+    start: str,
+    end: str,
+    days: int = Query(365, ge=1, le=3650),
+    radius_km: float = Query(1.0, ge=0.0, le=25.0),
+) -> list[dict]:
+    return [j.model_dump(mode="json") for j in trips_for_route(start, end, days=days, radius_km=radius_km)]
 
 
 @router.get("/address-labels")

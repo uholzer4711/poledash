@@ -243,12 +243,13 @@ def routes_page(
     request: Request,
     days: int = Query(365, ge=1, le=3650),
     min_trips: int = Query(1, ge=1, le=20),
+    radius_km: float = Query(1.0, ge=0.0, le=25.0),
 ):
-    routes = list_routes(days=days, min_trips=min_trips)
+    routes = list_routes(days=days, min_trips=min_trips, radius_km=radius_km)
     return templates.TemplateResponse(
         request,
         "routes.html",
-        {"routes": routes, "days": days, "min_trips": min_trips},
+        {"routes": routes, "days": days, "min_trips": min_trips, "radius_km": radius_km},
     )
 
 

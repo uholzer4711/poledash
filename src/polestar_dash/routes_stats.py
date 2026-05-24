@@ -1,35 +1,124 @@
 """Aggregate repeated routes from imported journey-log trips.
 
-Two trips count as the "same route" when their labeled start- and
-end-addresses match (e.g. "Heim → Arbeit"). Unlabeled trips are grouped
-by the first segment of their geocoded address — coarse but usually
-sufficient for finding patterns. The aggregator returns ordered tuples
-of (start, end), so "Heim → Arbeit" and "Arbeit → Heim" are distinct.
+Two trips count as the "same route" when their start- and end-places
+match. A place is either:
+  - a configured label (e.g. "Heim") if any label-pattern matches the
+    geocoded address, or
+  - a 1-km cluster of nearby endpoints (greedy clustering on lat/lng).
+
+The 1-km tolerance avoids splitting visits to the same destination
+across slightly different geocoded addresses (different street, side
+of the building, GPS jitter). Trips with no coordinates fall back to
+the first segment of the address.
+
+The aggregator returns ordered tuples of (start, end), so
+"Heim → Arbeit" and "Arbeit → Heim" are distinct.
 """
 
 from __future__ import annotations
 
+import math
+from collections import Counter
 from datetime import datetime, timedelta
 from statistics import mean
-from typing import Iterable
 
 from sqlmodel import Session, select
 
 from .db.models import JourneyImport
 from .db.session import get_engine
-from .journey_import import label_for
+from .journey_import import get_address_labels, label_for
 
 
-def _place(addr: str | None) -> str:
+def _short(addr: str | None) -> str:
     if not addr:
         return "—"
-    lbl = label_for(addr)
-    if lbl:
-        return lbl
-    return addr.split(",")[0]
+    return addr.split(",")[0].strip() or "—"
 
 
-def list_routes(days: int = 365, min_trips: int = 2) -> list[dict]:
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _cluster_places(
+    points: list[tuple[float, float, str]],
+    radius_km: float,
+) -> dict[tuple[float, float], str]:
+    """Greedy-cluster (lat, lng, short_addr) points within radius_km.
+
+    Returns a mapping {(lat, lng): cluster_key}, where cluster_key is
+    the most common short_addr among points in that cluster.
+    """
+    # cluster = (center_lat, center_lng, [short_addr, ...], [(lat, lng), ...])
+    clusters: list[tuple[float, float, list[str], list[tuple[float, float]]]] = []
+    for lat, lng, name in points:
+        placed = False
+        for i, (clat, clng, names, members) in enumerate(clusters):
+            if _haversine_km(lat, lng, clat, clng) <= radius_km:
+                names.append(name)
+                members.append((lat, lng))
+                # recompute centroid so the cluster doesn't drift with insertion order
+                nlat = sum(p[0] for p in members) / len(members)
+                nlng = sum(p[1] for p in members) / len(members)
+                clusters[i] = (nlat, nlng, names, members)
+                placed = True
+                break
+        if not placed:
+            clusters.append((lat, lng, [name], [(lat, lng)]))
+
+    out: dict[tuple[float, float], str] = {}
+    for _, _, names, members in clusters:
+        key = Counter(n for n in names if n and n != "—").most_common(1)
+        cluster_name = key[0][0] if key else "—"
+        for lat, lng in members:
+            out[(lat, lng)] = cluster_name
+    return out
+
+
+def _build_key_resolver(
+    trips: list[JourneyImport],
+    radius_km: float,
+):
+    """Return a function trip -> (start_key, end_key) for these trips.
+
+    Endpoints with a matching address label get the label as their key.
+    Endpoints with coordinates but no label are clustered together
+    (start and end endpoints share one cluster space — going *to* a
+    place and starting *from* the same place yield the same key).
+    """
+    labels = get_address_labels()
+
+    geo_points: list[tuple[float, float, str]] = []
+    for t in trips:
+        if not label_for(t.start_address, labels) and t.start_lat is not None and t.start_lng is not None:
+            geo_points.append((t.start_lat, t.start_lng, _short(t.start_address)))
+        if not label_for(t.end_address, labels) and t.end_lat is not None and t.end_lng is not None:
+            geo_points.append((t.end_lat, t.end_lng, _short(t.end_address)))
+
+    cluster_lookup = _cluster_places(geo_points, radius_km)
+
+    def resolve(addr: str | None, lat: float | None, lng: float | None) -> str:
+        lbl = label_for(addr, labels)
+        if lbl:
+            return lbl
+        if lat is not None and lng is not None and (lat, lng) in cluster_lookup:
+            return cluster_lookup[(lat, lng)]
+        return _short(addr)
+
+    def for_trip(t: JourneyImport) -> tuple[str, str]:
+        return (
+            resolve(t.start_address, t.start_lat, t.start_lng),
+            resolve(t.end_address, t.end_lat, t.end_lng),
+        )
+
+    return for_trip
+
+
+def list_routes(days: int = 365, min_trips: int = 2, radius_km: float = 1.0) -> list[dict]:
     since = datetime.utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         rows = list(
@@ -40,10 +129,11 @@ def list_routes(days: int = 365, min_trips: int = 2) -> list[dict]:
             ).all()
         )
 
+    key_for = _build_key_resolver(rows, radius_km)
+
     buckets: dict[tuple[str, str], list[JourneyImport]] = {}
     for r in rows:
-        key = (_place(r.start_address), _place(r.end_address))
-        buckets.setdefault(key, []).append(r)
+        buckets.setdefault(key_for(r), []).append(r)
 
     out: list[dict] = []
     for (start, end), trips in buckets.items():
@@ -80,7 +170,9 @@ def list_routes(days: int = 365, min_trips: int = 2) -> list[dict]:
     return out
 
 
-def trips_for_route(start: str, end: str, days: int = 365) -> list[JourneyImport]:
+def trips_for_route(
+    start: str, end: str, days: int = 365, radius_km: float = 1.0
+) -> list[JourneyImport]:
     since = datetime.utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         rows = list(
@@ -90,4 +182,5 @@ def trips_for_route(start: str, end: str, days: int = 365) -> list[JourneyImport
                 .order_by(JourneyImport.started_at.desc())
             ).all()
         )
-    return [r for r in rows if _place(r.start_address) == start and _place(r.end_address) == end]
+    key_for = _build_key_resolver(rows, radius_km)
+    return [r for r in rows if key_for(r) == (start, end)]

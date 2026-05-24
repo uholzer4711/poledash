@@ -9,12 +9,17 @@
   <div class="flex-between mb-6 no-print">
     <div class="flex gap-2">
       {% for d in [30, 90, 365, 3650] %}
-        <a href="/routes?days={{ d }}&min_trips={{ min_trips }}" class="badge {% if d==days %}solid{% endif %}">{{ "All" if d == 3650 else (d|string + "D") }}</a>
+        <a href="/routes?days={{ d }}&min_trips={{ min_trips }}&radius_km={{ radius_km }}" class="badge {% if d==days %}solid{% endif %}">{{ "All" if d == 3650 else (d|string + "D") }}</a>
       {% endfor %}
     </div>
     <div class="flex gap-2">
       {% for m, lbl in [(1, "All"), (2, "≥2"), (5, "≥5"), (10, "≥10")] %}
-        <a href="/routes?days={{ days }}&min_trips={{ m }}" class="badge {% if m==min_trips %}solid{% endif %}">{{ lbl }}</a>
+        <a href="/routes?days={{ days }}&min_trips={{ m }}&radius_km={{ radius_km }}" class="badge {% if m==min_trips %}solid{% endif %}">{{ lbl }}</a>
+      {% endfor %}
+    </div>
+    <div class="flex gap-2">
+      {% for r in [0.0, 0.5, 1.0, 2.0, 5.0] %}
+        <a href="/routes?days={{ days }}&min_trips={{ min_trips }}&radius_km={{ r }}" class="badge {% if r==radius_km %}solid{% endif %}">{{ "exact" if r == 0.0 else ("±" + ("%g"|format(r)) + "km") }}</a>
       {% endfor %}
     </div>
   </div>
