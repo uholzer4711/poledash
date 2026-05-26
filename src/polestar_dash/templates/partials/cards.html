@@ -1,3 +1,11 @@
+{% macro fmt_min(m) -%}
+  {%- if m >= 60 -%}
+    {{ (m // 60)|int }}<span class="unit">h</span> {{ (m % 60)|int }}<span class="unit">m</span>
+  {%- else -%}
+    {{ m }}<span class="unit">m</span>
+  {%- endif -%}
+{%- endmacro %}
+
 {% if not s %}
   <p class="muted">No data yet. The first poll runs at startup; refresh in a minute.</p>
 {% else %}
@@ -17,7 +25,133 @@
     </div>
   {% endif %}
 
+  {% if is_charging %}
+  <!-- ═══ CHARGING HERO ═══ -->
+  <div class="card charge-hero mb-4">
+    {% set pct = s.soc_percent or 0 %}
+
+    <div class="charge-header">
+      <span class="badge live"><span class="dot"></span>{{ s.charging_status }}</span>
+      {% if s.charging_type %}<span class="badge">{{ s.charging_type }}</span>{% endif %}
+    </div>
+
+    <!-- Battery bar -->
+    <div class="battery-vis">
+      <div class="battery-pct num">{{ pct }}<span class="unit">%</span></div>
+      <div class="battery-bar-wrap">
+        {% set sweep_end = s.target_soc_percent if s.target_soc_percent else 100 %}
+        <div class="battery-bar" style="--soc: {{ pct }}; --sweep-end: {{ sweep_end }}">
+          <div class="battery-bar-fill"></div>
+          <div class="battery-bar-sweep"></div>
+        </div>
+        {% if s.target_soc_percent %}
+          <div class="battery-target" style="--target: {{ s.target_soc_percent }}">
+            <span class="battery-target-label mono-xs">{{ s.target_soc_percent }}%</span>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- VU gauges: Power + Voltage -->
+    <div class="vu-row">
+      {% if s.charging_power_w %}
+        {% set power_kw = s.charging_power_w / 1000 %}
+        {% set max_kw = 22 if power_kw <= 22 else (50 if power_kw <= 50 else 150) %}
+        <div class="vu-meter">
+          <div class="vu-head">
+            <span class="mono-xs">Power</span>
+          </div>
+          <div class="vu-reading">
+            <span class="vu-val num">{{ "%.1f"|format(power_kw) }}</span>
+            <span class="vu-unit">kW</span>
+          </div>
+          <div class="vu-track">
+            <div class="vu-fill" style="width: {{ (power_kw / max_kw * 100)|round }}%"></div>
+            <div class="vu-needle" style="left: {{ (power_kw / max_kw * 100)|round }}%"></div>
+          </div>
+          <div class="vu-scale">
+            <span>0</span>
+            <span class="vu-scale-mid">{{ (max_kw / 2)|int }}</span>
+            <span>{{ max_kw|int }}</span>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if s.charging_voltage_v %}
+        {% set v = s.charging_voltage_v %}
+        {% set v_min = 200 if v <= 260 else 300 %}
+        {% set v_max = 260 if v <= 260 else 500 %}
+        <div class="vu-meter">
+          <div class="vu-head">
+            <span class="mono-xs">Voltage</span>
+          </div>
+          <div class="vu-reading">
+            <span class="vu-val num">{{ v }}</span>
+            <span class="vu-unit">V</span>
+          </div>
+          <div class="vu-track">
+            <div class="vu-fill" style="width: {{ ((v - v_min) / (v_max - v_min) * 100)|round }}%"></div>
+            <div class="vu-needle" style="left: {{ ((v - v_min) / (v_max - v_min) * 100)|round }}%"></div>
+          </div>
+          <div class="vu-scale">
+            <span>{{ v_min }}</span>
+            <span class="vu-scale-mid">{{ ((v_min + v_max) / 2)|int }}</span>
+            <span>{{ v_max }}</span>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Stats row -->
+    <div class="charge-stats">
+      {% set time_label = none %}
+      {% if s.minutes_to_target %}
+        {% set time_to_show = s.minutes_to_target %}
+        {% set time_label = "To target" %}
+      {% elif s.minutes_to_full and s.target_soc_percent and s.target_soc_percent < 100 and pct < s.target_soc_percent %}
+        {% set time_to_show = (s.minutes_to_full * (s.target_soc_percent - pct) / (100 - pct))|round|int %}
+        {% set time_label = "To target" %}
+      {% elif s.minutes_to_full %}
+        {% set time_to_show = s.minutes_to_full %}
+        {% set time_label = "To full" %}
+      {% endif %}
+      {% if time_label %}
+      <div class="charge-stat-item">
+        <div class="mono-xs">{{ time_label }}</div>
+        <div class="charge-stat-val num">{{ fmt_min(time_to_show) }}</div>
+      </div>
+      {% endif %}
+      <div class="charge-stat-item">
+        <div class="mono-xs">Range</div>
+        <div class="charge-stat-val num">{{ s.range_km if s.range_km is not none else "–" }}<span class="unit">km</span></div>
+      </div>
+      {% if s.charging_current_a %}
+      <div class="charge-stat-item">
+        <div class="mono-xs">Current</div>
+        <div class="charge-stat-val num">{{ s.charging_current_a }}<span class="unit">A</span></div>
+      </div>
+      {% endif %}
+      {% if s.target_soc_percent %}
+      <div class="charge-stat-item">
+        <div class="mono-xs">Target</div>
+        <div class="charge-stat-val num">{{ s.target_soc_percent }}<span class="unit">%</span>
+          {%- if s.target_soc_type %} <span class="muted" style="font-size:11px">{{ s.target_soc_type }}</span>{% endif -%}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if s.minutes_to_full and time_label == "To target" %}
+    <div class="mt-3 chips">
+      {% set ftf = s.minutes_to_full %}
+      <span class="badge">{% if ftf >= 60 %}{{ (ftf // 60)|int }}h {{ (ftf % 60)|int }}m{% else %}{{ ftf }}m{% endif %} to 100%</span>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div class="grid grid-2">
+    {% if not is_charging %}
     <!-- SoC + range -->
     <div class="card">
       <div class="card-label">State of charge</div>
@@ -52,30 +186,16 @@
     <!-- Charging -->
     <div class="card">
       <div class="card-label">
-        {% if is_charging %}<span class="badge live"><span class="dot"></span>{{ s.charging_status }}</span>
-        {% elif s.charging_status == 'Done' %}<span class="badge"><span class="dot"></span>Done</span>
+        {% if s.charging_status == 'Done' %}<span class="badge"><span class="dot"></span>Done</span>
         {% elif is_plugged %}<span class="badge"><span class="dot"></span>Plugged</span>
         {% else %}Charging{% endif %}
       </div>
-      {% if is_charging and s.charging_power_w %}
-        <div class="stat num">{{ "%.1f"|format(s.charging_power_w/1000) }}<span class="unit">kW</span></div>
-        <div class="stat-sub">
-          {% if s.charging_type %}{{ s.charging_type }}{% endif %}
-          {% if s.charging_current_a %} · {{ s.charging_current_a }} A{% endif %}
-          {% if s.charging_voltage_v %} · {{ s.charging_voltage_v }} V{% endif %}
-        </div>
-      {% else %}
-        <div class="stat-muted">{{ s.charging_status or "Idle" }}</div>
-        <div class="stat-sub">
-          {% if is_plugged %}Cable connected, not drawing{% else %}Not plugged in{% endif %}
-        </div>
-      {% endif %}
-      <div class="mt-4 chips">
-        {% if s.minutes_to_full %}<span class="badge">{{ s.minutes_to_full }} min · full</span>{% endif %}
-        {% if s.minutes_to_target %}<span class="badge">{{ s.minutes_to_target }} min · target</span>{% endif %}
-        {% if s.minutes_to_minimum_soc %}<span class="badge">{{ s.minutes_to_minimum_soc }} min · min SoC</span>{% endif %}
+      <div class="stat-muted">{{ s.charging_status or "Idle" }}</div>
+      <div class="stat-sub">
+        {% if is_plugged %}Cable connected, not drawing{% else %}Not plugged in{% endif %}
       </div>
     </div>
+    {% endif %}
 
     <!-- Odometer -->
     <div class="card">

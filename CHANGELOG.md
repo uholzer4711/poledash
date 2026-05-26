@@ -5,6 +5,31 @@ All notable changes to **polestar-dash**. Format roughly follows
 
 ## [Unreleased] — 2026-05-26
 
+### Added — Charging Hero dashboard mode
+
+When the car is actively charging, the dashboard replaces the normal SoC +
+Charging cards with a full-width **Charging Hero** panel:
+
+- **Animated battery bar**: filled portion up to current SoC with a glowing
+  orange leading edge, energy-flow ticks and a sweep animation through the
+  uncharged zone. The animation stops at the target SoC (not 100%).
+- **Target SoC marker**: vertical line + label on the battery bar at the
+  configured charge limit.
+- **VU-meter gauges** for charging power (kW) and voltage (V) — horizontal
+  gauge bars with orange fill, needle indicator and min/mid/max scale.
+  Ranges adapt automatically (0–22 kW for AC, 0–150 kW for DC).
+- **Smart time estimate**: shows "To target" (estimated from `minutes_to_full`
+  × remaining-to-target ratio) when target < 100 %, with the full-charge
+  time as a secondary badge. Falls back to "To full" when no target is set.
+- **Minutes → hours/minutes**: all time displays formatted as `Xh Ym`.
+- Stats row: current (A), range (km), target (%) — all at a glance.
+- Header badges: charging status, type (AC/DC).
+- Ambient orange glow on the hero card, pulsing subtly.
+- Full mobile responsiveness (VU meters stack vertically on small screens).
+- `prefers-reduced-motion` disables all animations.
+
+When charging stops, the dashboard reverts to the normal 4-card grid.
+
 ### Fixed — correctness and robustness pass (16 fixes)
 
 **Bugs:**

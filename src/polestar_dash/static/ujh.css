@@ -205,6 +205,19 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
   .stat-muted { font-size: 13px; }
   .stat-sub { font-size: 9px; letter-spacing: 0.08em; margin-top: 4px; }
 
+  /* Charging hero */
+  .battery-vis { gap: var(--ujh-s-3); }
+  .battery-pct { font-size: 36px; min-width: 60px; }
+  .battery-pct .unit { font-size: 14px; }
+  .battery-bar { height: 32px; }
+  .battery-target-label { font-size: 8px; }
+  .vu-row { flex-direction: column; gap: var(--ujh-s-4); margin-bottom: var(--ujh-s-3); padding-bottom: var(--ujh-s-3); }
+  .vu-meter { min-width: 0; }
+  .vu-val { font-size: 24px; }
+  .vu-track { height: 6px; }
+  .charge-stats { gap: var(--ujh-s-3) var(--ujh-s-5); }
+  .charge-stat-val { font-size: 19px; }
+
   /* Vehicle card */
   .veh-title { font-size: 20px; }
   .veh-image { width: 120px; height: 72px; }
@@ -402,6 +415,232 @@ table.index tbody tr { transition: background var(--ujh-t-base); }
 table.index tbody tr:hover { background: var(--ujh-bg-2); }
 table.index .tnum { font-variant-numeric: tabular-nums; }
 table.index .right { text-align: right; }
+
+/* ---------- Charging Hero ---------- */
+.charge-hero {
+  position: relative;
+  overflow: hidden;
+  border-top: 2px solid var(--ujh-orange);
+}
+.charge-hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 120px;
+  background: linear-gradient(180deg, rgba(255,91,20,0.07) 0%, transparent 100%);
+  pointer-events: none;
+  animation: hero-glow 3s ease-in-out infinite;
+}
+@keyframes hero-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.charge-header {
+  display: flex; gap: var(--ujh-s-2); align-items: center;
+  margin-bottom: var(--ujh-s-4);
+  position: relative; z-index: 1;
+}
+
+/* Battery visualization: big % + bar */
+.battery-vis {
+  display: flex; align-items: center; gap: var(--ujh-s-6);
+  margin: var(--ujh-s-4) 0 var(--ujh-s-5);
+  position: relative; z-index: 1;
+}
+.battery-pct {
+  font: 300 64px/1 var(--ujh-sans);
+  letter-spacing: -0.04em;
+  color: var(--ujh-ink);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+.battery-pct .unit {
+  font: 400 22px/1 var(--ujh-mono);
+  letter-spacing: 0.05em;
+  color: var(--ujh-ink-3);
+  margin-left: 2px;
+}
+.battery-bar-wrap { flex: 1; position: relative; }
+
+.battery-bar {
+  position: relative;
+  height: 44px;
+  background: var(--ujh-bg-3);
+  border: 1px solid var(--ujh-line);
+  overflow: hidden;
+}
+
+/* Filled portion */
+.battery-bar-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: calc(var(--soc) * 1%);
+  background: var(--ujh-line-2);
+  transition: width 2s ease;
+}
+/* Glowing leading edge */
+.battery-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 3px;
+  background: var(--ujh-orange);
+  box-shadow: 0 0 8px 2px rgba(255,91,20,0.5),
+              0 0 20px 6px rgba(255,91,20,0.2);
+  animation: edge-pulse 1.5s ease-in-out infinite;
+}
+@keyframes edge-pulse {
+  0%, 100% { box-shadow: 0 0 8px 2px rgba(255,91,20,0.5), 0 0 20px 6px rgba(255,91,20,0.2); }
+  50% { box-shadow: 0 0 14px 4px rgba(255,91,20,0.7), 0 0 30px 10px rgba(255,91,20,0.3); }
+}
+
+/* Sweep animation through uncharged zone — stops at target */
+.battery-bar-sweep {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: calc(var(--soc) * 1%);
+  right: calc((100 - var(--sweep-end)) * 1%);
+  overflow: hidden;
+}
+/* Energy flow ticks */
+.battery-bar-sweep::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 16px,
+    rgba(255,91,20,0.05) 16px,
+    rgba(255,91,20,0.05) 18px
+  );
+  animation: energy-flow 0.8s linear infinite;
+}
+/* Bright sweep line */
+.battery-bar-sweep::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 50px;
+  background: linear-gradient(90deg, transparent, rgba(255,91,20,0.2), transparent);
+  animation: charge-sweep 2.5s ease-in-out infinite;
+}
+@keyframes energy-flow {
+  from { background-position: 0 0; }
+  to   { background-position: 18px 0; }
+}
+@keyframes charge-sweep {
+  0%   { left: -50px; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: calc(100% + 50px); opacity: 0; }
+}
+
+/* Target SoC marker — positioned in battery-bar-wrap, overlays the bar */
+.battery-bar-wrap { position: relative; }
+.battery-target {
+  position: absolute;
+  top: -8px; bottom: -2px;
+  left: calc(var(--target) * 1%);
+  width: 2px;
+  background: var(--ujh-ink-3);
+  z-index: 2;
+  pointer-events: none;
+}
+.battery-target-label {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--ujh-ink-4);
+}
+
+/* VU meter gauges */
+.vu-row {
+  display: flex;
+  gap: var(--ujh-s-6);
+  margin-bottom: var(--ujh-s-5);
+  padding-bottom: var(--ujh-s-5);
+  border-bottom: 1px solid var(--ujh-line);
+  position: relative; z-index: 1;
+}
+.vu-meter { flex: 1; min-width: 160px; }
+.vu-head { margin-bottom: var(--ujh-s-1); }
+.vu-reading { display: flex; align-items: baseline; gap: 4px; margin-bottom: var(--ujh-s-2); }
+.vu-val {
+  font: 300 36px/1 var(--ujh-sans);
+  letter-spacing: -0.03em;
+  color: var(--ujh-ink);
+}
+.vu-unit {
+  font: 400 12px/1 var(--ujh-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ujh-ink-3);
+}
+.vu-track {
+  position: relative;
+  height: 8px;
+  background: var(--ujh-bg-3);
+  border: 1px solid var(--ujh-line);
+}
+.vu-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  background: var(--ujh-orange);
+  opacity: 0.35;
+  transition: width 1.5s ease;
+}
+.vu-needle {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  width: 3px;
+  background: var(--ujh-orange);
+  box-shadow: 0 0 6px 1px rgba(255,91,20,0.5);
+  transition: left 1.5s ease;
+  transform: translateX(-1px);
+}
+.vu-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font: 500 9px/1 var(--ujh-mono);
+  letter-spacing: 0.08em;
+  color: var(--ujh-ink-4);
+}
+.vu-scale-mid { text-align: center; }
+
+/* Stats row below VU meters */
+.charge-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ujh-s-4) var(--ujh-s-7);
+  position: relative; z-index: 1;
+}
+.charge-stat-item { min-width: 80px; }
+.charge-stat-item .mono-xs { margin-bottom: var(--ujh-s-1); }
+.charge-stat-val {
+  font: 300 32px/1 var(--ujh-sans);
+  letter-spacing: -0.03em;
+  color: var(--ujh-ink);
+}
+.charge-stat-val .unit {
+  font: 400 11px/1 var(--ujh-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ujh-ink-3);
+  margin-left: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .charge-hero::before,
+  .battery-bar-fill::after,
+  .battery-bar-sweep::before,
+  .battery-bar-sweep::after { animation: none; }
+}
 
 /* ---------- Ring (SoC) ---------- */
 .ring-track { stroke: var(--ujh-line); fill: none; stroke-width: 6; }

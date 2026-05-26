@@ -49,7 +49,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 
 | Path | Purpose |
 |---|---|
-| `/` | Live tiles: SoC, charging, range, consumption, vehicle info |
+| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info |
 | `/history` | Time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer, monthly kWh/100km, iCal feed |
