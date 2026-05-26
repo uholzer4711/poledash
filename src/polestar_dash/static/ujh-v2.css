@@ -4,7 +4,7 @@
  * of ujh.css; never duplicates structural rules. Toggle from the topbar
  * "Design" button. Falls back to v1 by removing the attribute.
  *
- * Guard rails (per the project conventions): no rounded corners, orange stays ≤ 5 %
+ * Guard rails: no rounded corners, orange stays ≤ 5 %
  * surface, two fonts only, no shadows/gradients/icons. v2 only changes
  * size, spacing, contrast, and adds zebra striping on dense tables.
  */

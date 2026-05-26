@@ -15,4 +15,5 @@ build/
 .coverage
 .DS_Store
 the project conventions
+
 journeylog.csv
