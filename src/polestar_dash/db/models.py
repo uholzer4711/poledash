@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import Index
 from sqlmodel import JSON, Column, Field, SQLModel
 
+from ..util import utcnow
+
 
 class VehicleSnapshot(SQLModel, table=True):
     """Structured snapshot — one row per successful poll."""
@@ -71,6 +73,10 @@ class VehicleSnapshot(SQLModel, table=True):
     brake_fluid_level_warning: str | None = None
     engine_coolant_level_warning: str | None = None
 
+    __table_args__ = (
+        Index("ix_vehiclesnapshot_vin_fetched", "vin", "fetched_at"),
+    )
+
 
 class RawSnapshot(SQLModel, table=True):
     """Full JSON dump of every fetch — safety net for fields not yet mapped."""
@@ -126,7 +132,7 @@ class AppSetting(SQLModel, table=True):
 
     key: str = Field(primary_key=True)
     value: str
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 class JourneyImport(SQLModel, table=True):
@@ -157,7 +163,7 @@ class JourneyImport(SQLModel, table=True):
     trip_type: str | None = None
     category: str | None = None
     comments: str | None = None
-    imported_at: datetime = Field(default_factory=datetime.utcnow)
+    imported_at: datetime = Field(default_factory=utcnow)
     # Enrichments (filled lazily by post-import jobs)
     outside_temp_c: float | None = None
     weather_code: int | None = None  # Open-Meteo WMO weather code

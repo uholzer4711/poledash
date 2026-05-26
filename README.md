@@ -54,6 +54,8 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer, monthly kWh/100km, iCal feed |
 | `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector |
+| `/routes` | Repeated routes aggregated from imported trips |
+| `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
 | `/settings` `/errors` `/raw` | Settings, recent errors, raw API dump |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |

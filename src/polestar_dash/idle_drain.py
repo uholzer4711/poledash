@@ -12,11 +12,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from .util import utcnow
+
 from sqlmodel import Session, select
 
+from .app_settings import get_calibrated_battery_kwh
 from .db.models import VehicleSnapshot
 from .db.session import get_engine
-from .sessions import DEFAULT_BATTERY_KWH
 
 GAP_MINUTES = 360  # 6 h
 
@@ -35,11 +37,11 @@ class IdleDrain:
 
     @property
     def kwh(self) -> float:
-        return round(self.soc_drop / 100.0 * DEFAULT_BATTERY_KWH, 2)
+        return round(self.soc_drop / 100.0 * get_calibrated_battery_kwh(), 2)
 
 
 def detect_idle_drains(vin: str | None = None, days: int = 30) -> list[IdleDrain]:
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = (
             select(VehicleSnapshot)

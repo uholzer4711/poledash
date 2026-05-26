@@ -3,6 +3,8 @@ from __future__ import annotations
 from bisect import bisect_left
 from datetime import datetime, timedelta
 
+from ..util import utcnow
+
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
@@ -27,7 +29,7 @@ def _charge_locations(days: int, vin: str | None, price_ct: float) -> list[dict]
     session start, or failing that the closest trip *start* after the session
     end. The car was parked at one of those points.
     """
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     window = timedelta(hours=4)
     with Session(get_engine()) as s:
         stmt = select(ChargeSession).where(ChargeSession.started_at >= since)
@@ -150,15 +152,20 @@ def tripbook_page(
     # When matched, prefer the imported trip's real kWh over our SoC-based
     # estimate everywhere (per-row, monthly, grand total).
     match_window = timedelta(minutes=30)
+    imports_sorted = sorted(imports, key=lambda j: j.started_at)
+    import_keys = [j.started_at for j in imports_sorted]
     paired = []
     for t in trips:
         best = None
-        best_diff = match_window
-        for j in imports:
-            diff = abs(j.started_at - t.started_at)
-            if diff <= best_diff:
-                best_diff = diff
-                best = j
+        if import_keys:
+            i = bisect_left(import_keys, t.started_at)
+            best_diff = match_window
+            for ci in (i - 1, i):
+                if 0 <= ci < len(imports_sorted):
+                    diff = abs(imports_sorted[ci].started_at - t.started_at)
+                    if diff <= best_diff:
+                        best_diff = diff
+                        best = imports_sorted[ci]
         paired.append((t, best))
 
     kwh_per_km = fleet_avg_kwh_per_km()
@@ -310,7 +317,7 @@ def session_detail_page(request: Request, session_id: int):
 
 @router.get("/errors", response_class=HTMLResponse)
 def errors_page(request: Request):
-    since = datetime.utcnow() - timedelta(days=14)
+    since = utcnow() - timedelta(days=14)
     with Session(get_engine()) as session:
         stmt = (
             select(FetchError)

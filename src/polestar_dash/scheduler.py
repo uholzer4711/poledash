@@ -4,6 +4,8 @@ import dataclasses
 import logging
 from datetime import datetime, timedelta, timezone
 
+from .util import utcnow
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -120,7 +122,7 @@ async def poll_once(client: PolestarClient) -> None:
             except Exception as e:  # noqa: BLE001
                 log.exception("Fetch failed for VIN %s", vin)
                 with Session(get_engine()) as s:
-                    s.add(FetchError(occurred_at=datetime.utcnow(), vin=vin, message=str(e)))
+                    s.add(FetchError(occurred_at=utcnow(), vin=vin, message=str(e)))
                     s.commit()
                 continue
 
@@ -132,6 +134,8 @@ async def poll_once(client: PolestarClient) -> None:
             try:
                 with Session(get_engine()) as _s:
                     prev = previous_snapshot(_s, snap.vin, snap.fetched_at)
+                    if prev is not None:
+                        _s.expunge(prev)
             except Exception:  # noqa: BLE001
                 log.exception("previous_snapshot lookup failed for VIN %s", vin)
                 prev = None
@@ -179,7 +183,7 @@ def _reschedule(client: PolestarClient, *, charging: bool) -> None:
     if sched is None:
         return
     interval = s.fast_poll_interval_min if charging else s.poll_interval_min
-    next_run = datetime.utcnow() + timedelta(minutes=interval)
+    next_run = utcnow() + timedelta(minutes=interval)
     sched.add_job(
         poll_once,
         DateTrigger(run_date=next_run),
@@ -198,9 +202,9 @@ _SCHEDULER: AsyncIOScheduler | None = None
 def _prune_raw_snapshots() -> None:
     """Delete RawSnapshot rows older than RAW_RETENTION_DAYS to keep the DB
     from growing unbounded (~20 KB/poll × every 2–10 min = >1 GB/year)."""
-    cutoff = datetime.utcnow() - timedelta(days=RAW_RETENTION_DAYS)
+    cutoff = utcnow() - timedelta(days=RAW_RETENTION_DAYS)
     with Session(get_engine()) as s:
-        result = s.exec(
+        result = s.execute(
             RawSnapshot.__table__.delete().where(RawSnapshot.fetched_at < cutoff)
         )
         s.commit()
@@ -216,7 +220,7 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
     sched = AsyncIOScheduler(timezone=timezone.utc)
     sched.add_job(
         poll_once,
-        DateTrigger(run_date=datetime.utcnow()),  # immediately
+        DateTrigger(run_date=utcnow()),  # immediately
         args=[client],
         id=JOB_ID,
         max_instances=1,

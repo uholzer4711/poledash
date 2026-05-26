@@ -4,6 +4,8 @@ import csv
 import io
 from datetime import UTC, date, datetime, timedelta
 
+from ..util import utcnow
+
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from sqlalchemy import func
@@ -91,7 +93,7 @@ def history(
 ) -> dict:
     if field not in ALLOWED_FIELDS:
         raise HTTPException(400, f"Field must be one of {sorted(ALLOWED_FIELDS)}")
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     column = getattr(VehicleSnapshot, field)
     with Session(get_engine()) as s:
         stmt = (
@@ -111,7 +113,7 @@ def history(
 
 @router.get("/sessions")
 def sessions(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> dict:
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     default_price = get_default_price_ct()
     with Session(get_engine()) as s:
         stmt = (
@@ -167,7 +169,7 @@ def session_detail(session_id: int) -> dict:
     powers = [c["power_w"] for c in curve if c["power_w"]]
     duration_min = None
     if cs.started_at and (cs.ended_at or curve):
-        end_ts = cs.ended_at or snaps[-1].fetched_at if snaps else cs.started_at
+        end_ts = cs.ended_at or (snaps[-1].fetched_at if snaps else cs.started_at)
         duration_min = max(0, int((end_ts - cs.started_at).total_seconds() // 60))
     return {
         "session": _session_to_dict(cs, default_price),
@@ -257,7 +259,7 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
 
     # Cost per km: aggregate by ISO-week. For each completed charge session,
     # bill its energy at the effective price; for each trip, count its km.
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = (
             select(ChargeSession)
@@ -324,7 +326,7 @@ def idle_drain(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> d
 @router.get("/daily")
 def daily(days: int = Query(30, ge=1, le=365), vin: str | None = None) -> list[dict]:
     """Per-day km driven (odometer max-min) and rough kWh from avg consumption."""
-    since = (datetime.utcnow() - timedelta(days=days)).date()
+    since = (utcnow() - timedelta(days=days)).date()
     with Session(get_engine()) as s:
         day_col = func.date(VehicleSnapshot.fetched_at)
         stmt = (
@@ -388,7 +390,7 @@ def tripbook_ics(
         uid = f"{int(t.started_at.timestamp())}-{int(t.start_km)}@poledash"
         dtstart = t.started_at.strftime("%Y%m%dT%H%M%SZ")
         dtend = t.ended_at.strftime("%Y%m%dT%H%M%SZ")
-        dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        dtstamp = utcnow().strftime("%Y%m%dT%H%M%SZ")
         eff = f", {t.kwh_per_100km} kWh/100km" if t.kwh_per_100km is not None else ""
         summary = _ics_escape(f"{t.km} km · {t.duration_min} min")
         desc_parts = [f"Odo {t.start_km:.0f} → {t.end_km:.0f} km{eff}"]
@@ -423,9 +425,15 @@ async def journey_import(
     """Import the Polestar app's journey-log CSV. Dedupes on (start, end, vin)."""
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(400, "expected a .csv file")
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(413, "file too large (>5 MB)")
+    max_size = 5 * 1024 * 1024
+    chunks = []
+    total = 0
+    while chunk := await file.read(64 * 1024):
+        total += len(chunk)
+        if total > max_size:
+            raise HTTPException(413, "file too large (>5 MB)")
+        chunks.append(chunk)
+    content = b"".join(chunks)
     try:
         records = parse_csv(content, tz_offset_hours=tz_offset_hours)
     except UnicodeDecodeError:
@@ -525,7 +533,7 @@ def address_points(
     vin: str | None = None,
 ) -> list[dict]:
     """Unique (address, lat, lng) points from JourneyImport with current label."""
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = select(JourneyImport).where(JourneyImport.started_at >= since)
         if vin is not None:
@@ -582,29 +590,31 @@ def journey_imports_clear(vin: str | None = None) -> dict:
 
 @router.get("/export.csv")
 def export_csv(days: int = Query(365, ge=1, le=3650), vin: str | None = None) -> StreamingResponse:
-    since = datetime.utcnow() - timedelta(days=days)
-    with Session(get_engine()) as s:
-        stmt = (
-            select(VehicleSnapshot)
-            .where(VehicleSnapshot.fetched_at >= since)
-            .order_by(VehicleSnapshot.fetched_at.asc())
-        )
-        if vin:
-            stmt = stmt.where(VehicleSnapshot.vin == vin)
-        rows = s.exec(stmt).all()
+    since = utcnow() - timedelta(days=days)
 
-    buf = io.StringIO()
-    writer = csv.writer(buf)
-    if rows:
-        cols = list(rows[0].model_dump().keys())
-        writer.writerow(cols)
-        for r in rows:
-            d = r.model_dump()
-            writer.writerow([d.get(c, "") for c in cols])
-    buf.seek(0)
+    def _generate():
+        with Session(get_engine()) as s:
+            stmt = (
+                select(VehicleSnapshot)
+                .where(VehicleSnapshot.fetched_at >= since)
+                .order_by(VehicleSnapshot.fetched_at.asc())
+            )
+            if vin:
+                stmt = stmt.where(VehicleSnapshot.vin == vin)
+            cols = None
+            for row in s.exec(stmt):
+                buf = io.StringIO()
+                writer = csv.writer(buf)
+                d = row.model_dump()
+                if cols is None:
+                    cols = list(d.keys())
+                    writer.writerow(cols)
+                writer.writerow([d.get(c, "") for c in cols])
+                yield buf.getvalue()
+
     filename = f"polestar-dash-{date.today().isoformat()}.csv"
     return StreamingResponse(
-        iter([buf.getvalue()]),
+        _generate(),
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

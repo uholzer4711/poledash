@@ -18,6 +18,8 @@ import csv
 import io
 from datetime import datetime, timedelta
 
+from .util import utcnow
+
 from sqlmodel import Session, select
 
 from .db.models import JourneyImport
@@ -196,7 +198,7 @@ def fleet_avg_kwh_per_km() -> float:
     even 1 % — without this, the kWh column on those trips reads as `—`."""
     from .db.models import JourneyImport as J
 
-    cutoff = datetime.utcnow() - _CALIB_WINDOW
+    cutoff = utcnow() - _CALIB_WINDOW
     try:
         with Session(get_engine()) as s:
             rows = list(s.exec(select(J).where(J.started_at >= cutoff)).all())
@@ -227,7 +229,7 @@ def calibrate_battery_kwh(min_soc_drop: int = 4) -> float | None:
     """
     from .db.models import JourneyImport as J
 
-    cutoff = datetime.utcnow() - _CALIB_WINDOW
+    cutoff = utcnow() - _CALIB_WINDOW
     with Session(get_engine()) as s:
         rows = list(s.exec(select(J).where(J.started_at >= cutoff)).all())
 
@@ -253,7 +255,7 @@ def list_imports(
     days: int = 30,
     vin: str | None = None,
 ) -> list[JourneyImport]:
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = (
             select(JourneyImport)

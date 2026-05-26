@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
+from .util import utcnow
+
 from sqlmodel import Session, select
 
 from .app_settings import blended_price_ct
@@ -22,7 +24,7 @@ def compute_forecast(days: int = 30) -> dict:
     Prefers imported journey-log trips (real kWh). Falls back to detected
     trips' SoC-estimated kWh when none are imported in the window.
     """
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         imports = list(
             s.exec(
@@ -67,7 +69,7 @@ def compute_range_factor(days: int = 180) -> list[dict]:
     range_at_100 = range_km / (soc_percent / 100). Larger = more optimistic
     onboard estimate. Smoothing happens client-side; we just return the
     daily mean."""
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = (
             select(VehicleSnapshot.fetched_at, VehicleSnapshot.range_km, VehicleSnapshot.soc_percent)
@@ -95,7 +97,7 @@ def compute_charge_heatmap(days: int = 365) -> dict:
     Returns a dict keyed by ISO date (only days with kWh > 0); the caller
     fills the gaps when rendering the grid. Plus a max for color scaling.
     """
-    since_d = (datetime.utcnow() - timedelta(days=days)).date()
+    since_d = (utcnow() - timedelta(days=days)).date()
     with Session(get_engine()) as s:
         rows = list(
             s.exec(
@@ -120,7 +122,7 @@ def compute_charge_heatmap(days: int = 365) -> dict:
 
 def compute_temp_scatter(days: int = 365) -> list[dict]:
     """Wh/km vs outside temperature per imported trip with weather data."""
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         rows = list(
             s.exec(

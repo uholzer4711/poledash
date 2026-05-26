@@ -9,6 +9,8 @@ the user wants to tweak from the web UI without restarting the container
 from __future__ import annotations
 
 from datetime import datetime
+
+from .util import utcnow
 from typing import Any
 
 from sqlmodel import Session, select
@@ -31,10 +33,10 @@ def set_setting(key: str, value: Any) -> None:
     with Session(get_engine()) as s:
         row = s.exec(select(AppSetting).where(AppSetting.key == key)).first()
         if row is None:
-            s.add(AppSetting(key=key, value=str_val, updated_at=datetime.utcnow()))
+            s.add(AppSetting(key=key, value=str_val, updated_at=utcnow()))
         else:
             row.value = str_val
-            row.updated_at = datetime.utcnow()
+            row.updated_at = utcnow()
             s.add(row)
         s.commit()
 
@@ -79,7 +81,7 @@ def blended_price_ct(days: int = 90) -> tuple[float, str]:
     from .db.models import ChargeSession
 
     default = get_default_price_ct()
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = (
             select(ChargeSession)

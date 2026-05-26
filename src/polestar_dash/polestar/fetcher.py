@@ -3,6 +3,8 @@ from __future__ import annotations
 import dataclasses
 import logging
 from datetime import date, datetime
+
+from ..util import utcnow
 from enum import Enum
 from typing import Any
 
@@ -119,7 +121,7 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
     except Exception:  # noqa: BLE001
         log.debug("car images unavailable for %s", vin, exc_info=True)
 
-    snap = Snapshot(vin=vin, fetched_at=datetime.utcnow())
+    snap = Snapshot(vin=vin, fetched_at=utcnow())
 
     if info is not None:
         snap.model_name = info.model_name
@@ -166,7 +168,7 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
 
         if tele.odometer is not None:
             o = tele.odometer
-            snap.odometer_km = (o.odometer_meters / 1000) if o.odometer_meters else None
+            snap.odometer_km = (o.odometer_meters / 1000) if o.odometer_meters is not None else None
             snap.avg_speed_kmh = o.average_speed_km_per_hour
             snap.trip_auto_km = o.trip_meter_automatic_km
             snap.trip_manual_km = o.trip_meter_manual_km
@@ -213,7 +215,7 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
         )
         snap.range_miles = getattr(grpc_battery, "estimated_distance_to_empty_miles", None)
         cps = getattr(grpc_battery, "charger_power_status_raw", None)
-        snap.charger_power_status_raw = cps if cps else None
+        snap.charger_power_status_raw = cps if cps is not None else None
         if grpc_battery.charging_type:
             ct = grpc_battery.charging_type.value
             snap.charging_type = ct if ct != "Unspecified" else None

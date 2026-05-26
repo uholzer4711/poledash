@@ -3,6 +3,57 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [Unreleased] — 2026-05-26
+
+### Fixed — correctness and robustness pass (16 fixes)
+
+**Bugs:**
+- **Operator precedence bug** in session detail (`/api/sessions/{id}`):
+  `end_ts` calculation parsed as `(A or B) if C else D` instead of
+  `A or (B if C else D)`, producing wrong duration when `ended_at` was
+  set but `snaps` was empty.
+- **Falsy-vs-None checks** in `fetcher.py`: `odometer_meters == 0` and
+  `charger_power_status_raw == 0` were silently mapped to `None` because
+  `if val` is false for zero. Changed to `if val is not None`.
+- **Detached SQLModel object**: `prev` snapshot was loaded in a session
+  that closed before `update_session` accessed its attributes. Added
+  `expunge(prev)` to make it safe across session boundaries.
+
+**Robustness:**
+- **Stale charge sessions**: sessions stuck open forever when the API
+  returned `None` (not a terminal state) for `charging_status`. Now
+  auto-closed after 24 h without a charging signal.
+- **Backup connection leak**: `sqlite3.connect()` handles were not closed
+  on exception in `backup.py`. Wrapped in `try/finally`.
+- **Journey CSV upload**: file was fully read into memory *before* the
+  5 MB size check. Now streams in 64 KB chunks and bails early.
+- **`s.exec()` on Core DELETE** in raw-snapshot pruning: replaced with
+  `s.execute()` (the correct method for DML statements).
+
+**Performance:**
+- **Composite index** `(vin, fetched_at)` on `VehicleSnapshot` — the
+  hot query (`previous_snapshot`) runs on every poll and could not use
+  the two individual indexes efficiently. Added to model + migration.
+- **`_battery_kwh()` cached** (5 min TTL): was opening a new DB session
+  on every `trip.kwh_used` property access (~730 round-trips for a year
+  of trips). Now a single query per 5 minutes.
+- **CSV export streams** rows instead of materialising the entire result
+  set in memory (could be 260k+ rows for multi-year exports).
+- **Trip↔import matching** uses `bisect_left` (O(n log n)) instead of
+  a nested loop (O(n×m)).
+
+**Housekeeping:**
+- **`datetime.utcnow()` replaced** across 13 files with a central
+  `util.utcnow()` that returns naive UTC without Python 3.12+
+  deprecation warnings.
+- **Idle drain** now uses the calibrated battery capacity instead of the
+  hardcoded `DEFAULT_BATTERY_KWH` constant.
+- Removed unused `session_scope()` from `db/session.py`.
+
+### Changed — route clustering radius parameter
+- `/routes` accepts a `radius_km` query parameter (default 1.0 km) to
+  control the clustering tolerance for repeated routes.
+
 ## [Unreleased] — 2026-05-23
 
 ### Added — Address map in `/settings`

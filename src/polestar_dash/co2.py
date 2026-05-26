@@ -17,6 +17,8 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
+from .util import utcnow
+
 _AT_MONTHLY_G_PER_KWH = {
     1: 220, 2: 200, 3: 150, 4: 120, 5: 100, 6: 90,
     7: 100, 8: 110, 9: 130, 10: 160, 11: 200, 12: 230,
@@ -38,7 +40,7 @@ def co2_g_per_kwh(when: datetime | None = None) -> int:
             return int(float(override))
     except Exception:  # noqa: BLE001
         pass
-    month = (when or datetime.utcnow()).month
+    month = (when or utcnow()).month
     return _AT_MONTHLY_G_PER_KWH.get(month, 150)
 
 

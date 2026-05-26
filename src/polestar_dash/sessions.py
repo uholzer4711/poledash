@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -186,7 +186,10 @@ def update_session(
                 s.add(cs)
                 s.commit()
 
-        elif cs is not None and status in TERMINAL_STATES:
+        elif cs is not None and (
+            status in TERMINAL_STATES
+            or (snap.fetched_at - cs.started_at) > timedelta(hours=24)
+        ):
             cs.ended_at = snap.fetched_at
             # Don't let post-charge driving regress the peak SoC/range we
             # already captured during the session (matters for inferred

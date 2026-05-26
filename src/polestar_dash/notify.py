@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from .util import utcnow
+
 import httpx
 from sqlmodel import Session, select
 
@@ -68,7 +70,7 @@ def notify(
         if _already_sent(session, kind, key):
             return
         session.add(
-            NotificationLog(sent_at=datetime.utcnow(), vin=vin, kind=kind, key=key)
+            NotificationLog(sent_at=utcnow(), vin=vin, kind=kind, key=key)
         )
         session.commit()
     log.info("Sent ntfy notification kind=%s key=%s", kind, key)

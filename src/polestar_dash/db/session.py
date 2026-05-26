@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from pathlib import Path
 
 from sqlalchemy import inspect, text
@@ -72,6 +71,7 @@ def _ensure_columns(engine) -> None:
         # name, table, columns
         ("ix_chargesession_vin_started", "chargesession", "vin, started_at"),
         ("ix_chargesession_is_complete", "chargesession", "is_complete"),
+        ("ix_vehiclesnapshot_vin_fetched", "vehiclesnapshot", "vin, fetched_at"),
     ]
     with engine.begin() as conn:
         for name, table, cols in index_plan:
@@ -98,6 +98,3 @@ def get_engine():
     return _engine
 
 
-def session_scope() -> Iterator[Session]:
-    with Session(get_engine()) as s:
-        yield s

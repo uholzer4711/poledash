@@ -20,6 +20,8 @@ from __future__ import annotations
 import math
 from collections import Counter
 from datetime import datetime, timedelta
+
+from .util import utcnow
 from statistics import mean
 
 from sqlmodel import Session, select
@@ -119,7 +121,7 @@ def _build_key_resolver(
 
 
 def list_routes(days: int = 365, min_trips: int = 2, radius_km: float = 1.0) -> list[dict]:
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         rows = list(
             s.exec(
@@ -173,7 +175,7 @@ def list_routes(days: int = 365, min_trips: int = 2, radius_km: float = 1.0) -> 
 def trips_for_route(
     start: str, end: str, days: int = 365, radius_km: float = 1.0
 ) -> list[JourneyImport]:
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         rows = list(
             s.exec(

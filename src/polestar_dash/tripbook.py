@@ -6,8 +6,11 @@ into one trip and aggregate distance/duration/start-end odometer/SoC."""
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+
+from .util import utcnow
 
 from sqlmodel import Session, select
 
@@ -16,9 +19,12 @@ from .db.models import VehicleSnapshot
 from .db.session import get_engine
 from .sessions import DEFAULT_BATTERY_KWH
 
+_battery_kwh_cache: tuple[float, float] | None = None  # (value, timestamp)
+_BATTERY_KWH_TTL = 300  # 5 minutes
+
 
 def _battery_kwh() -> float:
-    """Best available battery capacity in kWh.
+    """Best available battery capacity in kWh (cached 5 min).
 
     Preference order:
     1. `battery_capacity_kwh` from the most recent snapshot (the car itself
@@ -26,6 +32,11 @@ def _battery_kwh() -> float:
     2. The calibrated value derived from imported journey-log CSV trips.
     3. The hard-coded DEFAULT_BATTERY_KWH as a last resort.
     """
+    global _battery_kwh_cache
+    now = time.monotonic()
+    if _battery_kwh_cache is not None and (now - _battery_kwh_cache[1]) < _BATTERY_KWH_TTL:
+        return _battery_kwh_cache[0]
+
     with Session(get_engine()) as s:
         stmt = (
             select(VehicleSnapshot.battery_capacity_kwh)
@@ -34,9 +45,9 @@ def _battery_kwh() -> float:
             .limit(1)
         )
         cap = s.exec(stmt).first()
-    if cap:
-        return float(cap)
-    return get_calibrated_battery_kwh(fallback=DEFAULT_BATTERY_KWH)
+    val = float(cap) if cap else get_calibrated_battery_kwh(fallback=DEFAULT_BATTERY_KWH)
+    _battery_kwh_cache = (val, now)
+    return val
 
 
 @dataclass
@@ -94,7 +105,7 @@ def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) 
     the *odometer event timestamp* the car reports — not from our poll
     cadence — so the threshold can be shorter than the poll interval.
     """
-    since = datetime.utcnow() - timedelta(days=days)
+    since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = (
             select(VehicleSnapshot)
