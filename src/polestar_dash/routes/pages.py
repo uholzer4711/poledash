@@ -218,10 +218,10 @@ def tripbook_page(
         cs = _match_session(t.ended_at)
         if cs is not None:
             eff_price = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else price_ct
-            trip_kwh = kwh or 0
-            ext["charge_cost"] = round(trip_kwh * eff_price / 100.0, 2)
             ext["charge_station"] = cs.note
-            ext["charge_price_ct"] = eff_price
+            ext["charge_kwh"] = cs.energy_kwh
+            ext["charge_cost_eur"] = round((cs.energy_kwh or 0) * eff_price / 100.0, 2)
+            ext["charge_soc"] = f"{cs.soc_start} → {cs.soc_end}%"
         triples.append((t, j, ext))
 
     grand_km = round(sum(t.km for t, _ in paired), 1)
@@ -305,7 +305,12 @@ def settings_page(request: Request):
         "ready" if s.telegram_chat_id else "set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID"
     )
     mqtt_note = f"{s.mqtt_host}:{s.mqtt_port}" if s.mqtt_host else "set MQTT_HOST"
+    smtp_note = (
+        f"{s.smtp_host}:{s.smtp_port} → {s.smtp_to}" if s.smtp_host and s.smtp_to
+        else "set SMTP_HOST + SMTP_TO in .env"
+    )
     integrations = [
+        ("Email (SMTP)", bool(s.smtp_host and s.smtp_to), smtp_note),
         ("ntfy.sh push", bool(s.ntfy_topic), ntfy_note),
         ("Telegram", bool(s.telegram_bot_token and s.telegram_chat_id), tg_note),
         ("MQTT / Home Assistant", bool(s.mqtt_host), mqtt_note),

@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from .app_settings import blended_price_ct
 from .db.models import ChargeSession, VehicleSnapshot
 from .db.session import get_engine
+from .email_notify import email_send
 from .notify import notify
 from .tripbook import detect_trips
 from .util import utcnow
@@ -42,6 +43,149 @@ def _week_range_factor() -> float | None:
     return round(sum(factors) / len(factors), 1) if factors else None
 
 
+def _latest_soc() -> tuple[int | None, int | None]:
+    with Session(get_engine()) as s:
+        stmt = (
+            select(VehicleSnapshot.soc_percent, VehicleSnapshot.range_km)
+            .where(VehicleSnapshot.soc_percent.is_not(None))
+            .order_by(VehicleSnapshot.fetched_at.desc())
+            .limit(1)
+        )
+        row = s.exec(stmt).first()
+    return (row[0], row[1]) if row else (None, None)
+
+
+def _build_html(
+    total_trips: int,
+    total_km: float,
+    avg_eff: float | None,
+    total_sessions: int,
+    total_kwh_charged: float,
+    total_cost: float,
+    price_ct: float,
+    range_factor: float | None,
+    soc: int | None,
+    range_km: int | None,
+    sessions: list[ChargeSession],
+) -> str:
+    """Build a styled HTML email body."""
+
+    def stat_card(label: str, value: str, unit: str = "") -> str:
+        return (
+            f'<td style="background:#1a1c20;padding:20px 24px;width:25%">'
+            f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:10px;'
+            f'text-transform:uppercase;letter-spacing:1px;color:#8a8d93;margin-bottom:6px">{label}</div>'
+            f'<div style="font-family:\'Inter Tight\',sans-serif;font-size:32px;'
+            f'font-weight:700;color:#e8e8ea;line-height:1">{value}'
+            f'<span style="font-size:14px;color:#8a8d93;margin-left:4px">{unit}</span></div>'
+            f'</td>'
+        )
+
+    soc_display = f"{soc}%" if soc is not None else "—"
+    range_display = f"{range_km}" if range_km is not None else "—"
+    eff_display = f"{avg_eff}" if avg_eff else "—"
+    rf_display = f"{range_factor}" if range_factor else "—"
+
+    session_rows = ""
+    for cs in sessions[:5]:
+        station = cs.note or "—"
+        kwh = f"{cs.energy_kwh:.1f}" if cs.energy_kwh else "—"
+        soc_range = f"{cs.soc_start} → {cs.soc_end}%" if cs.soc_start is not None else "—"
+        eff_price = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else price_ct
+        cost = f"&euro; {(cs.energy_kwh or 0) * eff_price / 100:.2f}"
+        session_rows += (
+            f'<tr style="border-bottom:1px solid #2a2c30">'
+            f'<td style="padding:8px 12px;color:#e8e8ea;font-size:13px">{station}</td>'
+            f'<td style="padding:8px 12px;color:#8a8d93;font-size:13px">{soc_range}</td>'
+            f'<td style="padding:8px 12px;color:#e8e8ea;font-size:13px;text-align:right">{kwh} kWh</td>'
+            f'<td style="padding:8px 12px;color:#ff5b14;font-size:13px;text-align:right;font-weight:600">{cost}</td>'
+            f'</tr>'
+        )
+
+    return f'''<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;padding:0;background:#0e0f11;font-family:'Inter Tight','Helvetica Neue',Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0e0f11;padding:32px 16px">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
+
+  <!-- Header -->
+  <tr><td style="padding:0 0 24px">
+    <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td style="font-family:'Inter Tight',sans-serif;font-size:24px;font-weight:700;color:#e8e8ea">
+        poledash <span style="color:#ff5b14">Wochenreport</span>
+      </td>
+      <td align="right" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8a8d93">
+        KW {utcnow().isocalendar()[1]} / {utcnow().year}
+      </td>
+    </tr>
+    </table>
+    <div style="height:2px;background:#ff5b14;margin-top:12px;width:48px"></div>
+  </td></tr>
+
+  <!-- Current status -->
+  <tr><td style="padding-bottom:16px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8a8d93;margin-bottom:8px">Aktuell</div>
+    <table width="100%" cellpadding="0" cellspacing="4"><tr>
+      {stat_card("SoC", soc_display)}
+      {stat_card("Reichweite", range_display, "km")}
+    </tr></table>
+  </td></tr>
+
+  <!-- Driving stats -->
+  <tr><td style="padding-bottom:16px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8a8d93;margin-bottom:8px">Gefahren</div>
+    <table width="100%" cellpadding="0" cellspacing="4"><tr>
+      {stat_card("Fahrten", str(total_trips))}
+      {stat_card("Kilometer", str(total_km), "km")}
+      {stat_card("Effizienz", eff_display, "kWh/100km")}
+      {stat_card("Range-Faktor", rf_display, "km@100%")}
+    </tr></table>
+  </td></tr>
+
+  <!-- Charging stats -->
+  <tr><td style="padding-bottom:16px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8a8d93;margin-bottom:8px">Geladen</div>
+    <table width="100%" cellpadding="0" cellspacing="4"><tr>
+      {stat_card("Sessions", str(total_sessions))}
+      {stat_card("Energie", str(total_kwh_charged), "kWh")}
+      {stat_card("Kosten", f"&euro; {total_cost:.2f}", "")}
+      {stat_card("Preis", f"{price_ct:.1f}", "ct/kWh")}
+    </tr></table>
+  </td></tr>
+
+  <!-- Session detail table -->
+  {"" if not session_rows else f"""
+  <tr><td style="padding-bottom:16px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8a8d93;margin-bottom:8px">Ladesessions</div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a1c20">
+      <tr style="border-bottom:1px solid #2a2c30">
+        <th style="padding:8px 12px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a8d93;text-transform:uppercase;letter-spacing:1px">Station</th>
+        <th style="padding:8px 12px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a8d93;text-transform:uppercase;letter-spacing:1px">SoC</th>
+        <th style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a8d93;text-transform:uppercase;letter-spacing:1px">kWh</th>
+        <th style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a8d93;text-transform:uppercase;letter-spacing:1px">Kosten</th>
+      </tr>
+      {session_rows}
+    </table>
+  </td></tr>
+  """}
+
+  <!-- Footer -->
+  <tr><td style="padding-top:16px;border-top:1px solid #2a2c30">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#8a8d93;text-align:center">
+      poledash &middot; Polestar 2 Telemetry Dashboard
+    </div>
+  </td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>'''
+
+
 def weekly_digest() -> None:
     """Build and send the weekly summary via all configured channels."""
     trips = detect_trips(days=7)
@@ -62,12 +206,13 @@ def weekly_digest() -> None:
         avg_eff = round(total_kwh_driven * 100 / total_km, 1)
 
     range_factor = _week_range_factor()
+    soc, range_km = _latest_soc()
 
     if total_trips == 0 and total_sessions == 0:
         log.info("Weekly digest: no activity, skipping")
         return
 
-    title = f"Wochenreport: {total_km} km, {total_kwh_charged} kWh, EUR {total_cost:.2f}"
+    title = f"Wochenreport KW{utcnow().isocalendar()[1]}: {total_km} km, {total_kwh_charged} kWh, EUR {total_cost:.2f}"
 
     plain_lines = [
         f"Fahrten: {total_trips} ({total_km} km)",
@@ -80,15 +225,19 @@ def weekly_digest() -> None:
         plain_lines.append(f"Range-Faktor: {range_factor} km bei 100%")
     plain_body = "\n".join(plain_lines)
 
-    html_lines = ["<b>Wochenreport</b><br><br>"]
-    html_lines.append(f"<b>{total_trips}</b> Fahrten &middot; <b>{total_km}</b> km<br>")
-    if avg_eff:
-        html_lines.append(f"Verbrauch: <b>{avg_eff}</b> kWh/100km<br>")
-    html_lines.append(f"<br><b>{total_sessions}</b> Ladesessions &middot; <b>{total_kwh_charged}</b> kWh<br>")
-    html_lines.append(f"Kosten: <b>&euro; {total_cost:.2f}</b> (@ {price_ct:.1f} ct/kWh)<br>")
-    if range_factor:
-        html_lines.append(f"Range-Faktor: <b>{range_factor}</b> km bei 100%<br>")
-    html_body = "".join(html_lines)
+    html_body = _build_html(
+        total_trips=total_trips,
+        total_km=total_km,
+        avg_eff=avg_eff,
+        total_sessions=total_sessions,
+        total_kwh_charged=total_kwh_charged,
+        total_cost=total_cost,
+        price_ct=price_ct,
+        range_factor=range_factor,
+        soc=soc,
+        range_km=range_km,
+        sessions=sessions,
+    )
 
     week_key = utcnow().strftime("%Y-W%W")
 
@@ -99,7 +248,9 @@ def weekly_digest() -> None:
         body=plain_body,
         priority="low",
         tags=["chart_with_upwards_trend"],
+        skip_email=True,
     )
+    email_send(title, html_body, html=True)
 
     log.info("Weekly digest sent: %s km, %s kWh, EUR %s", total_km, total_kwh_charged, total_cost)
 

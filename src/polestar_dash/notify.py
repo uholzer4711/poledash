@@ -31,6 +31,7 @@ def notify(
     vin: str | None = None,
     priority: str = "default",
     tags: list[str] | None = None,
+    skip_email: bool = False,
 ) -> None:
     """Send a deduped notification via all configured channels.
 
@@ -61,7 +62,7 @@ def notify(
             log.exception("ntfy send failed kind=%s key=%s", kind, key)
 
     # --- Email ---
-    if s.smtp_host and s.smtp_to:
+    if s.smtp_host and s.smtp_to and not skip_email:
         try:
             from .email_notify import email_send
             email_send(f"[poledash] {title}", body)
