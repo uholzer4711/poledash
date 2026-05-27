@@ -218,8 +218,8 @@ def tripbook_page(
         cs = _match_session(t.ended_at)
         if cs is not None:
             eff_price = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else price_ct
-            ext["charge_kwh"] = cs.energy_kwh
-            ext["charge_cost"] = round((cs.energy_kwh or 0) * eff_price / 100.0, 2)
+            trip_kwh = kwh or 0
+            ext["charge_cost"] = round(trip_kwh * eff_price / 100.0, 2)
             ext["charge_station"] = cs.note
             ext["charge_price_ct"] = eff_price
         triples.append((t, j, ext))

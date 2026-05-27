@@ -65,6 +65,11 @@ def _ensure_columns(engine) -> None:
                 continue
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
 
+    if "chargingstation" in tables:
+        plan += [
+            ("chargingstation", "price_ct_per_kwh", "FLOAT"),
+        ]
+
     # Indexes — create_all skips index creation on tables that already exist.
     # CREATE INDEX IF NOT EXISTS is the cleanest forward-only equivalent.
     index_plan: list[tuple[str, str, str]] = [

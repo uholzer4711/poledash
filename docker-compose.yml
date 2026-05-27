@@ -12,6 +12,8 @@ services:
       # Bind to localhost by default — put a reverse proxy (Caddy/Traefik/nginx) in front
       # if you want to expose this beyond the host. See README.
       - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/data
       - ./.env:/app/.env:ro

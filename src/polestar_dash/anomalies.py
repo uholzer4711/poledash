@@ -15,6 +15,7 @@ from .db.models import VehicleSnapshot
 from .db.session import get_engine
 from .notify import notify
 from .polestar.fetcher import Snapshot
+from .util import utcnow
 
 log = logging.getLogger(__name__)
 

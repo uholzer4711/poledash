@@ -17,7 +17,7 @@ from ..app_settings import (
     set_charging_loss_factor,
     set_default_price_ct,
 )
-from ..db.models import ChargeSession, JourneyImport, VehicleSnapshot
+from ..db.models import ChargeSession, ChargingStation, JourneyImport, VehicleSnapshot
 from ..db.session import get_engine
 from ..idle_drain import detect_idle_drains
 from ..insights_extras import (
@@ -115,6 +115,8 @@ def history(
 
 @router.get("/sessions")
 def sessions(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> dict:
+    from ..stations import batch_suggest
+
     since = utcnow() - timedelta(days=days)
     default_price = get_default_price_ct()
     with Session(get_engine()) as s:
@@ -126,7 +128,13 @@ def sessions(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> dic
         if vin:
             stmt = stmt.where(ChargeSession.vin == vin)
         rows = s.exec(stmt).all()
-    items = [_session_to_dict(r, default_price) for r in rows]
+    suggestions = batch_suggest(rows)
+    items = []
+    for r in rows:
+        d = _session_to_dict(r, default_price)
+        if r.id in suggestions:
+            d["station_suggestion"] = suggestions[r.id]
+        items.append(d)
     total_kwh = round(sum((r.energy_kwh or 0) for r in rows), 1)
     total_cost = round(sum(i["cost_eur"] for i in items), 2)
     return {
@@ -194,7 +202,14 @@ def patch_session(
     price_ct_per_kwh: float | None = None,
     note: str | None = None,
 ) -> dict:
-    """Update price / note for one charging session. price=null clears the override."""
+    """Update price / note for one charging session. price=null clears the override.
+
+    When a note is saved, the session's GPS location is looked up and a
+    ChargingStation is created/updated so future sessions at the same spot
+    (~500 m) auto-fill name + price.
+    """
+    from ..stations import locate_session, upsert_station
+
     if price_ct_per_kwh is not None and not (0 <= price_ct_per_kwh <= 500):
         raise HTTPException(400, "price_ct_per_kwh out of range")
     with Session(get_engine()) as s:
@@ -207,7 +222,55 @@ def patch_session(
         s.add(row)
         s.commit()
         s.refresh(row)
+
+    effective_note = row.note
+    if effective_note:
+        coords = locate_session(row)
+        if coords:
+            upsert_station(effective_note, coords[0], coords[1], price_ct_per_kwh)
+
     return _session_to_dict(row, get_default_price_ct())
+
+
+@router.get("/charging-stations")
+def charging_stations_list() -> list[dict]:
+    from ..stations import list_stations
+    return [st.model_dump(mode="json") for st in list_stations()]
+
+
+@router.patch("/charging-stations/{station_id}")
+def charging_station_patch(
+    station_id: int,
+    name: str | None = None,
+    price_ct_per_kwh: float | None = None,
+) -> dict:
+    if price_ct_per_kwh is not None and not (0 <= price_ct_per_kwh <= 500):
+        raise HTTPException(400, "price_ct_per_kwh out of range")
+    with Session(get_engine()) as s:
+        st = s.get(ChargingStation, station_id)
+        if st is None:
+            raise HTTPException(404, "station not found")
+        if name is not None:
+            st.name = name
+        if price_ct_per_kwh is not None:
+            st.price_ct_per_kwh = price_ct_per_kwh
+        from ..util import utcnow as _utcnow
+        st.updated_at = _utcnow()
+        s.add(st)
+        s.commit()
+        s.refresh(st)
+    return st.model_dump(mode="json")
+
+
+@router.delete("/charging-stations/{station_id}")
+def charging_station_delete(station_id: int) -> dict:
+    with Session(get_engine()) as s:
+        st = s.get(ChargingStation, station_id)
+        if st is None:
+            raise HTTPException(404, "station not found")
+        s.delete(st)
+        s.commit()
+    return {"deleted": station_id}
 
 
 @router.get("/app-settings")

@@ -109,6 +109,7 @@
               <label>Note</label>
               <input type="text" placeholder="e.g. Wallbox home, IONITY A4" value="${_escAttr(s.note)}" data-field="note">
             </div>
+            ${s.station_suggestion && !s.note ? `<button class="btn ghost" onclick="applyStation(${s.id}, this)" title="Auto-fill from known station: ${_escAttr(s.station_suggestion.name)}${s.station_suggestion.price_ct_per_kwh != null ? ' @ '+s.station_suggestion.price_ct_per_kwh+' ct' : ''}">Apply: ${_escAttr(s.station_suggestion.name)} <span class="arrow">→</span></button>` : ''}
             <button class="btn ghost" onclick="saveSession(${s.id}, this)">Save <span class="arrow">→</span></button>
             <button class="btn ghost" onclick="clearOverride(${s.id}, this)" title="Use default price">Reset <span class="arrow">→</span></button>
             <a class="mono-xs" href="/sessions/${s.id}" style="margin-left:auto">View curve →</a>
@@ -125,6 +126,7 @@
       document.getElementById('t_kwh').innerHTML = `${j.totals.kwh.toFixed(1)}<span class="unit">kWh</span>`;
       document.getElementById('t_cost').textContent = j.totals.cost_eur.toFixed(2);
       document.getElementById('t_default').innerHTML = `${DEFAULT_PRICE.toFixed(1)}<span class="unit">ct/kWh</span>`;
+      window._sessItems = j.items;
       renderSessions(j.items);
     }
 
@@ -142,6 +144,19 @@
       const r = await fetch(`/api/sessions/${id}?${params}`, {method:'PATCH'});
       if (!r.ok) return alert('save failed');
       await loadSessions();
+    }
+    async function applyStation(id, btn) {
+      const card = btn.closest('.card');
+      const noteInput = card.querySelector('[data-field=note]');
+      const priceInput = card.querySelector('[data-field=price]');
+      const items = window._sessItems || [];
+      const sess = items.find(s => s.id === id);
+      if (!sess || !sess.station_suggestion) return;
+      noteInput.value = sess.station_suggestion.name;
+      if (sess.station_suggestion.price_ct_per_kwh != null) {
+        priceInput.value = sess.station_suggestion.price_ct_per_kwh;
+      }
+      await saveSession(id, btn);
     }
     async function clearOverride(id, btn) {
       const inp = _rowInputs(btn);

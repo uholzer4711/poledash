@@ -59,6 +59,58 @@
   </script>
 
   <div class="card mb-6">
+    <div class="card-label">Charging stations</div>
+    <div class="stat-sub mb-4">
+      Saved automatically when you set a note on a charging session (if GPS data
+      is available from imported trips). Future sessions at the same location
+      (~500 m) will suggest the station name and price. Edit or delete here.
+    </div>
+    <div id="cs_list"><p class="muted">Loading…</p></div>
+  </div>
+  <script>
+    function _csEsc(s) { return (s ?? '').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+    async function loadStations() {
+      const r = await fetch('/api/charging-stations');
+      const stations = r.ok ? await r.json() : [];
+      const el = document.getElementById('cs_list');
+      if (!stations.length) { el.innerHTML = '<p class="muted">No stations saved yet. Set a note on a charging session in <a href="/history#sessions">History</a> to create one.</p>'; return; }
+      el.innerHTML = stations.map(st => `
+        <div class="flex gap-4 mb-2" style="align-items:flex-end;flex-wrap:wrap" data-station="${st.id}">
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Name</label>
+            <input type="text" value="${_csEsc(st.name)}" data-field="cs_name">
+          </div>
+          <div class="field" style="min-width:120px">
+            <label>Price (ct/kWh)</label>
+            <input type="number" min="0" max="500" step="0.1" value="${st.price_ct_per_kwh ?? ''}" data-field="cs_price">
+          </div>
+          <div class="mono-xs muted" style="white-space:nowrap">${st.lat.toFixed(4)}, ${st.lng.toFixed(4)}</div>
+          <button class="btn ghost" onclick="saveStation(${st.id}, this)">Save <span class="arrow">&rarr;</span></button>
+          <button class="btn ghost" onclick="deleteStation(${st.id}, this)">Delete <span class="arrow">&rarr;</span></button>
+        </div>
+      `).join('');
+    }
+    async function saveStation(id, btn) {
+      const row = btn.closest('[data-station]');
+      const name = row.querySelector('[data-field=cs_name]').value;
+      const price = row.querySelector('[data-field=cs_price]').value;
+      const params = new URLSearchParams();
+      if (name) params.set('name', name);
+      if (price !== '') params.set('price_ct_per_kwh', price);
+      const r = await fetch('/api/charging-stations/' + id + '?' + params, {method:'PATCH'});
+      if (!r.ok) return alert('save failed');
+      await loadStations();
+    }
+    async function deleteStation(id, btn) {
+      if (!confirm('Delete this station?')) return;
+      const r = await fetch('/api/charging-stations/' + id, {method:'DELETE'});
+      if (!r.ok) return alert('delete failed');
+      await loadStations();
+    }
+    window.addEventListener('load', loadStations);
+  </script>
+
+  <div class="card mb-6">
     <div class="card-label">Address labels</div>
     <div class="stat-sub mb-4">
       Friendly names for frequent destinations. Shown on <a href="/tripbook">/tripbook</a>

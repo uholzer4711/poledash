@@ -170,6 +170,21 @@ class JourneyImport(SQLModel, table=True):
     co2_g_per_kwh: int | None = None  # grid CO2 intensity at trip start
 
 
+class ChargingStation(SQLModel, table=True):
+    """A known charging station, matched by GPS proximity (500 m radius).
+
+    Created/updated when user saves a session with a note (station name).
+    Used to auto-fill note + price for future sessions at the same location.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    lat: float
+    lng: float
+    price_ct_per_kwh: float | None = None
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class NotificationLog(SQLModel, table=True):
     """Dedupes notifications so we don't spam ntfy on every poll."""
 
