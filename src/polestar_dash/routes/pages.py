@@ -262,7 +262,7 @@ def routes_page(
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
-    from ..app_settings import get_default_price_ct
+    from ..app_settings import get_charging_loss_factor, get_default_price_ct
     from ..journey_import import get_address_labels
 
     s = get_settings()
@@ -287,6 +287,7 @@ def settings_page(request: Request):
             "s": s,
             "integrations": integrations,
             "default_price_ct": get_default_price_ct(),
+            "charging_loss_factor": get_charging_loss_factor(),
         },
     )
 

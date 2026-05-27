@@ -190,7 +190,10 @@
         {% elif is_plugged %}<span class="badge"><span class="dot"></span>Plugged</span>
         {% else %}Charging{% endif %}
       </div>
-      <div class="stat-muted">{{ s.charging_status or "Idle" }}</div>
+      <div class="stat-muted">
+        {% if s.charging_status == 'Error' and not is_plugged %}Idle
+        {% else %}{{ s.charging_status or "Idle" }}{% endif %}
+      </div>
       <div class="stat-sub">
         {% if is_plugged %}Cable connected, not drawing{% else %}Not plugged in{% endif %}
       </div>

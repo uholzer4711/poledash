@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 from sqlmodel import Session, select
 
+from .app_settings import get_charging_loss_factor
 from .db.models import ChargeSession, VehicleSnapshot
 from .db.session import get_engine
 from .polestar.fetcher import Snapshot
@@ -209,7 +210,8 @@ def update_session(
                 cs.peak_power_w = peak_w
             if cs.soc_start is not None and cs.soc_end is not None:
                 delta = max(0, cs.soc_end - cs.soc_start)
-                cs.energy_kwh = round(delta / 100 * DEFAULT_BATTERY_KWH, 1)
+                net_kwh = delta / 100 * DEFAULT_BATTERY_KWH
+                cs.energy_kwh = round(net_kwh * get_charging_loss_factor(), 1)
             cs.is_complete = True
             s.add(cs)
             s.commit()

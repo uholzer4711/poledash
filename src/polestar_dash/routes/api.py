@@ -12,7 +12,9 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..app_settings import (
+    get_charging_loss_factor,
     get_default_price_ct,
+    set_charging_loss_factor,
     set_default_price_ct,
 )
 from ..db.models import ChargeSession, JourneyImport, VehicleSnapshot
@@ -210,13 +212,38 @@ def patch_session(
 
 @router.get("/app-settings")
 def app_settings_get() -> dict:
-    return {"default_price_ct_per_kwh": get_default_price_ct()}
+    return {
+        "default_price_ct_per_kwh": get_default_price_ct(),
+        "charging_loss_factor": get_charging_loss_factor(),
+    }
 
 
 @router.post("/app-settings/price")
 def app_settings_set_price(value: float = Query(..., ge=0, le=500)) -> dict:
     set_default_price_ct(value)
     return {"default_price_ct_per_kwh": get_default_price_ct()}
+
+
+@router.post("/app-settings/charging-loss-factor")
+def app_settings_set_loss_factor(value: float = Query(..., ge=1.0, le=1.5)) -> dict:
+    set_charging_loss_factor(value)
+    _recalc_session_energy(value)
+    return {"charging_loss_factor": get_charging_loss_factor()}
+
+
+def _recalc_session_energy(loss_factor: float) -> None:
+    from ..sessions import DEFAULT_BATTERY_KWH
+    with Session(get_engine()) as s:
+        rows = list(s.exec(
+            select(ChargeSession).where(ChargeSession.is_complete.is_(True))
+        ).all())
+        for cs in rows:
+            if cs.soc_start is not None and cs.soc_end is not None:
+                delta = max(0, cs.soc_end - cs.soc_start)
+                net_kwh = delta / 100 * DEFAULT_BATTERY_KWH
+                cs.energy_kwh = round(net_kwh * loss_factor, 1)
+                s.add(cs)
+        s.commit()
 
 
 @router.get("/insights")

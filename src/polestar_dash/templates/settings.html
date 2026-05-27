@@ -33,6 +33,32 @@
   </script>
 
   <div class="card mb-6">
+    <div class="card-label">Charging loss factor</div>
+    <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="flex:1;min-width:160px">
+        <label>Factor (1.0 = no loss, 1.12 = 12 %)</label>
+        <input id="loss_factor" type="number" min="1.0" max="1.5" step="0.01" value="{{ "%.2f"|format(charging_loss_factor) }}">
+      </div>
+      <button class="btn accent" onclick="saveLossFactor()">Save <span class="arrow">→</span></button>
+      <span id="loss_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">saved</span>
+    </div>
+    <div class="stat-sub mt-4">
+      The charger draws more energy from the grid than arrives in the battery.
+      This factor compensates for AC charging losses (~10–15 %). Applied to all session kWh and cost calculations.
+    </div>
+  </div>
+  <script>
+    async function saveLossFactor() {
+      const v = document.getElementById('loss_factor').value;
+      const r = await fetch('/api/app-settings/charging-loss-factor?value=' + encodeURIComponent(v), {method:'POST'});
+      if (!r.ok) return alert('save failed: ' + r.status);
+      const el = document.getElementById('loss_saved');
+      el.style.opacity = 1;
+      setTimeout(() => { el.style.opacity = 0; }, 1500);
+    }
+  </script>
+
+  <div class="card mb-6">
     <div class="card-label">Address labels</div>
     <div class="stat-sub mb-4">
       Friendly names for frequent destinations. Shown on <a href="/tripbook">/tripbook</a>

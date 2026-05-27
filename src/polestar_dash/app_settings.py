@@ -55,6 +55,25 @@ def set_default_price_ct(value: float) -> None:
     set_setting(DEFAULT_PRICE_KEY, round(float(value), 2))
 
 
+CHARGING_LOSS_FACTOR_KEY = "charging_loss_factor"
+CHARGING_LOSS_FACTOR_DEFAULT = 1.12  # ~12 % typical AC charging losses
+
+
+def get_charging_loss_factor() -> float:
+    raw = get_setting(CHARGING_LOSS_FACTOR_KEY, CHARGING_LOSS_FACTOR_DEFAULT)
+    try:
+        v = float(raw)
+        return v if 1.0 <= v <= 1.5 else CHARGING_LOSS_FACTOR_DEFAULT
+    except (TypeError, ValueError):
+        return CHARGING_LOSS_FACTOR_DEFAULT
+
+
+def set_charging_loss_factor(value: float) -> None:
+    if value < 1.0 or value > 1.5:
+        raise ValueError("Charging loss factor must be between 1.0 and 1.5")
+    set_setting(CHARGING_LOSS_FACTOR_KEY, round(float(value), 3))
+
+
 CALIBRATED_BATTERY_KEY = "calibrated_battery_kwh"
 
 
