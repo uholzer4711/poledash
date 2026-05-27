@@ -3,6 +3,51 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [Unreleased] — 2026-05-27
+
+### Added — Smart automations
+
+**Session auto-tagging**: when a charging session closes, the app
+automatically looks up the GPS location (from nearby imported journey
+endpoints) and matches it against known charging stations (500 m radius).
+If a match is found and no manual note was set, `note` and
+`price_ct_per_kwh` are filled automatically. No more manually tagging
+every home charge.
+
+**Weekly digest** (Sundays 17:00 UTC): summarises the past 7 days —
+trips, km, kWh charged, cost, efficiency (kWh/100km), and range factor.
+Sent via all configured notification channels (email, ntfy, Telegram).
+
+**Battery health trend alert**: runs alongside the weekly digest.
+Compares the 4-week rolling average range factor against the 12-week
+baseline. If it drops more than 10%, fires a warning notification
+(possible causes: cold weather, tyre pressure, degradation).
+
+**Trip-to-session cost linking**: the tripbook now matches each detected
+trip to the charging session that started within 2 hours after the trip
+ended. When matched, the "Cost" column shows the actual charge cost
+(from the session's effective price) instead of just the global estimate,
+and a new "Charged at" column shows the station name.
+
+### Added — Email notifications (SMTP)
+
+New notification channel: email via SMTP with STARTTLS. Compatible with
+Gmail App Passwords, Fastmail, any standard SMTP relay. Configure via
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`,
+`SMTP_TO` environment variables.
+
+`notify()` is now the single hub for all channels — ntfy, email, and
+Telegram are each sent if configured, with the same dedup key. Anomaly
+alerts, charge-complete, low-SoC, service-due, weekly digest, and
+battery-trend alerts all go through this unified path.
+
+### Changed — Notification architecture
+
+All callers (`scheduler._maybe_notify`, `anomalies._alert`,
+`digest.weekly_digest`) now go through a single `notify()` call that
+handles ntfy + email + Telegram in one shot. Removes duplicate
+`telegram_send()` calls that were scattered across callers.
+
 ## [Unreleased] — 2026-05-26
 
 ### Added — Charging Hero dashboard mode

@@ -87,6 +87,26 @@ def _odo_stationary(a: float | None, b: float | None) -> bool:
     return abs(a - b) <= ODO_STATIONARY_TOL_KM
 
 
+def _auto_tag_station(cs: ChargeSession, db: Session) -> None:
+    """Auto-fill note + price from a known ChargingStation if GPS matches."""
+    if cs.note:
+        return
+    try:
+        from .stations import find_station, locate_session
+        coords = locate_session(cs, db=db)
+        if coords is None:
+            return
+        station = find_station(*coords)
+        if station is None:
+            return
+        cs.note = station.name
+        if station.price_ct_per_kwh is not None and cs.price_ct_per_kwh is None:
+            cs.price_ct_per_kwh = station.price_ct_per_kwh
+        log.info("Auto-tagged session %s as '%s'", cs.id, station.name)
+    except Exception:  # noqa: BLE001
+        log.exception("Auto-tag station failed for session %s", cs.id)
+
+
 def update_session(
     snap: Snapshot, *, prev: VehicleSnapshot | None = None
 ) -> ChargeSession | None:
@@ -213,16 +233,18 @@ def update_session(
                 net_kwh = delta / 100 * DEFAULT_BATTERY_KWH
                 cs.energy_kwh = round(net_kwh * get_charging_loss_factor(), 1)
             cs.is_complete = True
+            _auto_tag_station(cs, s)
             s.add(cs)
             s.commit()
             s.refresh(cs)
             closed = cs
             log.info(
-                "Closed charge session for %s: %s -> %s%% (~%s kWh)",
+                "Closed charge session for %s: %s -> %s%% (~%s kWh, station=%s)",
                 snap.vin,
                 cs.soc_start,
                 cs.soc_end,
                 cs.energy_kwh,
+                cs.note or "?",
             )
 
     return closed

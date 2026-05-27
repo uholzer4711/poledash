@@ -12,6 +12,7 @@ from apscheduler.triggers.date import DateTrigger
 from sqlmodel import Session
 
 from .backup import run_backup
+from .digest import weekly_digest
 from .config import get_settings
 from .db.models import FetchError, RawSnapshot, VehicleSnapshot
 from .db.session import get_engine
@@ -21,7 +22,6 @@ from .polestar.client import PolestarClient
 from .polestar.fetcher import Snapshot, fetch_snapshot
 from .anomalies import run_anomaly_checks
 from .sessions import CHARGING_STATES, previous_snapshot, update_session
-from .telegram import telegram_send
 
 # Retention for the raw-JSON safety net. Structured rows in VehicleSnapshot
 # stay forever; the verbatim API payloads we keep just long enough to debug
@@ -59,20 +59,14 @@ def _maybe_notify(snap: Snapshot, closed_session) -> None:  # noqa: ANN001
             key=f"session-{closed_session.id}",
             title=f"Charging finished — {snap.soc_percent}%",
             body=(
-                f"Reached {snap.soc_percent}% (≈ {snap.range_km} km).\n"
-                f"Session: {closed_session.soc_start}→{closed_session.soc_end}%, "
+                f"Reached {snap.soc_percent}% ({snap.range_km} km).\n"
+                f"Session: {closed_session.soc_start} -> {closed_session.soc_end}%, "
                 f"peak {(closed_session.peak_power_w or 0)/1000:.1f} kW, "
                 f"~{closed_session.energy_kwh or 0:.1f} kWh."
             ),
             vin=snap.vin,
             priority="high",
             tags=["battery", "zap"],
-        )
-        telegram_send(
-            f"⚡ <b>Charging finished</b> — {snap.soc_percent}% (~{snap.range_km} km)\n"
-            f"{closed_session.soc_start}→{closed_session.soc_end}%, "
-            f"peak {(closed_session.peak_power_w or 0)/1000:.1f} kW, "
-            f"~{closed_session.energy_kwh or 0:.1f} kWh."
         )
 
     # Low SoC (once per day at most)
@@ -239,6 +233,14 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
         _prune_raw_snapshots,
         CronTrigger(hour=3, minute=45),
         id="raw-retention",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    sched.add_job(
+        weekly_digest,
+        CronTrigger(day_of_week="sun", hour=17, minute=0),
+        id="weekly-digest",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

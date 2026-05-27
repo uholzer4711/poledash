@@ -5,7 +5,7 @@ Polestar consumer API in the background, stores the history in SQLite, and
 serves a single page with SoC, range, charging state, odometer, trips,
 sessions, anomalies and service warnings.
 
-Optional: **ntfy.sh / Telegram** push, **MQTT / Home Assistant**,
+Optional: **Email / ntfy.sh / Telegram** push, **MQTT / Home Assistant**,
 **Prometheus / Grafana**.
 
 > Unofficial. Not affiliated with Polestar. Uses reverse-engineered endpoints
@@ -72,6 +72,11 @@ See [`.env.example`](.env.example). Most useful:
 | `POLESTAR_VINS` | *(auto-discover)* | Comma-separated |
 | `POLL_INTERVAL_MIN` | `10` | Idle (floor: 5) |
 | `FAST_POLL_INTERVAL_MIN` | `2` | Charging (floor: 1) |
+| `SMTP_HOST` | — | SMTP server (e.g. `smtp.gmail.com`) |
+| `SMTP_PORT` | `587` | STARTTLS port |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | — | SMTP credentials (Gmail: App Password) |
+| `SMTP_FROM` | — | Sender address (defaults to `SMTP_USERNAME`) |
+| `SMTP_TO` | — | Recipient address |
 | `NTFY_TOPIC` | — | Unguessable string |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | — | Bot push |
 | `MQTT_HOST` | — | Enables MQTT + HA discovery |

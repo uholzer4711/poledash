@@ -76,7 +76,7 @@
     <p class="muted">No trips detected in this window yet — wait until you've driven a bit.</p>
   {% else %}
     <table class="index">
-      <thead><tr><th>Start</th><th>End</th><th class="right">km</th><th class="right">Duration</th><th class="right">SoC</th><th class="right">kWh/100km</th><th class="right">kWh (real)</th><th class="right">Cost</th><th class="right">Odo</th></tr></thead>
+      <thead><tr><th>Start</th><th>End</th><th class="right">km</th><th class="right">Duration</th><th class="right">SoC</th><th class="right">kWh/100km</th><th class="right">kWh (real)</th><th class="right">Cost</th><th>Charged at</th><th class="right">Odo</th></tr></thead>
       <tbody>
         {% for t, j, ext in paired|sort(attribute='0.started_at', reverse=true) %}
           {% set real_kwh = j.consumption_kwh if j and j.consumption_kwh else None %}
@@ -97,7 +97,14 @@
               {% else %}—{% endif %}
             </td>
             <td class="right tnum">{% if real_kwh %}{{ "%.2f"|format(real_kwh) }}{% else %}—{% endif %}</td>
-            <td class="right tnum">{% if cost_kwh %}€ {{ "%.2f"|format(cost_kwh * price_ct / 100) }}{% else %}—{% endif %}</td>
+            <td class="right tnum">
+              {% if ext.charge_cost is defined and ext.charge_cost %}€ <em class="accent">{{ "%.2f"|format(ext.charge_cost) }}</em>
+                <span class="mono-xs muted">{{ "%.1f"|format(ext.charge_price_ct) }} ct</span>
+              {% elif cost_kwh %}€ {{ "%.2f"|format(cost_kwh * price_ct / 100) }}
+                <span class="mono-xs muted">est</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="mono-xs">{% if ext.charge_station is defined and ext.charge_station %}{{ ext.charge_station }}{% endif %}</td>
             <td class="right tnum">{{ "%.0f"|format(t.end_km) }}</td>
           </tr>
         {% endfor %}

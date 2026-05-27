@@ -181,6 +181,32 @@ def tripbook_page(
             return round(t.km * kwh_per_km, 2)
         return None
 
+    # Match each trip to the charging session that started within 2 h after
+    # the trip ended — that session "paid for" this drive.
+    sess_window = timedelta(hours=2)
+    with Session(get_engine()) as s:
+        since = utcnow() - timedelta(days=days + 1)
+        sess_rows = list(
+            s.exec(
+                select(ChargeSession)
+                .where(ChargeSession.is_complete.is_(True))
+                .where(ChargeSession.started_at >= since)
+                .order_by(ChargeSession.started_at)
+            ).all()
+        )
+    sess_keys = [cs.started_at for cs in sess_rows]
+
+    def _match_session(trip_end):
+        if not sess_keys:
+            return None
+        i = bisect_left(sess_keys, trip_end)
+        for ci in (i, i - 1):
+            if 0 <= ci < len(sess_rows):
+                diff = sess_rows[ci].started_at - trip_end
+                if timedelta(0) <= diff <= sess_window:
+                    return sess_rows[ci]
+        return None
+
     # Decorate each trip with an estimated kWh/100km that falls back to the
     # fleet avg when SoC drop is zero (short trips). The template reads it
     # via the third tuple element.
@@ -188,7 +214,15 @@ def tripbook_page(
     for t, j in paired:
         kwh = best_kwh(t, j)
         per100 = round(kwh * 100 / t.km, 1) if (kwh and t.km > 0.5) else None
-        triples.append((t, j, {"kwh_est": kwh, "per100_est": per100}))
+        ext = {"kwh_est": kwh, "per100_est": per100}
+        cs = _match_session(t.ended_at)
+        if cs is not None:
+            eff_price = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else price_ct
+            ext["charge_kwh"] = cs.energy_kwh
+            ext["charge_cost"] = round((cs.energy_kwh or 0) * eff_price / 100.0, 2)
+            ext["charge_station"] = cs.note
+            ext["charge_price_ct"] = eff_price
+        triples.append((t, j, ext))
 
     grand_km = round(sum(t.km for t, _ in paired), 1)
     grand_min = sum(t.duration_min for t, _ in paired)

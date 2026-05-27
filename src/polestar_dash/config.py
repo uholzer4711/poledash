@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     mqtt_base_topic: str = "poledash"
     mqtt_ha_discovery: bool = True
 
+    # --- Email (SMTP) ---
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_to: str = ""
+
     # --- Demo mode (public showcase instance) ---
     demo_mode: bool = False
     demo_banner_text: str = (

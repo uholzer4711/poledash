@@ -15,7 +15,6 @@ from .db.models import VehicleSnapshot
 from .db.session import get_engine
 from .notify import notify
 from .polestar.fetcher import Snapshot
-from .telegram import telegram_send
 
 log = logging.getLogger(__name__)
 
@@ -42,10 +41,9 @@ def _prev_snapshot(vin: str, before: Snapshot) -> VehicleSnapshot | None:
 
 
 def _alert(kind: str, key: str, title: str, body: str, vin: str) -> None:
-    """ntfy + Telegram in one shot, with the same idempotency key."""
+    """Send alert via all configured channels (ntfy, email, Telegram)."""
     notify(kind=kind, key=key, title=title, body=body, vin=vin,
            priority="high", tags=["warning"])
-    telegram_send(f"⚠️ <b>{title}</b>\n{body}")
 
 
 def _check_soc_drop(snap: Snapshot, prev: VehicleSnapshot) -> None:
@@ -166,6 +164,60 @@ def _check_low_soc_unplugged(snap: Snapshot) -> None:
             f"Consider plugging in tonight."
         ),
         vin=snap.vin,
+    )
+
+
+def check_battery_trend() -> None:
+    """Weekly check: compare 4-week vs 12-week range factor average.
+
+    If the recent average dropped >10%, fire an alert. Called by the
+    weekly-digest scheduler job."""
+    from datetime import timedelta as td
+
+    now = utcnow()
+    with Session(get_engine()) as s:
+        stmt = (
+            select(VehicleSnapshot.fetched_at, VehicleSnapshot.range_km, VehicleSnapshot.soc_percent)
+            .where(VehicleSnapshot.fetched_at >= now - td(weeks=12))
+            .where(VehicleSnapshot.range_km.is_not(None))
+            .where(VehicleSnapshot.soc_percent.is_not(None))
+        )
+        rows = list(s.exec(stmt).all())
+
+    cutoff_4w = now - td(weeks=4)
+    recent, baseline = [], []
+    for ts, range_km, soc in rows:
+        if not soc or soc <= 0 or not range_km:
+            continue
+        factor = range_km / (soc / 100)
+        if ts >= cutoff_4w:
+            recent.append(factor)
+        else:
+            baseline.append(factor)
+
+    if len(recent) < 10 or len(baseline) < 10:
+        return
+
+    avg_recent = sum(recent) / len(recent)
+    avg_baseline = sum(baseline) / len(baseline)
+    if avg_baseline <= 0:
+        return
+
+    drop_pct = (avg_baseline - avg_recent) / avg_baseline * 100
+    if drop_pct < 10:
+        return
+
+    week_key = now.strftime("%Y-W%W")
+    _alert(
+        kind="battery_trend",
+        key=f"battery-trend-{week_key}",
+        title=f"Range-Faktor sinkt: −{drop_pct:.0f}%",
+        body=(
+            f"4-Wochen-Schnitt: {avg_recent:.0f} km bei 100%\n"
+            f"12-Wochen-Schnitt: {avg_baseline:.0f} km bei 100%\n"
+            f"Mögliche Ursachen: Kälte, Reifendruck, Degradation."
+        ),
+        vin="",
     )
 
 
