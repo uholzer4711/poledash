@@ -72,7 +72,12 @@ def notify(
     if s.smtp_host and s.smtp_to and not skip_email:
         from .email_notify import email_send
         if email_html is not None:
-            channel("email", lambda: email_send(f"[poledash] {title}", email_html, html=True))
+            channel(
+                "email",
+                lambda: email_send(
+                    f"[poledash] {title}", email_html, html=True, text_alt=body
+                ),
+            )
         else:
             channel("email", lambda: email_send(f"[poledash] {title}", body))
     if s.telegram_bot_token and s.telegram_chat_id:

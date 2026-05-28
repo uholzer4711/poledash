@@ -54,6 +54,11 @@ class Settings(BaseSettings):
     smtp_from: str = ""
     smtp_to: str = ""
 
+    # --- Software update watch ---
+    software_manual_url: str = (
+        "https://www.polestar.com/uk/manual/polestar-2/2027/software-updates/"
+    )
+
     # --- Demo mode (public showcase instance) ---
     demo_mode: bool = False
     demo_banner_text: str = (

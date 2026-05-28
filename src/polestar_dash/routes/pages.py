@@ -312,6 +312,13 @@ def insights_page(request: Request):
     return templates.TemplateResponse(request, "insights.html", {})
 
 
+@router.get("/software", response_class=HTMLResponse)
+def software_page(request: Request, vin: str | None = None):
+    from ..software import dashboard_state
+
+    return templates.TemplateResponse(request, "software.html", dashboard_state(vin))
+
+
 @router.get("/sessions")
 def sessions_page():
     # Sessions live as a block on /history now; keep the URL working.

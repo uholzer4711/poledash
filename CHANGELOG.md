@@ -3,7 +3,46 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
-## [Unreleased] — 2026-05-28
+## [Unreleased]
+
+### Added — Software version tracking + update watch
+
+- **New `/software` tab.** Shows the car's currently installed software
+  version and *since when*, a full history of every detected version change,
+  and the release-notes changelog scraped from the Polestar online manual.
+  Linked from the main nav.
+- **Manual version entry.** The Polestar consumer API returns
+  `software_version: null` for many cars (incl. MY2026), so the tab has a small
+  form to enter the version read in-car (Settings → System → Software update).
+  It is stored as a version-change record and drives the "since when" /
+  update-available logic; auto-detection from the API takes over automatically
+  if it ever starts reporting a value. `POST /api/software/installed`.
+- **Readable release notes.** The manual embeds the changelog as both rendered
+  HTML and a JSON blob; the parser reads only the HTML titles and converts
+  paragraphs / sub-headings / lists into clean line-broken text with bullets.
+- **Installed-version history.** New `SoftwareVersionChange` table; the poll
+  pipeline records every change of the car-reported `software_version`
+  (`record_installed_version` in `software.py`) and notifies (`software_installed`)
+  on each OTA install. The first version observed per VIN is logged as a
+  silent baseline.
+- **Update watch (2× daily).** New `software-update-check` scheduler job scrapes
+  `SOFTWARE_MANUAL_URL` (default the Polestar 2 MY2027 manual) at 06:00/18:00
+  UTC, caches the release catalog (`SoftwareRelease`), and **emails** when a
+  version newer than the installed one is listed (`software_update_available`,
+  deduped per version via `NotificationLog`).
+- **`GET /api/software`** — JSON: installed version, since, latest available,
+  `update_available`, change history, and the release catalog.
+- **Config:** `SOFTWARE_MANUAL_URL` env var (overridable).
+
+### Fixed — Email deliverability
+
+- Outgoing mail now sets **`Date`** and **`Message-ID`** headers and is sent as
+  **multipart/alternative** (plain text + HTML) instead of HTML-only. Missing
+  Date/Message-ID and HTML-only bodies are strong spam signals — Gmail was
+  filing alerts/digests into Spam (or dropping them). Affects all channels that
+  email (software alerts + weekly digest).
+
+## [1.7] — 2026-05-28
 
 ### Fixed — Robustness pass (project review HIGH/MED)
 

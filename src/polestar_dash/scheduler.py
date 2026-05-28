@@ -21,6 +21,7 @@ from .mqtt import schedule_publish
 from .notify import notify
 from .polestar.client import PolestarClient
 from .polestar.fetcher import Snapshot, fetch_snapshot
+from .software import check_software_updates, record_installed_version
 from .anomalies import run_anomaly_checks
 from .sessions import CHARGING_STATES, previous_snapshot, update_session
 
@@ -153,6 +154,12 @@ async def poll_once(client: PolestarClient) -> None:
             except Exception:  # noqa: BLE001
                 log.exception("update_session failed for VIN %s", vin)
                 closed = None
+            # Records installed-version changes + may notify (blocking I/O) —
+            # offload like the other notify steps.
+            try:
+                await asyncio.to_thread(record_installed_version, snap)
+            except Exception:  # noqa: BLE001
+                log.exception("Software version tracking failed for VIN %s", vin)
             # notify() and the anomaly checks do blocking network I/O (ntfy
             # HTTP, SMTP up to 15 s, Telegram) — run them off the event loop so
             # they can't stall the poll cadence or anything else on the loop.
@@ -255,6 +262,16 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
         weekly_digest,
         CronTrigger(day_of_week="sun", hour=17, minute=0),
         id="weekly-digest",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # Software-update watch — twice a day (UTC 06:00 / 18:00 ≈ 08:00 / 20:00
+    # Vienna). Scrapes the manual and emails when a newer version is listed.
+    sched.add_job(
+        check_software_updates,
+        CronTrigger(hour="6,18", minute=0),
+        id="software-update-check",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

@@ -54,6 +54,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer, monthly kWh/100km, iCal feed |
 | `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector |
+| `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
 | `/routes` | Repeated routes aggregated from imported trips |
 | `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
 | `/settings` `/errors` `/raw` | Settings, recent errors, raw API dump |
@@ -81,6 +82,7 @@ See [`.env.example`](.env.example). Most useful:
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | — | Bot push |
 | `MQTT_HOST` | — | Enables MQTT + HA discovery |
 | `BACKUP_KEEP_DAYS` | `14` | Daily SQLite backups |
+| `SOFTWARE_MANUAL_URL` | *(Polestar 2 MY2027 manual)* | Page scraped 2×/day for the latest software version |
 
 Electricity prices: set a default `ct/kWh` on `/settings` (defaults to 50);
 per-session overrides on the Sessions page get energy-weighted into the
@@ -99,6 +101,14 @@ shown on `/tripbook` and `/routes`. Multiple addresses can hang off one label
 — useful when the same place reports slightly different geocoded strings.
 Manage them visually on `/settings` → *Address map* (Leaflet + OSM): every
 unique start/end point from imported trips appears as a dot, click to assign.
+
+Software updates: `/software` shows the installed version, since when, the
+version history, and the manual's release-notes changelog. Twice a day the
+Polestar manual (`SOFTWARE_MANUAL_URL`) is scraped and an **email** is sent
+when a version newer than the installed one is listed. Note: the consumer API
+returns `software_version: null` for many cars (incl. MY2026), so enter the
+version read in-car (*Settings → System → Software update*) once via the form
+on the page — auto-detection takes over if the API ever reports it.
 
 ## Reverse proxy (Caddy)
 

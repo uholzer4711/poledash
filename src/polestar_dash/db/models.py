@@ -190,6 +190,41 @@ class ChargingStation(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class SoftwareVersionChange(SQLModel, table=True):
+    """One row per detected change of the car's *installed* software version.
+
+    Lets the dashboard answer "which version, since when" and keeps a full
+    history of OTA installs. Detected at poll time by comparing the latest
+    snapshot's software_version against the previous recorded value.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    vin: str = Field(index=True)
+    detected_at: datetime = Field(index=True)  # when we first polled the new version
+    software_version: str
+    previous_version: str | None = None
+    software_version_ts: datetime | None = None  # car-reported timestamp for the version
+
+    __table_args__ = (
+        Index("ix_swversionchange_vin_detected", "vin", "detected_at"),
+    )
+
+
+class SoftwareRelease(SQLModel, table=True):
+    """A software version published in the Polestar online manual.
+
+    Scraped twice a day from SOFTWARE_MANUAL_URL. `version` is the raw label
+    (e.g. "P5.1.9"); `version_key` is the zero-padded sortable form so plain
+    SQL/string ordering matches semantic version order.
+    """
+
+    version: str = Field(primary_key=True)
+    version_key: str = Field(index=True)
+    notes: str | None = None
+    first_seen_at: datetime = Field(default_factory=utcnow)
+    last_seen_at: datetime = Field(default_factory=utcnow)
+
+
 class NotificationLog(SQLModel, table=True):
     """Dedupes notifications so we don't spam ntfy on every poll."""
 

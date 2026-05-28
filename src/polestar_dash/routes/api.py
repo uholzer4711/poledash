@@ -87,6 +87,60 @@ def vins() -> list[str]:
     return list(rows)
 
 
+@router.get("/software")
+def software(vin: str | None = None) -> dict:
+    from ..software import dashboard_state
+
+    st = dashboard_state(vin)
+
+    def _release(r) -> dict:
+        return {
+            "version": r.version,
+            "notes": r.notes,
+            "first_seen_at": r.first_seen_at.isoformat() if r.first_seen_at else None,
+            "last_seen_at": r.last_seen_at.isoformat() if r.last_seen_at else None,
+        }
+
+    def _change(c) -> dict:
+        return {
+            "software_version": c.software_version,
+            "previous_version": c.previous_version,
+            "detected_at": c.detected_at.isoformat() if c.detected_at else None,
+            "software_version_ts": (
+                c.software_version_ts.isoformat() if c.software_version_ts else None
+            ),
+        }
+
+    return {
+        "installed": st["installed"],
+        "installed_since": (
+            st["installed_since"].isoformat() if st["installed_since"] else None
+        ),
+        "vin": st["vin"],
+        "update_available": st["update_available"],
+        "latest": _release(st["latest"]) if st["latest"] else None,
+        "checked_at": st["checked_at"].isoformat() if st["checked_at"] else None,
+        "history": [_change(c) for c in st["history"]],
+        "releases": [_release(r) for r in st["releases"]],
+    }
+
+
+@router.post("/software/installed")
+def set_software_installed(version: str = Form(...)) -> dict:
+    from ..software import dashboard_state, set_manual_installed_version
+
+    try:
+        set_manual_installed_version(version)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    st = dashboard_state()
+    return {
+        "installed": st["installed"],
+        "update_available": st["update_available"],
+        "latest": st["latest"].version if st["latest"] else None,
+    }
+
+
 @router.get("/history")
 def history(
     field: str = Query(..., description="Field name"),

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Software · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">06 / SOFTWARE</div>
+    <h1>Software <em class="accent">version</em></h1>
+  </div>
+
+  {% if update_available and latest %}
+  <div class="card mb-6" style="border-left:2px solid var(--ujh-orange)">
+    <div class="card-label">Update available</div>
+    <div class="stat num">{{ installed or '—' }} <span class="unit">&rarr;</span> <em class="accent">{{ latest.version }}</em></div>
+    <div class="stat-sub">Version {{ latest.version }} is listed in the Polestar manual but not yet installed. An email is sent automatically when a newer version appears.</div>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-4 mb-6">
+    <div class="card">
+      <div class="card-label">Installed</div>
+      <div class="stat num">{{ installed or '—' }}</div>
+      {% if installed_since %}<div class="stat-sub">since {{ installed_since|localtime }}</div>{% endif %}
+    </div>
+    <div class="card">
+      <div class="card-label">Latest available</div>
+      <div class="stat num">{{ latest.version if latest else '—' }}</div>
+      <div class="stat-sub">
+        {% if not latest %}not checked yet{% elif update_available %}<span class="accent">update available</span>{% else %}up to date{% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Last checked</div>
+      <div class="stat num" style="font-size:24px">{{ checked_at|localtime if checked_at else '—' }}</div>
+      <div class="stat-sub">manual scraped 2&times; daily</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Source</div>
+      <div class="stat-sub" style="margin-top:8px"><a href="{{ manual_url }}" target="_blank" rel="noopener">Polestar manual <span class="arrow">&rarr;</span></a></div>
+    </div>
+  </div>
+
+  <div class="card mb-6">
+    <div class="card-label">Set installed version</div>
+    <div class="stat-sub" style="margin-bottom:12px">
+      The car does not report its software version over the API, so enter it manually.
+      Read it in the car under <strong>Settings &rarr; System &rarr; Software update</strong> (e.g. P5.1.9).
+    </div>
+    <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="min-width:160px">
+        <label>Version</label>
+        <input type="text" id="installed-input" placeholder="P5.1.9" value="{{ installed or '' }}">
+      </div>
+      <button class="btn ghost" onclick="saveInstalled(this)">Save <span class="arrow">&rarr;</span></button>
+      <span id="installed-msg" class="mono-xs muted"></span>
+    </div>
+  </div>
+  <script>
+    async function saveInstalled(btn) {
+      const v = document.getElementById('installed-input').value.trim();
+      const msg = document.getElementById('installed-msg');
+      if (!v) { msg.textContent = 'enter a version'; return; }
+      const body = new URLSearchParams({version: v});
+      const r = await fetch('/api/software/installed', {method: 'POST', body});
+      if (!r.ok) { const e = await r.json().catch(()=>({})); msg.textContent = e.detail || 'save failed'; return; }
+      location.reload();
+    }
+  </script>
+
+  <div class="card-label mb-4">Installed-version history</div>
+  <div class="card mb-6">
+    {% if history %}
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr class="mono-xs" style="text-align:left;color:var(--ujh-ink-3)">
+          <th style="padding:8px 0">Detected</th>
+          <th style="padding:8px 0">Version</th>
+          <th style="padding:8px 0">Previous</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in history %}
+        <tr style="border-top:1px solid var(--ujh-line)">
+          <td style="padding:8px 0">{{ c.detected_at|localtime }}</td>
+          <td style="padding:8px 0"><strong>{{ c.software_version }}</strong></td>
+          <td style="padding:8px 0;color:var(--ujh-ink-3)">{{ c.previous_version or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No version change recorded yet. The current version is logged as a baseline on the next poll; future changes appear here.</p>
+    {% endif %}
+  </div>
+
+  <div class="card-label mb-4">Release notes — from the Polestar manual</div>
+  {% if releases %}
+  <div class="grid">
+    {% for r in releases %}
+    <div class="card" style="padding:16px">
+      <div class="flex-between" style="align-items:baseline;gap:8px">
+        <div class="stat num" style="font-size:22px">
+          {% if installed and r.version == installed %}<em class="accent">{{ r.version }}</em>{% else %}{{ r.version }}{% endif %}
+        </div>
+        {% if installed and r.version == installed %}<span class="mono-xs accent">installed</span>{% endif %}
+      </div>
+      {% if r.notes %}<div style="margin-top:8px;line-height:1.5;white-space:pre-line">{{ r.notes }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card"><p class="muted">No release data yet — the manual is scraped twice a day (and on the next scheduled check).</p></div>
+  {% endif %}
+{% endblock %}
