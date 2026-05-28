@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import logging
 from datetime import datetime, timedelta, timezone
@@ -106,6 +107,16 @@ async def poll_once(client: PolestarClient) -> None:
     a logging bug in update_session crashed poll_once *before* _reschedule)."""
     any_charging = False
     try:
+        # If the startup login failed (or dropped), `connect()` never populated
+        # the client. Retry here so a transient outage at boot doesn't leave the
+        # loop polling-and-failing forever until a manual restart.
+        if not client.connected:
+            try:
+                await client.connect()
+            except Exception:  # noqa: BLE001
+                log.exception("poll_once: reconnect failed — will retry next interval")
+                return
+
         if not client.vins:
             log.warning("poll_once: no VINs known, skipping")
             return
@@ -142,8 +153,11 @@ async def poll_once(client: PolestarClient) -> None:
             except Exception:  # noqa: BLE001
                 log.exception("update_session failed for VIN %s", vin)
                 closed = None
+            # notify() and the anomaly checks do blocking network I/O (ntfy
+            # HTTP, SMTP up to 15 s, Telegram) — run them off the event loop so
+            # they can't stall the poll cadence or anything else on the loop.
             try:
-                _maybe_notify(snap, closed)
+                await asyncio.to_thread(_maybe_notify, snap, closed)
             except Exception:  # noqa: BLE001
                 log.exception("Notify failed for VIN %s", vin)
             try:
@@ -151,7 +165,7 @@ async def poll_once(client: PolestarClient) -> None:
             except Exception:  # noqa: BLE001
                 log.exception("MQTT publish failed for VIN %s", vin)
             try:
-                run_anomaly_checks(snap, prev=prev)
+                await asyncio.to_thread(run_anomaly_checks, snap, prev=prev)
             except Exception:  # noqa: BLE001
                 log.exception("Anomaly checks failed for VIN %s", vin)
 

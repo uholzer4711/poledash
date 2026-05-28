@@ -17,22 +17,33 @@ def run_backup() -> None:
         return
 
     target = s.backup_dir / f"polestar-{date.today().isoformat()}.sqlite"
+    # Write to a temp file and atomically rename on success, so a same-day
+    # re-run or a crash mid-copy can never leave a truncated file under the
+    # canonical name.
+    tmp = target.with_suffix(".sqlite.tmp")
     src = None
     dst = None
+    ok = False
     try:
         src = sqlite3.connect(str(s.db_path))
-        dst = sqlite3.connect(str(target))
+        dst = sqlite3.connect(str(tmp))
         with dst:
             src.backup(dst)
-        log.info("Wrote backup %s (%.1f MB)", target, target.stat().st_size / 1e6)
+        ok = True
     except Exception:  # noqa: BLE001
         log.exception("Backup failed")
-        return
     finally:
         if src:
             src.close()
         if dst:
             dst.close()
+
+    if not ok:
+        tmp.unlink(missing_ok=True)
+        return
+
+    tmp.replace(target)
+    log.info("Wrote backup %s (%.1f MB)", target, target.stat().st_size / 1e6)
 
     # prune
     cutoff = datetime.now() - timedelta(days=s.backup_keep_days)

@@ -50,12 +50,17 @@ def _ensure_columns(engine) -> None:
             ("chargesession", "price_ct_per_kwh", "FLOAT"),
             ("chargesession", "note", "VARCHAR"),
             ("chargesession", "co2_g_per_kwh", "INTEGER"),
+            ("chargesession", "inferred", "BOOLEAN"),
         ]
     if "journeyimport" in tables:
         plan += [
             ("journeyimport", "outside_temp_c", "FLOAT"),
             ("journeyimport", "weather_code", "INTEGER"),
             ("journeyimport", "co2_g_per_kwh", "INTEGER"),
+        ]
+    if "chargingstation" in tables:
+        plan += [
+            ("chargingstation", "price_ct_per_kwh", "FLOAT"),
         ]
 
     with engine.begin() as conn:
@@ -64,11 +69,6 @@ def _ensure_columns(engine) -> None:
             if name in existing:
                 continue
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {sql_type}"))
-
-    if "chargingstation" in tables:
-        plan += [
-            ("chargingstation", "price_ct_per_kwh", "FLOAT"),
-        ]
 
     # Indexes — create_all skips index creation on tables that already exist.
     # CREATE INDEX IF NOT EXISTS is the cleanest forward-only equivalent.

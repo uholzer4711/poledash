@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from .app_settings import get_charging_loss_factor
+from .app_settings import get_calibrated_battery_kwh, get_charging_loss_factor
 from .db.models import ChargeSession, VehicleSnapshot
 from .db.session import get_engine
 from .polestar.fetcher import Snapshot
@@ -80,6 +80,15 @@ def _power_aggregates(
     )
 
 
+def _battery_capacity_kwh(snap: Snapshot) -> float:
+    """Best available pack capacity: the car's own spec when present, else the
+    value calibrated from imported journey trips, else the hard-coded default.
+    Mirrors tripbook so per-session and per-trip energy use the same basis."""
+    if snap.battery_capacity_kwh:
+        return float(snap.battery_capacity_kwh)
+    return get_calibrated_battery_kwh(fallback=DEFAULT_BATTERY_KWH)
+
+
 def _odo_stationary(a: float | None, b: float | None) -> bool:
     if a is None or b is None:
         # Missing odometer → assume stationary (don't block charge detection).
@@ -105,6 +114,29 @@ def _auto_tag_station(cs: ChargeSession, db: Session) -> None:
         log.info("Auto-tagged session %s as '%s'", cs.id, station.name)
     except Exception:  # noqa: BLE001
         log.exception("Auto-tag station failed for session %s", cs.id)
+
+
+def _should_close(
+    cs: ChargeSession,
+    status: str | None,
+    snap: Snapshot,
+    prev: VehicleSnapshot | None,
+    stationary: bool,
+    soc_delta: int | None,
+) -> bool:
+    """Whether the open session should be closed on this tick.
+
+    API sessions close on any terminal status. Inferred (silent) sessions
+    never see a terminal status — their status is "Idle" throughout — so a
+    plateau (soc_delta == 0) must NOT close them, or a slow AC charge gets
+    shredded into many one-tick sessions. They end only when the SoC actually
+    falls, the car is driven away, or the 24 h safety timeout fires."""
+    timed_out = (snap.fetched_at - cs.started_at) > timedelta(hours=24)
+    if not cs.inferred:
+        return status in TERMINAL_STATES or timed_out
+    drove_off = prev is not None and not stationary
+    soc_dropped = soc_delta is not None and soc_delta < 0
+    return drove_off or soc_dropped or timed_out
 
 
 def update_session(
@@ -180,6 +212,7 @@ def update_session(
                     peak_power_w=snap.charging_power_w,
                     avg_power_w=snap.charging_power_w,
                     co2_g_per_kwh=co2_g_per_kwh(started_at),
+                    inferred=not api_charging,
                 )
                 s.add(cs)
                 s.commit()
@@ -204,12 +237,16 @@ def update_session(
                     cs.peak_power_w = peak_w
                 cs.soc_end = snap.soc_percent
                 cs.range_end_km = snap.range_km
+                # The API now confirms a real charge — promote a session we'd
+                # opened only on a SoC rise so it closes on the normal terminal
+                # state like any API session.
+                if api_charging and cs.inferred:
+                    cs.inferred = False
                 s.add(cs)
                 s.commit()
 
         elif cs is not None and (
-            status in TERMINAL_STATES
-            or (snap.fetched_at - cs.started_at) > timedelta(hours=24)
+            _should_close(cs, status, snap, prev, stationary, soc_delta)
         ):
             cs.ended_at = snap.fetched_at
             # Don't let post-charge driving regress the peak SoC/range we
@@ -230,7 +267,7 @@ def update_session(
                 cs.peak_power_w = peak_w
             if cs.soc_start is not None and cs.soc_end is not None:
                 delta = max(0, cs.soc_end - cs.soc_start)
-                net_kwh = delta / 100 * DEFAULT_BATTERY_KWH
+                net_kwh = delta / 100 * _battery_capacity_kwh(snap)
                 cs.energy_kwh = round(net_kwh * get_charging_loss_factor(), 1)
             cs.is_complete = True
             _auto_tag_station(cs, s)

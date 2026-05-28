@@ -10,7 +10,6 @@ from sqlmodel import Session, select
 from .app_settings import blended_price_ct
 from .db.models import ChargeSession, VehicleSnapshot
 from .db.session import get_engine
-from .email_notify import email_send
 from .notify import notify
 from .tripbook import detect_trips
 from .util import utcnow
@@ -239,18 +238,21 @@ def weekly_digest() -> None:
         sessions=sessions,
     )
 
-    week_key = utcnow().strftime("%Y-W%W")
+    iso_year, iso_week, _ = utcnow().isocalendar()
+    week_key = f"{iso_year}-W{iso_week:02d}"
 
+    # One deduped call drives all channels — the HTML email goes through the
+    # same per-channel dedup as ntfy/Telegram, so a re-run in the same week
+    # doesn't re-send the email (it previously bypassed dedup entirely).
     notify(
         kind="weekly_digest",
         key=week_key,
         title=title,
         body=plain_body,
+        email_html=html_body,
         priority="low",
         tags=["chart_with_upwards_trend"],
-        skip_email=True,
     )
-    email_send(title, html_body, html=True)
 
     log.info("Weekly digest sent: %s km, %s kWh, EUR %s", total_km, total_kwh_charged, total_cost)
 

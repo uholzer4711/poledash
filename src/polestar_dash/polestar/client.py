@@ -129,6 +129,22 @@ class PolestarClient:
         self._vins: list[str] = []
 
     async def connect(self) -> None:
+        # Tear down a previous instance before replacing it (reconnect path),
+        # otherwise its httpx session / tokens leak.
+        if self._api is not None:
+            for closer in ("async_logout", "aclose", "close"):
+                fn = getattr(self._api, closer, None)
+                if fn is None:
+                    continue
+                try:
+                    res = fn()
+                    if hasattr(res, "__await__"):
+                        await res
+                except Exception:  # noqa: BLE001
+                    log.debug("Closing previous PolestarApi via %s failed", closer, exc_info=True)
+                break
+            self._api = None
+
         self._api = PolestarApi(
             username=self._email,
             password=self._password,
@@ -153,6 +169,10 @@ class PolestarClient:
         if self._api is None:
             raise RuntimeError("PolestarClient.connect() not called")
         return self._api
+
+    @property
+    def connected(self) -> bool:
+        return self._api is not None
 
     @property
     def vins(self) -> list[str]:

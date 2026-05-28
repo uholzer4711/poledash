@@ -63,7 +63,10 @@ def _check_soc_drop(snap: Snapshot, prev: VehicleSnapshot) -> None:
     )
     if drove:
         return
-    key = f"{snap.vin}-{snap.fetched_at.strftime('%Y%m%dT%H%M')}-socdrop"
+    # Daily dedup (like the sibling checks): a persistent / recurring drop
+    # should nudge once per day, not on every poll. The old per-minute key was
+    # effectively unique each poll, so the dedup never actually suppressed.
+    key = f"{snap.vin}-{snap.fetched_at.strftime('%Y-%m-%d')}-socdrop"
     _alert(
         kind="anomaly_soc_drop",
         key=key,

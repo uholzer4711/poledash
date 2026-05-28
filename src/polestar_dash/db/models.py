@@ -116,6 +116,11 @@ class ChargeSession(SQLModel, table=True):
     co2_g_per_kwh: int | None = None  # AT grid mix at session start
 
     is_complete: bool = Field(default=False, index=True)  # set True when charging_status transitions to Done/Idle
+    # True for sessions opened heuristically from a SoC rise (the API never
+    # reported "Charging"). These don't get a terminal "Done"/"Idle" signal, so
+    # they must not be closed on a bare Idle plateau — only on a SoC drop, the
+    # car driving off, or the 24 h timeout.
+    inferred: bool = Field(default=False)
 
     # Composite for the hot query: list/aggregate sessions per VIN over a
     # time window. SQLite picks single-column indexes too slowly here.
