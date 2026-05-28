@@ -3,6 +3,31 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.8.2] — 2026-05-28
+
+### Fixed — One drive split into two trips by a stale odometer
+
+- A single drive could show up as two `/tripbook` entries when the Polestar API
+  delivered the odometer minutes behind the battery: the odometer *value* froze
+  for several polls (looking like a >10 min idle gap) while the SoC kept ticking
+  down, so `detect_trips` cut the drive in two. A real case: odometer flat
+  14:58→15:23 while SoC fell 52→45 %.
+- A trip now only ends when the car charges, **or** has been idle past the
+  threshold **and** the SoC has gone flat. While the SoC keeps falling
+  (≥ `ACTIVE_SOC_DROP_PCT` below the level at the last observed movement) the car
+  is treated as still driving, so a back-filled odometer — or a short stop in
+  traffic — no longer splits the trip. A `HARD_IDLE_CEILING_MIN` (90 min) cap
+  stops a stuck reading from holding a trip open indefinitely. Trips are
+  recomputed live from snapshots, so this applies retroactively to all history.
+
+### Changed — Tripbook table shows per-trip energy, not a per-row rate
+
+- The per-row "kWh/100km" column (which rendered as e.g. `14.8 est`) is gone.
+  Each row now shows the trip's **absolute energy in kWh** — the real
+  journey-log value when matched, otherwise the SoC-based estimate with a small
+  `est` marker. The fleet kWh/100km average is shown once in the page header
+  ("Energy used" card) instead of being repeated on every row.
+
 ## [1.8.1] — 2026-05-28
 
 ### Fixed — Imported trip matched to multiple detected trips

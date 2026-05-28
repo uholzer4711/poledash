@@ -36,6 +36,7 @@
     <div class="card">
       <div class="card-label">Energy used</div>
       <div class="stat num">{{ "%.1f"|format(grand_kwh) }}<span class="unit">kWh</span></div>
+      {% if grand_km > 0 and grand_kwh > 0 %}<div class="stat-sub"><span class="accent">{{ "%.1f"|format(grand_kwh * 100 / grand_km) }}</span> kWh/100km</div>{% endif %}
     </div>
     <div class="card">
       <div class="card-label">Cost (estimated)</div>
@@ -76,11 +77,10 @@
     <p class="muted">No trips detected in this window yet — wait until you've driven a bit.</p>
   {% else %}
     <table class="index">
-      <thead><tr><th>Start</th><th>End</th><th class="right">km</th><th class="right">Duration</th><th class="right">SoC</th><th class="right">kWh/100km</th><th class="right">kWh (real)</th><th class="right">Cost</th><th class="right">Odo</th></tr></thead>
+      <thead><tr><th>Start</th><th>End</th><th class="right">km</th><th class="right">Duration</th><th class="right">SoC</th><th class="right">kWh</th><th class="right">Cost</th><th class="right">Odo</th></tr></thead>
       <tbody>
         {% for t, j, ext in paired|sort(attribute='0.started_at', reverse=true) %}
           {% set real_kwh = j.consumption_kwh if j and j.consumption_kwh else None %}
-          {% set est_per_100 = ext.per100_est %}
           {% set cost_kwh = real_kwh if real_kwh is not none else ext.kwh_est %}
           <tr>
             <td class="mono">{{ t.started_at|localtime }}</td>
@@ -90,11 +90,7 @@
             <td class="right tnum">
               {% if t.soc_start is not none and t.soc_end is not none %}{{ t.soc_start }} → {{ t.soc_end }}%{% else %}—{% endif %}
             </td>
-            <td class="right tnum">
-              {% if est_per_100 %}{{ "%.1f"|format(est_per_100) }} <span class="mono-xs muted">est</span>
-              {% else %}—{% endif %}
-            </td>
-            <td class="right tnum">{% if real_kwh %}{{ "%.2f"|format(real_kwh) }}{% else %}—{% endif %}</td>
+            <td class="right tnum">{% if cost_kwh %}{{ "%.2f"|format(cost_kwh) }}{% if not real_kwh %} <span class="mono-xs muted">est</span>{% endif %}{% else %}—{% endif %}</td>
             <td class="right tnum">{% if cost_kwh %}€ {{ "%.2f"|format(cost_kwh * price_ct / 100) }}{% else %}—{% endif %}</td>
             <td class="right tnum">{{ "%.0f"|format(t.end_km) }}</td>
           </tr>

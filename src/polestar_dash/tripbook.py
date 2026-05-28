@@ -98,6 +98,15 @@ class Trip:
 
 MAX_PLAUSIBLE_KMH = 180  # cap to filter out odo jumps after long idle gaps
 
+# A trip only ends once the SoC stops falling. While the battery keeps draining
+# the car is still active — i.e. driving — even when the odometer *value* is
+# stale: Polestar delivers the odometer minutes behind the battery and in lumpy
+# batches, so a continuous drive can show a frozen odometer for several polls
+# while the SoC ticks down. A parked car's SoC is flat (vampire drain ~1 %/h),
+# so an idle gap only counts as "parked" once the SoC has stopped falling.
+ACTIVE_SOC_DROP_PCT = 2     # SoC fall since last movement that still reads as "driving"
+HARD_IDLE_CEILING_MIN = 90  # never hold a trip open longer than this on SoC alone
+
 
 def _odo_event_or_fetch(r: VehicleSnapshot) -> datetime:
     """Best available timestamp for when the odometer reading happened."""
@@ -107,10 +116,12 @@ def _odo_event_or_fetch(r: VehicleSnapshot) -> datetime:
 def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) -> list[Trip]:
     """Detect trips from the snapshot stream.
 
-    A new trip starts when the odometer ticks again after `gap_minutes` of
-    no movement (or after a charging episode). Idle time is measured from
-    the *odometer event timestamp* the car reports — not from our poll
-    cadence — so the threshold can be shorter than the poll interval.
+    A trip ends when the car charges, or has been idle past `gap_minutes`
+    *and* the SoC has stopped falling. The SoC gate matters because Polestar
+    delivers the odometer minutes behind the battery: a continuous drive (or a
+    short stop in traffic) can show a frozen odometer for several polls while
+    the SoC keeps ticking down. Splitting purely on the stale odometer would
+    cut one drive into two — see ACTIVE_SOC_DROP_PCT / HARD_IDLE_CEILING_MIN.
     """
     since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
@@ -238,9 +249,25 @@ def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) 
                     prev = r
                     continue
 
-        # Close the open trip if the car has been idle past the threshold or
-        # has started charging since the last observed movement.
-        if cur is not None and (idle_min > gap_minutes or is_charging) and not moved:
+        # A still-falling SoC means the car is actively drawing power (driving),
+        # even with a stale odometer value. parked_soc_hist is cleared on every
+        # movement, so its max is ≈ the SoC at the last observed motion; if the
+        # current SoC sits ACTIVE_SOC_DROP_PCT below that, the car is still
+        # active and the idle gap is a back-filled odometer, not a park. The
+        # ceiling stops a stuck reading from holding a trip open indefinitely.
+        recent_soc = [s for _, s in parked_soc_hist]
+        soc_active = (
+            r.soc_percent is not None
+            and bool(recent_soc)
+            and (max(recent_soc) - r.soc_percent) >= ACTIVE_SOC_DROP_PCT
+            and idle_min <= HARD_IDLE_CEILING_MIN
+        )
+
+        # Close the open trip if the car has started charging, or has been idle
+        # past the threshold *and* the SoC has gone flat (genuinely parked).
+        if cur is not None and not moved and (
+            is_charging or (idle_min > gap_minutes and not soc_active)
+        ):
             close_trip()
 
         # A `moved` sample is a trip event even when the car is now
