@@ -3,6 +3,44 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [Unreleased] — 2026-05-28
+
+### Fixed — Tripbook trip duration collapsed to a few minutes
+
+`detect_trips()` only treated an increase in the odometer *value* as
+motion. Polestar refreshes the odometer minutes after the fact and in
+batches, while `odometer_event_ts` (the car's own reading timestamp)
+advances on every poll the car is moving. So a drive whose odometer
+ticked once read as a 3-minute trip even though the event timestamps
+spanned ~20 minutes.
+
+- An advancing `odometer_event_ts` now counts as motion in its own
+  right: trip start anchors to the first movement event, and the trip
+  stays open while the event timestamp keeps advancing (even if the
+  odometer value has plateaued).
+- Idle time is measured in `fetched_at` space so the poll cadence and
+  the event-timestamp lag no longer fragment one continuous drive into
+  a string of sub-threshold hops.
+
+### Fixed — Tripbook per-trip energy read up to 2× too high
+
+SoC is reported in whole percent, so on a short trip a single 1% step
+(~0.8 kWh on this pack) dwarfs the real energy — a 7.8 km hop showed
+32 kWh/100km against the car's ~15. Trip energy now derives from the
+car's own `avg_consumption_kwh_per_100km × distance`, falling back to
+the SoC-delta estimate only when the car reports no consumption figure.
+(The cumulative `total_energy_consumption_wh` counter, which would give
+an exact per-trip delta, is never populated by this car's API.)
+
+### Changed — Tripbook kWh/100km column is now uniform
+
+The rate column previously mixed two methods — journey-log-matched
+trips showed the real per-trip rate (orange) while unmatched ones showed
+the estimate — so old and new rows read inconsistently. It now always
+shows the trip's own estimate (`est`). The absolute **kWh (real)** column
+(total trip energy from the imported journey-log CSV) and the
+real-preferred cost/totals are unchanged.
+
 ## [Unreleased] — 2026-05-27
 
 ### Added — Smart automations

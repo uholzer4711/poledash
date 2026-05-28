@@ -86,6 +86,14 @@ Electricity prices: set a default `ct/kWh` on `/settings` (defaults to 50);
 per-session overrides on the Sessions page get energy-weighted into the
 tripbook cost columns.
 
+Trip energy: trips are detected from the odometer plus the car's own
+`odometer_event_ts`, so a drive whose odometer reports in one batch still
+gets its real duration. The per-trip **kWh/100km** is estimated from the
+car's reported average consumption × distance (SoC is only whole-percent,
+which is too coarse for short trips). The **kWh (real)** column shows the
+exact per-trip energy from an imported Polestar-app journey-log CSV, when
+one matches.
+
 Address labels: friendly names (`Home`, `Work`, …) for frequent destinations
 shown on `/tripbook` and `/routes`. Multiple addresses can hang off one label
 — useful when the same place reports slightly different geocoded strings.
