@@ -181,14 +181,19 @@ def tripbook_page(
             return round(t.km * kwh_per_km, 2)
         return None
 
-    # Decorate each trip with an estimated kWh/100km that falls back to the
-    # fleet avg when SoC drop is zero (short trips). The template reads it
-    # via the third tuple element.
+    # Decorate each trip with a displayed kWh/100km rate. This is always the
+    # trip's own estimate (car avg-consumption x distance, fleet avg as a
+    # last resort) so old and new rows read uniformly — the real per-trip
+    # rate from the journey log is no longer shown in this column; its
+    # absolute energy still appears in the "kWh (real)" column. `kwh_est`
+    # (used only as the cost fallback) keeps preferring the real value.
     triples = []
     for t, j in paired:
-        kwh = best_kwh(t, j)
-        per100 = round(kwh * 100 / t.km, 1) if (kwh and t.km > 0.5) else None
-        triples.append((t, j, {"kwh_est": kwh, "per100_est": per100}))
+        est_kwh = t.kwh_used
+        if est_kwh is None and t.km > 0:
+            est_kwh = round(t.km * kwh_per_km, 2)
+        per100 = round(est_kwh * 100 / t.km, 1) if (est_kwh and t.km > 0.5) else None
+        triples.append((t, j, {"kwh_est": best_kwh(t, j), "per100_est": per100}))
 
     grand_km = round(sum(t.km for t, _ in paired), 1)
     grand_min = sum(t.duration_min for t, _ in paired)

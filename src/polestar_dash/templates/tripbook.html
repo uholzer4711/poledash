@@ -80,7 +80,6 @@
       <tbody>
         {% for t, j, ext in paired|sort(attribute='0.started_at', reverse=true) %}
           {% set real_kwh = j.consumption_kwh if j and j.consumption_kwh else None %}
-          {% set real_per_100 = (real_kwh * 100 / t.km) if (real_kwh and t.km > 0.5) else None %}
           {% set est_per_100 = ext.per100_est %}
           {% set cost_kwh = real_kwh if real_kwh is not none else ext.kwh_est %}
           <tr>
@@ -92,8 +91,7 @@
               {% if t.soc_start is not none and t.soc_end is not none %}{{ t.soc_start }} → {{ t.soc_end }}%{% else %}—{% endif %}
             </td>
             <td class="right tnum">
-              {% if real_per_100 %}<span class="accent">{{ "%.1f"|format(real_per_100) }}</span>
-              {% elif est_per_100 %}{{ "%.1f"|format(est_per_100) }} <span class="mono-xs muted">est</span>
+              {% if est_per_100 %}{{ "%.1f"|format(est_per_100) }} <span class="mono-xs muted">est</span>
               {% else %}—{% endif %}
             </td>
             <td class="right tnum">{% if real_kwh %}{{ "%.2f"|format(real_kwh) }}{% else %}—{% endif %}</td>
