@@ -169,60 +169,70 @@ def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) 
 
         is_charging = r.charging_status in ("Charging", "Smart Charging")
         gap = (r.fetched_at - prev.fetched_at).total_seconds() / 60
-        moved = odo > (prev.odometer_km or odo)
         dkm = odo - (prev.odometer_km or odo)
+        value_moved = odo > (prev.odometer_km or odo)
 
-        # Phantom-moved guard: odometer jumped but the car's own event
-        # timestamp didn't advance past the last one we saw — Polestar is
-        # back-filling an older reading, not reporting new motion.
+        evt = r.odometer_event_ts
+        prev_evt = prev.odometer_event_ts
+
+        # The car's own odometer-reading timestamp only advances while it is
+        # moving and freezes when parked. An advancing event timestamp is
+        # therefore a movement signal in its own right — and a more timely one
+        # than the odometer *value*, which Polestar refreshes minutes later and
+        # in batches. Without this, a drive whose odometer ticks just once is
+        # detected as a few-minute trip even though the event timestamps show
+        # it ran far longer.
+        event_advanced = evt is not None and (
+            last_event_ts is None or evt > last_event_ts
+        )
+
+        # Phantom-moved guard: odometer value jumped but the event timestamp
+        # didn't advance past the last one we saw — Polestar is back-filling an
+        # older reading, not reporting new motion.
         if (
-            moved
-            and r.odometer_event_ts is not None
+            value_moved
+            and evt is not None
             and last_event_ts is not None
-            and r.odometer_event_ts <= last_event_ts
+            and evt <= last_event_ts
         ):
-            moved = False
+            value_moved = False
 
-        if r.odometer_event_ts is not None and (
-            last_event_ts is None or r.odometer_event_ts > last_event_ts
-        ):
-            last_event_ts = r.odometer_event_ts
+        moved = value_moved or event_advanced
 
-        # Idle time = wall-clock minutes since the odometer last ticked.
-        # `fetched_at` advances on every poll; `odometer_event_ts` would
-        # freeze at the last-move time and idle would never grow.
+        if evt is not None and (last_event_ts is None or evt > last_event_ts):
+            last_event_ts = evt
+
+        # Idle = wall-clock minutes since the last poll at which we *observed*
+        # motion. Measured in fetched_at space (not event-ts) so the poll
+        # cadence and the event-timestamp lag don't make a continuous drive
+        # look like a string of sub-threshold hops.
         idle_min = (
             (r.fetched_at - last_move_ts).total_seconds() / 60
             if last_move_ts is not None
             else 0.0
         )
 
-        # Plausibility: implausibly high implied speed across a poll gap
-        # means the car was idle most of it. Use event-ts window if we have
-        # one; otherwise skip the sample.
-        evt_start = r.odometer_event_ts
-        prev_evt = prev.odometer_event_ts
-        implied_kmh = dkm / max(gap / 60.0, 1e-6)
-        if moved and implied_kmh > MAX_PLAUSIBLE_KMH:
-            if evt_start and prev_evt and evt_start > prev_evt:
-                window_min = (evt_start - prev_evt).total_seconds() / 60
-                if window_min > 0 and dkm / (window_min / 60.0) <= 250:
-                    started_at = prev_evt
+        # Plausibility: an implausibly high implied speed across a poll gap
+        # means the car was idle most of it and the odometer jump is a
+        # back-fill. Recover the real start from the event-ts window if it
+        # checks out; otherwise skip the sample.
+        forced_start: datetime | None = None
+        if value_moved and dkm > 0:
+            implied_kmh = dkm / max(gap / 60.0, 1e-6)
+            if implied_kmh > MAX_PLAUSIBLE_KMH:
+                if evt and prev_evt and evt > prev_evt:
+                    window_min = (evt - prev_evt).total_seconds() / 60
+                    if window_min > 0 and dkm / (window_min / 60.0) <= 250:
+                        forced_start = prev_evt
+                    else:
+                        prev = r
+                        continue
                 else:
                     prev = r
                     continue
-            else:
-                prev = r
-                continue
-        else:
-            # When extending an open trip, prefer the previous sample's
-            # event-ts; for a fresh trip after a gap, prev_evt is stale
-            # (belongs to the previous trip), so the current sample's
-            # event-ts is the better anchor.
-            started_at = prev_evt if (prev_evt and prev_evt < r.fetched_at) else prev.fetched_at
 
-        # Close the open trip if the car has been idle past the threshold
-        # or has started charging since the last movement.
+        # Close the open trip if the car has been idle past the threshold or
+        # has started charging since the last observed movement.
         if cur is not None and (idle_min > gap_minutes or is_charging) and not moved:
             close_trip()
 
@@ -230,27 +240,33 @@ def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) 
         # `Charging` — the drive happened in the past, the plug-in just
         # followed immediately. Filtering charging out here lost the trip.
         if moved:
-            ended_at = evt_start or r.fetched_at
-            if cur is None or idle_min > gap_minutes:
-                close_trip()
-                # For a brand-new trip after a gap, the previous poll's
-                # fetched_at is the last moment we know the car wasn't
-                # moving. evt_start is when this drive last ticked the
-                # odometer (≈ trip end). Together they bracket the drive.
-                trip_start = prev.fetched_at
+            # The event timestamp is when the car last recorded this motion:
+            # for the first motion poll of a trip it is ≈ the start; for each
+            # subsequent poll it tracks the running end.
+            motion_ts = evt or r.fetched_at
+            if cur is None:
+                # Start anchor: when the odometer *value* jumped across this
+                # poll gap the drive happened somewhere inside it, so anchor to
+                # the previous (parked) poll. When motion was detected purely
+                # from an advancing event timestamp (odometer value still
+                # flat), that event timestamp *is* the start.
+                if value_moved:
+                    trip_start = forced_start or prev.fetched_at
+                else:
+                    trip_start = motion_ts
                 cur = Trip(
                     started_at=trip_start,
-                    ended_at=ended_at,
+                    ended_at=motion_ts,
                     start_km=prev.odometer_km or odo,
                     end_km=odo,
                     soc_start=soc_at_trip_start(prev.soc_percent, trip_start),
                     soc_end=r.soc_percent,
                 )
             else:
-                cur.ended_at = ended_at
+                cur.ended_at = motion_ts
                 cur.end_km = odo
                 cur.soc_end = r.soc_percent
-            last_move_ts = evt_start or r.fetched_at
+            last_move_ts = r.fetched_at
             parked_soc_hist.clear()
             record_parked_soc(r)
         else:
