@@ -151,22 +151,34 @@ def tripbook_page(
     # Pair each detected trip with the closest imported trip by start time.
     # When matched, prefer the imported trip's real kWh over our SoC-based
     # estimate everywhere (per-row, monthly, grand total).
+    #
+    # Assignment is one-to-one: each import may back at most one detected trip.
+    # We gather every candidate (trip, import) pair within the window and
+    # assign greedily by ascending time difference, so the closest match wins
+    # and the same import can't be double-counted across two detected trips
+    # (which would inflate kWh + cost on both rows and in the totals).
     match_window = timedelta(minutes=30)
     imports_sorted = sorted(imports, key=lambda j: j.started_at)
     import_keys = [j.started_at for j in imports_sorted]
-    paired = []
-    for t in trips:
-        best = None
-        if import_keys:
-            i = bisect_left(import_keys, t.started_at)
-            best_diff = match_window
-            for ci in (i - 1, i):
-                if 0 <= ci < len(imports_sorted):
-                    diff = abs(imports_sorted[ci].started_at - t.started_at)
-                    if diff <= best_diff:
-                        best_diff = diff
-                        best = imports_sorted[ci]
-        paired.append((t, best))
+    candidates: list[tuple[float, int, int]] = []
+    for ti, t in enumerate(trips):
+        if not import_keys:
+            break
+        i = bisect_left(import_keys, t.started_at)
+        for ci in (i - 1, i):
+            if 0 <= ci < len(imports_sorted):
+                diff = abs(imports_sorted[ci].started_at - t.started_at)
+                if diff <= match_window:
+                    candidates.append((diff.total_seconds(), ti, ci))
+    candidates.sort(key=lambda c: c[0])
+    trip_match: dict[int, object] = {}
+    used_imports: set[int] = set()
+    for _, ti, ci in candidates:
+        if ti in trip_match or ci in used_imports:
+            continue
+        trip_match[ti] = imports_sorted[ci]
+        used_imports.add(ci)
+    paired = [(t, trip_match.get(ti)) for ti, t in enumerate(trips)]
 
     kwh_per_km = fleet_avg_kwh_per_km()
 

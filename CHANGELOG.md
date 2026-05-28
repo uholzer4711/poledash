@@ -3,6 +3,18 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.8.1] — 2026-05-28
+
+### Fixed — Imported trip matched to multiple detected trips
+
+- `/tripbook` paired each detected trip with its closest imported journey-log
+  trip independently, so when two detected trips fell near the same import (e.g.
+  a back-to-back short + long drive) both claimed it. The import's real kWh and
+  cost then appeared on both rows **and** were double-counted in the monthly and
+  grand totals. Matching is now one-to-one (greedy by smallest time gap): each
+  import backs at most one detected trip; the runner-up falls back to its own
+  estimate.
+
 ## [1.8] — 2026-05-28
 
 ### Added — App version shown in UI
