@@ -58,6 +58,7 @@ class Trip:
     end_km: float
     soc_start: int | None = None
     soc_end: int | None = None
+    avg_consumption_kwh_per_100km: float | None = None
 
     @property
     def km(self) -> float:
@@ -69,6 +70,12 @@ class Trip:
 
     @property
     def kwh_used(self) -> float | None:
+        # Prefer the car's own reported efficiency. SoC is quantized to whole
+        # percent, so on a short trip a single 1% step (~0.8 kWh) swamps the
+        # real energy and the SoC estimate reads up to ~2x high. The car's
+        # avg-consumption figure is what its trip computer shows.
+        if self.avg_consumption_kwh_per_100km is not None and self.km > 0.5:
+            return round(self.avg_consumption_kwh_per_100km * self.km / 100.0, 2)
         if self.soc_start is None or self.soc_end is None:
             return None
         drop = self.soc_start - self.soc_end
@@ -261,11 +268,15 @@ def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) 
                     end_km=odo,
                     soc_start=soc_at_trip_start(prev.soc_percent, trip_start),
                     soc_end=r.soc_percent,
+                    avg_consumption_kwh_per_100km=r.avg_consumption_kwh_per_100km
+                    or prev.avg_consumption_kwh_per_100km,
                 )
             else:
                 cur.ended_at = motion_ts
                 cur.end_km = odo
                 cur.soc_end = r.soc_percent
+                if r.avg_consumption_kwh_per_100km is not None:
+                    cur.avg_consumption_kwh_per_100km = r.avg_consumption_kwh_per_100km
             last_move_ts = r.fetched_at
             parked_soc_hist.clear()
             record_parked_soc(r)

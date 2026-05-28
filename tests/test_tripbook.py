@@ -76,3 +76,50 @@ def test_value_move_trip_anchors_start_to_parked_poll(tmp_db):
     assert trips[0].start_km == 100.0
     assert trips[0].end_km == 110.0
     assert trips[0].started_at == base
+
+
+def test_short_trip_energy_uses_car_consumption_not_soc(tmp_db):
+    """On a short trip the 1%-quantized SoC drop wildly overstates energy.
+    When the car reports its own consumption figure, use that instead."""
+    base = datetime(2026, 5, 28, 4, 0, 0)
+    rows = [
+        {"fetched_at": base, "odometer_km": 100.0,
+         "odometer_event_ts": base - timedelta(hours=2), "soc_percent": 58,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=10), "odometer_km": 107.8,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 55,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=20), "odometer_km": 107.8,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 55,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=30), "odometer_km": 107.8,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 55,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+    ]
+    _insert(rows)
+
+    t = detect_trips(vin="V", days=1)[0]
+    assert t.km == 7.8
+    # car efficiency: 14.8 kWh/100km, not the ~3%*83kWh/7.8km SoC estimate
+    assert t.kwh_used == round(14.8 * 7.8 / 100, 2)
+    assert abs(t.kwh_per_100km - 14.8) <= 0.2  # rounding through int wh/km
+
+
+def test_kwh_falls_back_to_soc_when_no_consumption(tmp_db):
+    """With no car-reported consumption, fall back to the SoC-delta estimate."""
+    base = datetime(2026, 5, 28, 8, 0, 0)
+    rows = [
+        {"fetched_at": base, "odometer_km": 200.0,
+         "odometer_event_ts": base - timedelta(hours=2), "soc_percent": 80, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=10), "odometer_km": 260.0,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 70, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=20), "odometer_km": 260.0,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 70, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=30), "odometer_km": 260.0,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 70, "charging_status": "Idle"},
+    ]
+    _insert(rows)
+
+    t = detect_trips(vin="V", days=1)[0]
+    assert t.kwh_used is not None and t.kwh_used > 0
+    assert t.avg_consumption_kwh_per_100km is None
