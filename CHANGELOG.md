@@ -3,7 +3,34 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
-## [Unreleased]
+## [1.8] — 2026-05-28
+
+### Added — App version shown in UI
+
+- The nav now renders the real package version (`v{{ app_version }}` from
+  `polestar_dash.__version__`) instead of a hardcoded `v1`, so deployments are
+  identifiable at a glance.
+
+### Added — CSV journey-log enrichment
+
+- **Note column on `/tripbook`.** The imported journey-log table now surfaces
+  three CSV fields we previously stored but never displayed: `Category` (shown
+  as a badge when not "Uncategorized"), `Trip Type` (shown when not "SINGLE"),
+  and `Comments`. The trip's comment also appears in its map popup.
+- **Odometer gap detection.** Consecutive imported trips are compared by
+  odometer: when a later trip's start odometer exceeds the previous trip's end
+  odometer, those kilometres were driven but never recorded by the Polestar app.
+  A new "Untracked km (odometer gaps)" block lists each gap (only shown when
+  gaps exist), giving a ground-truth check on journey-log completeness.
+
+### Fixed — Routes collapsed by over-broad address label
+
+- The `/routes` aggregation resolves each trip endpoint through the
+  `address_labels` setting, which matches by **substring**. A label pattern of
+  `"Austria"` therefore matched every Austrian address and collapsed all trips
+  into a single "Arbeit → Arbeit" route. Removed the offending pattern from the
+  stored setting; routes now differentiate correctly. (Data fix — the substring
+  matcher itself is unchanged; see note below.)
 
 ### Added — Software version tracking + update watch
 

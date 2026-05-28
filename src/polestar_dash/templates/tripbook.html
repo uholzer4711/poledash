@@ -116,11 +116,13 @@
       <div class="card"><div class="card-label">Cost</div><div class="stat num">€ <em class="accent">{{ "%.2f"|format(imp_cost) }}</em></div><div class="stat-sub">@ {{ "%.1f"|format(price_ct) }} ct/kWh</div></div>
     </div>
     <table class="index">
-      <thead><tr><th>Start</th><th>End</th><th>From → To</th><th class="right">km</th><th class="right">kWh</th><th class="right">SoC</th><th class="right">kWh/100km</th></tr></thead>
+      <thead><tr><th>Start</th><th>End</th><th>From → To</th><th class="right">km</th><th class="right">kWh</th><th class="right">SoC</th><th class="right">kWh/100km</th><th>Note</th></tr></thead>
       <tbody>
         {% for j in imports %}
           {% set start_lbl = j.start_address|address_label %}
           {% set end_lbl = j.end_address|address_label %}
+          {% set show_cat = j.category and j.category != 'Uncategorized' %}
+          {% set show_type = j.trip_type and j.trip_type != 'SINGLE' %}
           <tr>
             <td class="mono">{{ j.started_at|localtime }}</td>
             <td class="mono">{{ j.ended_at|localtime('%H:%M') }}</td>
@@ -137,10 +139,38 @@
             <td class="right tnum">{{ "%.2f"|format(j.consumption_kwh or 0) }}</td>
             <td class="right tnum">{% if j.soc_start is not none and j.soc_end is not none %}{{ j.soc_start }} → {{ j.soc_end }}%{% else %}—{% endif %}</td>
             <td class="right tnum">{% if j.distance_km and j.consumption_kwh and j.distance_km > 0.5 %}<span class="accent">{{ "%.1f"|format(j.consumption_kwh * 100 / j.distance_km) }}</span>{% else %}—{% endif %}</td>
+            <td>
+              {% if show_cat %}<span class="badge">{{ j.category }}</span> {% endif %}
+              {% if show_type %}<span class="mono-xs muted">{{ j.trip_type }}</span> {% endif %}
+              {% if j.comments %}<span class="mono-xs">{{ j.comments }}</span>{% endif %}
+              {% if not show_cat and not show_type and not j.comments %}<span class="muted">—</span>{% endif %}
+            </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+
+    {% if odo_gaps %}
+      <div class="card-label mt-8 mb-4">Untracked km <span class="muted">(odometer gaps)</span></div>
+      <p class="muted mb-4">{{ untracked_km }} km were driven between logged trips but never appeared in the journey log — most likely trips the Polestar app didn't record.</p>
+      <table class="index">
+        <thead><tr><th>After</th><th>Before</th><th>Between</th><th class="right">Gap km</th></tr></thead>
+        <tbody>
+          {% for g in odo_gaps %}
+            <tr>
+              <td class="mono">{{ g.from_at|localtime }}</td>
+              <td class="mono">{{ g.to_at|localtime }}</td>
+              <td>
+                {% if g.from_addr %}{{ g.from_addr.split(',')[0] }}{% else %}—{% endif %}
+                <span class="muted">→</span>
+                {% if g.to_addr %}{{ g.to_addr.split(',')[0] }}{% else %}—{% endif %}
+              </td>
+              <td class="right tnum"><span class="accent">{{ g.km }}</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
 
     {% set mappable = imports|selectattr('start_lat')|selectattr('end_lat')|list %}
     {% if mappable or charge_locations %}
@@ -160,6 +190,7 @@
                 per100:{% if j.distance_km and j.consumption_kwh and j.distance_km > 0.5 %}{{ "%.1f"|format(j.consumption_kwh * 100 / j.distance_km) }}{% else %}null{% endif %},
                 start_addr: {{ (j.start_address or "")|tojson }},
                 end_addr:   {{ (j.end_address or "")|tojson }},
+                comment: {{ (j.comments or "")|tojson }},
                 at: {{ j.started_at.isoformat()|tojson }},
               }{{ "," if not loop.last }}
             {% endfor %}
@@ -186,7 +217,8 @@
             const popup = `<b>${new Date(/Z|[+\-]\d{2}:?\d{2}$/.test(t.at) ? t.at : t.at + 'Z').toLocaleString()}</b><br>` +
                           `${t.start_addr.split(',')[0]} → ${t.end_addr.split(',')[0]}<br>` +
                           `${t.km.toFixed(1)} km · ${t.kwh.toFixed(2)} kWh` +
-                          (t.per100 != null ? ` · <b>${t.per100} kWh/100km</b>` : '');
+                          (t.per100 != null ? ` · <b>${t.per100} kWh/100km</b>` : '') +
+                          (t.comment ? `<br><i>${t.comment}</i>` : '');
             line.bindPopup(popup);
             L.circleMarker(t.start, {radius: 4, color: ink2, fillColor: ink2, fillOpacity: 1, weight: 0}).addTo(map);
             L.circleMarker(t.end,   {radius: 5, color: accent, fillColor: accent, fillOpacity: 1, weight: 0}).addTo(map).bindPopup(popup);

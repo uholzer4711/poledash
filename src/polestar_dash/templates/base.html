@@ -53,7 +53,7 @@
         <a href="/lab" class="{% if path == '/lab' %}active{% endif %}">Lab</a>
         {% endif %}
       </div>
-      <div class="mono-xs">v1</div>
+      <div class="mono-xs">v{{ app_version }}</div>
     </nav>
     <main>{% block content %}{% endblock %}</main>
     <footer class="foot">

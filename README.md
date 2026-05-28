@@ -52,7 +52,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info |
 | `/history` | Time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
-| `/tripbook` | Trips from odometer, monthly kWh/100km, iCal feed |
+| `/tripbook` | Trips from odometer, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
 | `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector |
 | `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
 | `/routes` | Repeated routes aggregated from imported trips |
@@ -96,11 +96,19 @@ which is too coarse for short trips). The **kWh (real)** column shows the
 exact per-trip energy from an imported Polestar-app journey-log CSV, when
 one matches.
 
+Imported journey log: the Polestar-app CSV carries more than energy and
+addresses. `/tripbook`'s imported-trips table surfaces each trip's **category**
+and **comments**, and an **odometer gap** check flags kilometres driven between
+logged trips that the app never recorded (a missing-trip / untracked-km signal).
+
 Address labels: friendly names (`Home`, `Work`, …) for frequent destinations
 shown on `/tripbook` and `/routes`. Multiple addresses can hang off one label
 — useful when the same place reports slightly different geocoded strings.
 Manage them visually on `/settings` → *Address map* (Leaflet + OSM): every
 unique start/end point from imported trips appears as a dot, click to assign.
+Patterns are matched as **case-insensitive substrings**, so keep them specific
+— a pattern like `Austria` would match every address and collapse all routes
+into one.
 
 Software updates: `/software` shows the installed version, since when, the
 version history, and the manual's release-notes changelog. Twice a day the

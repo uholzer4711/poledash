@@ -225,6 +225,31 @@ def tripbook_page(
     imp_cost = round(imp_kwh * price_ct / 100.0, 2)
     imp_avg = round(imp_kwh * 100 / imp_km, 1) if imp_km > 0 else None
 
+    # Odometer gap detection: between two consecutive imported trips the
+    # start odometer of the later trip should equal the end odometer of the
+    # earlier one. A positive jump means km were driven that the journey log
+    # never recorded (a trip the app missed). The odometer is ground-truth,
+    # so this is the most reliable "did the log miss anything?" signal we have.
+    odo_gaps = []
+    prev = None
+    for j in sorted(imports, key=lambda x: x.started_at):
+        if (
+            prev is not None
+            and prev.end_odometer_km is not None
+            and j.start_odometer_km is not None
+        ):
+            gap = j.start_odometer_km - prev.end_odometer_km
+            if gap >= 1:
+                odo_gaps.append({
+                    "from_at": prev.ended_at,
+                    "to_at": j.started_at,
+                    "from_addr": prev.end_address,
+                    "to_addr": j.start_address,
+                    "km": round(gap),
+                })
+        prev = j
+    untracked_km = round(sum(g["km"] for g in odo_gaps))
+
     return templates.TemplateResponse(
         request,
         "tripbook.html",
@@ -245,6 +270,8 @@ def tripbook_page(
             "imp_kwh": imp_kwh,
             "imp_cost": imp_cost,
             "imp_avg_kwh_per_100km": imp_avg,
+            "odo_gaps": odo_gaps,
+            "untracked_km": untracked_km,
             "charge_locations": charge_locations,
         },
     )

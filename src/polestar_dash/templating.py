@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi.templating import Jinja2Templates
 
+from . import __version__
 from .journey_import import label_for
 
 DISPLAY_TZ = ZoneInfo("Europe/Vienna")
@@ -37,4 +38,5 @@ def make_templates() -> Jinja2Templates:
     t.env.filters["address_label"] = label_for
     t.env.globals["demo_mode"] = s.demo_mode
     t.env.globals["demo_banner_text"] = s.demo_banner_text
+    t.env.globals["app_version"] = __version__
     return t
