@@ -76,12 +76,12 @@
   {% if not trips %}
     <p class="muted">No trips detected in this window yet — wait until you've driven a bit.</p>
   {% else %}
+    <p class="muted mb-4">Energy is estimated from the car's average consumption (≈ what the dashboard shows). Real per-leg figures are in the journey log below.</p>
     <table class="index">
       <thead><tr><th>Start</th><th>End</th><th class="right">km</th><th class="right">Duration</th><th class="right">SoC</th><th class="right">kWh</th><th class="right">Cost</th><th class="right">Odo</th></tr></thead>
       <tbody>
-        {% for t, j, ext in paired|sort(attribute='0.started_at', reverse=true) %}
-          {% set real_kwh = j.consumption_kwh if j and j.consumption_kwh else None %}
-          {% set cost_kwh = real_kwh if real_kwh is not none else ext.kwh_est %}
+        {% for t, ext in paired|sort(attribute='0.started_at', reverse=true) %}
+          {% set kwh = ext.kwh_est %}
           <tr>
             <td class="mono">{{ t.started_at|localtime }}</td>
             <td class="mono">{{ t.ended_at|localtime('%H:%M') }}</td>
@@ -90,8 +90,8 @@
             <td class="right tnum">
               {% if t.soc_start is not none and t.soc_end is not none %}{{ t.soc_start }} → {{ t.soc_end }}%{% else %}—{% endif %}
             </td>
-            <td class="right tnum">{% if cost_kwh %}{{ "%.2f"|format(cost_kwh) }}{% if not real_kwh %} <span class="mono-xs muted">est</span>{% endif %}{% else %}—{% endif %}</td>
-            <td class="right tnum">{% if cost_kwh %}€ {{ "%.2f"|format(cost_kwh * price_ct / 100) }}{% else %}—{% endif %}</td>
+            <td class="right tnum">{% if kwh %}{{ "%.2f"|format(kwh) }}{% else %}—{% endif %}</td>
+            <td class="right tnum">{% if kwh %}€ {{ "%.2f"|format(kwh * price_ct / 100) }}{% else %}—{% endif %}</td>
             <td class="right tnum">{{ "%.0f"|format(t.end_km) }}</td>
           </tr>
         {% endfor %}

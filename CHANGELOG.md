@@ -3,6 +3,23 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.8.3] — 2026-05-28
+
+### Fixed — Tripbook consumption read far too low (10.9 vs ~15 kWh/100km)
+
+- The detected-trips table mixed in the journey-log import's real kWh whenever a
+  trip matched one. After the v1.8.2 split fix made detected trips *longer*
+  (stops merged into one trip), each long trip matched only **one** of its
+  several shorter journey-log legs — so a single leg's kWh was divided over the
+  whole trip distance (a 119 km drive read as 7.2 kWh/100km). The blended grand
+  average collapsed to ~10.9 kWh/100km against a real ~15.
+- The detected-trips table (per-row kWh, monthly, and grand total) now uses a
+  single consistent estimate — the car's own average consumption × distance —
+  which tracks what the dashboard shows (≈ 15 kWh/100km). The real per-leg
+  figures still live in their own "Journey log (Polestar app)" section with
+  their own correct total. The per-row `est` marker is gone (the column is
+  uniformly an estimate now) in favour of one caption above the table.
+
 ## [1.8.2] — 2026-05-28
 
 ### Fixed — One drive split into two trips by a stale odometer

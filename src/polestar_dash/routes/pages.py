@@ -3,8 +3,6 @@ from __future__ import annotations
 from bisect import bisect_left
 from datetime import datetime, timedelta
 
-from ..util import utcnow
-
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
@@ -16,6 +14,7 @@ from ..journey_import import fleet_avg_kwh_per_km, list_imports
 from ..routes_stats import list_routes
 from ..templating import make_templates
 from ..tripbook import detect_trips
+from ..util import utcnow
 
 router = APIRouter()
 templates = make_templates()
@@ -139,8 +138,6 @@ def tripbook_page(
     days: int = Query(30, ge=1, le=365),
     vin: str | None = None,
 ):
-    from datetime import timedelta
-
     from ..app_settings import blended_price_ct, get_calibrated_battery_kwh
 
     trips = detect_trips(vin=vin, days=days)
@@ -148,43 +145,22 @@ def tripbook_page(
     battery_kwh = get_calibrated_battery_kwh()
     imports = list_imports(days=days, vin=vin)
 
-    # Pair each detected trip with the closest imported trip by start time.
-    # When matched, prefer the imported trip's real kWh over our SoC-based
-    # estimate everywhere (per-row, monthly, grand total).
-    #
-    # Assignment is one-to-one: each import may back at most one detected trip.
-    # We gather every candidate (trip, import) pair within the window and
-    # assign greedily by ascending time difference, so the closest match wins
-    # and the same import can't be double-counted across two detected trips
-    # (which would inflate kWh + cost on both rows and in the totals).
-    match_window = timedelta(minutes=30)
-    imports_sorted = sorted(imports, key=lambda j: j.started_at)
-    import_keys = [j.started_at for j in imports_sorted]
-    candidates: list[tuple[float, int, int]] = []
-    for ti, t in enumerate(trips):
-        if not import_keys:
-            break
-        i = bisect_left(import_keys, t.started_at)
-        for ci in (i - 1, i):
-            if 0 <= ci < len(imports_sorted):
-                diff = abs(imports_sorted[ci].started_at - t.started_at)
-                if diff <= match_window:
-                    candidates.append((diff.total_seconds(), ti, ci))
-    candidates.sort(key=lambda c: c[0])
-    trip_match: dict[int, object] = {}
-    used_imports: set[int] = set()
-    for _, ti, ci in candidates:
-        if ti in trip_match or ci in used_imports:
-            continue
-        trip_match[ti] = imports_sorted[ci]
-        used_imports.add(ci)
-    paired = [(t, trip_match.get(ti)) for ti, t in enumerate(trips)]
-
     kwh_per_km = fleet_avg_kwh_per_km()
 
-    def best_kwh(t, j) -> float | None:
-        if j is not None and j.consumption_kwh:
-            return float(j.consumption_kwh)
+    def trip_kwh(t) -> float | None:
+        """Estimated energy for one detected trip, from the car's own average
+        consumption (× distance), with the fleet average as a last resort.
+
+        We deliberately do *not* fold the journey-log import into this figure.
+        Detected trips and journey-log legs are cut differently — the SoC-gated
+        detector merges stops into one trip, while the Polestar app logs each
+        leg separately — so a long detected trip matches only one of its several
+        import legs, and dividing that single leg's kWh over the full distance
+        badly under-reports consumption (a 119 km trip read as 7 kWh/100km). The
+        real per-leg numbers live in the separate "Journey log" section below;
+        this column stays a clean, display-consistent estimate (≈ the car's
+        own avg-consumption readout).
+        """
         if t.kwh_used is not None:
             return t.kwh_used
         # SoC didn't tick down (short trip, < 1 % resolution). Estimate
@@ -193,27 +169,21 @@ def tripbook_page(
             return round(t.km * kwh_per_km, 2)
         return None
 
-    # Each row shows the trip's absolute energy: the real journey-log kWh when
-    # matched, otherwise our SoC-based estimate (fleet avg as a last resort).
-    # `kwh_est` carries that figure — the per-row kWh/100km rate was dropped;
-    # the fleet average is shown once in the page header instead.
-    triples = []
-    for t, j in paired:
-        triples.append((t, j, {"kwh_est": best_kwh(t, j)}))
+    triples = [(t, {"kwh_est": trip_kwh(t)}) for t in trips]
 
-    grand_km = round(sum(t.km for t, _ in paired), 1)
-    grand_min = sum(t.duration_min for t, _ in paired)
-    grand_kwh = round(sum((best_kwh(t, j) or 0) for t, j in paired), 1)
+    grand_km = round(sum(t.km for t in trips), 1)
+    grand_min = sum(t.duration_min for t in trips)
+    grand_kwh = round(sum((trip_kwh(t) or 0) for t in trips), 1)
     grand_cost = round(grand_kwh * price_ct / 100.0, 2)
 
     totals: dict[str, dict] = {}
-    for t, j in paired:
+    for t in trips:
         key = t.started_at.strftime("%Y-%m")
         v = totals.setdefault(key, {"trips": 0, "km": 0.0, "minutes": 0, "kwh": 0.0})
         v["trips"] += 1
         v["km"] += t.km
         v["minutes"] += t.duration_min
-        kwh = best_kwh(t, j)
+        kwh = trip_kwh(t)
         if kwh is not None:
             v["kwh"] += kwh
     for v in totals.values():
