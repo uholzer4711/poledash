@@ -5,6 +5,40 @@ All notable changes to **polestar-dash**. Format roughly follows
 
 ## [Unreleased] — 2026-05-28
 
+### Fixed — Robustness pass (project review HIGH/MED)
+
+- **Migration that never ran**: the `chargingstation.price_ct_per_kwh`
+  `ALTER TABLE` was appended to the plan *after* the execution loop, so it was
+  never applied to existing DBs. Moved before the loop.
+- **Session energy used the wrong battery capacity**: completed-session
+  `energy_kwh` was computed against the hardcoded 78 kWh while the rest of the
+  app uses the calibrated / car-reported pack (~83 kWh) — per-session kWh were
+  systematically ~7 % low. Now uses the same capacity basis as the tripbook.
+- **Silent charges shredded into many tiny sessions**: a heuristically-opened
+  (inferred) charge has no terminal API state — its status is `Idle`
+  throughout — so a flat-SoC poll closed it mid-charge. Inferred sessions are
+  now flagged (new `ChargeSession.inferred` column) and close only on a SoC
+  drop, the car driving off, or the 24 h timeout.
+- **SoC-drop anomaly spammed**: its dedup key embedded the poll minute, so a
+  persistent drop re-alerted every poll. Now keyed per day like the sibling
+  checks.
+- **Notifications lost on partial failure**: a single channel succeeding marked
+  the whole event delivered, so a transient failure on another channel dropped
+  it permanently. Dedup is now per channel — each records its own row only on a
+  successful send, and a failed channel backfills on the next call.
+- **Blocking I/O on the event loop**: `notify()` (ntfy HTTP, SMTP up to 15 s,
+  Telegram) ran on the scheduler's event loop. It and the anomaly checks now
+  run via `asyncio.to_thread`, and Telegram is a synchronous send (was
+  fire-and-forget and could be GC'd before completing).
+- **Weekly digest email bypassed dedup**: the HTML email was sent directly,
+  so a re-run in the same week re-sent it. Now routed through `notify()`; the
+  week key uses `isocalendar()` consistently with the title.
+- **Polling wedged after a failed startup login**: `connect()` left the client
+  empty and was never retried, so the loop polled-and-failed until a manual
+  restart. `poll_once` now reconnects when the client isn't connected.
+- **Non-atomic backup**: a crash or same-day re-run could leave a truncated
+  file under the canonical name. Now writes to `.tmp` and atomically renames.
+
 ### Fixed — Tripbook trip duration collapsed to a few minutes
 
 `detect_trips()` only treated an increase in the odometer *value* as
