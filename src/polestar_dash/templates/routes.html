@@ -1,43 +1,43 @@
 {% extends "base.html" %}
-{% block title %}Routes · poledash{% endblock %}
+{% block title %}{{ t("Routes") }} · poledash{% endblock %}
 {% block content %}
   <div class="section-head">
-    <div class="num-tag">08 / ROUTES</div>
-    <h1>Repeated <em class="accent">routes</em></h1>
+    <div class="num-tag">{{ t("08 / ROUTES") }}</div>
+    <h1>{{ t("Repeated") }} <em class="accent">{{ t("routes") }}</em></h1>
   </div>
 
   <div class="flex-between mb-6 no-print">
     <div class="flex gap-2">
       {% for d in [30, 90, 365, 3650] %}
-        <a href="/routes?days={{ d }}&min_trips={{ min_trips }}&radius_km={{ radius_km }}" class="badge {% if d==days %}solid{% endif %}">{{ "All" if d == 3650 else (d|string + "D") }}</a>
+        <a href="/routes?days={{ d }}&min_trips={{ min_trips }}&radius_km={{ radius_km }}" class="badge {% if d==days %}solid{% endif %}">{{ t("All") if d == 3650 else (d|string + "D") }}</a>
       {% endfor %}
     </div>
     <div class="flex gap-2">
-      {% for m, lbl in [(1, "All"), (2, "≥2"), (5, "≥5"), (10, "≥10")] %}
+      {% for m, lbl in [(1, t("All")), (2, "≥2"), (5, "≥5"), (10, "≥10")] %}
         <a href="/routes?days={{ days }}&min_trips={{ m }}&radius_km={{ radius_km }}" class="badge {% if m==min_trips %}solid{% endif %}">{{ lbl }}</a>
       {% endfor %}
     </div>
     <div class="flex gap-2">
       {% for r in [0.0, 0.5, 1.0, 2.0, 5.0] %}
-        <a href="/routes?days={{ days }}&min_trips={{ min_trips }}&radius_km={{ r }}" class="badge {% if r==radius_km %}solid{% endif %}">{{ "exact" if r == 0.0 else ("±" + ("%g"|format(r)) + "km") }}</a>
+        <a href="/routes?days={{ days }}&min_trips={{ min_trips }}&radius_km={{ r }}" class="badge {% if r==radius_km %}solid{% endif %}">{{ t("exact") if r == 0.0 else ("±" + ("%g"|format(r)) + "km") }}</a>
       {% endfor %}
     </div>
   </div>
 
   {% if not routes %}
-    <p class="muted">No repeated routes yet. Import a journey-log CSV with at least 2 matching trips.</p>
+    <p class="muted">{{ t("No repeated routes yet. Import a journey-log CSV with at least 2 matching trips.") }}</p>
   {% else %}
     <table class="index">
       <thead>
         <tr>
-          <th>From → To</th>
-          <th class="right">Trips</th>
-          <th class="right">Total km</th>
-          <th class="right">Avg km</th>
-          <th class="right">Avg duration</th>
+          <th>{{ t("From → To") }}</th>
+          <th class="right">{{ t("Trips") }}</th>
+          <th class="right">{{ t("Total km") }}</th>
+          <th class="right">{{ t("Avg km") }}</th>
+          <th class="right">{{ t("Avg duration") }}</th>
           <th class="right">kWh/100km</th>
-          <th class="right">Best / Worst</th>
-          <th class="right">Last</th>
+          <th class="right">{{ t("Best / Worst") }}</th>
+          <th class="right">{{ t("Last") }}</th>
         </tr>
       </thead>
       <tbody>

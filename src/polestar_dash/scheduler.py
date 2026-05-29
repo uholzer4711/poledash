@@ -17,6 +17,7 @@ from .digest import weekly_digest
 from .config import get_settings
 from .db.models import FetchError, RawSnapshot, VehicleSnapshot
 from .db.session import get_engine
+from .i18n import t
 from .mqtt import schedule_publish
 from .notify import notify
 from .polestar.client import PolestarClient
@@ -59,12 +60,16 @@ def _maybe_notify(snap: Snapshot, closed_session) -> None:  # noqa: ANN001
         notify(
             kind="charge_complete",
             key=f"session-{closed_session.id}",
-            title=f"Charging finished — {snap.soc_percent}%",
-            body=(
-                f"Reached {snap.soc_percent}% ({snap.range_km} km).\n"
-                f"Session: {closed_session.soc_start} -> {closed_session.soc_end}%, "
-                f"peak {(closed_session.peak_power_w or 0)/1000:.1f} kW, "
-                f"~{closed_session.energy_kwh or 0:.1f} kWh."
+            title=t("Charging finished — {soc}%", soc=snap.soc_percent),
+            body=t(
+                "Reached {soc}% ({range} km).\n"
+                "Session: {start} → {end}%, peak {peak:.1f} kW, ~{kwh:.1f} kWh.",
+                soc=snap.soc_percent,
+                range=snap.range_km,
+                start=closed_session.soc_start,
+                end=closed_session.soc_end,
+                peak=(closed_session.peak_power_w or 0) / 1000,
+                kwh=closed_session.energy_kwh or 0,
             ),
             vin=snap.vin,
             priority="high",
@@ -77,8 +82,8 @@ def _maybe_notify(snap: Snapshot, closed_session) -> None:  # noqa: ANN001
         notify(
             kind="low_soc",
             key=f"{snap.vin}-{day_key}",
-            title=f"Low battery — {snap.soc_percent}%",
-            body=f"Only {snap.range_km or '?'} km of range left.",
+            title=t("Low battery — {soc}%", soc=snap.soc_percent),
+            body=t("Only {range} km of range left.", range=snap.range_km or "?"),
             vin=snap.vin,
             priority="high",
             tags=["warning", "battery"],
@@ -92,10 +97,11 @@ def _maybe_notify(snap: Snapshot, closed_session) -> None:  # noqa: ANN001
         notify(
             kind="service_due",
             key=f"{snap.vin}-d{snap.days_to_service}",
-            title="Service due soon",
-            body=(
-                f"{snap.days_to_service} days or {snap.distance_to_service_km or '?'} km "
-                f"to next service."
+            title=t("Service due soon"),
+            body=t(
+                "{days} days or {dist} km to next service.",
+                days=snap.days_to_service,
+                dist=snap.distance_to_service_km or "?",
             ),
             vin=snap.vin,
             tags=["wrench"],

@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Sessions · poledash{% endblock %}
+{% block title %}{{ t("Sessions") }} · poledash{% endblock %}
 {% block content %}
   <div class="section-head">
-    <div class="num-tag">03 / SESSIONS</div>
-    <h1>Charging <em class="accent">sessions</em></h1>
+    <div class="num-tag">{{ t("03 / SESSIONS") }}</div>
+    <h1>{{ t("Charging sessions")|safe }}</h1>
   </div>
 
   <div id="totals" class="grid grid-4 mb-6">
-    <div class="card"><div class="card-label">Sessions</div><div class="stat num" id="t_count">—</div></div>
-    <div class="card"><div class="card-label">Energy total</div><div class="stat num" id="t_kwh">—<span class="unit">kWh</span></div></div>
-    <div class="card"><div class="card-label">Cost total</div><div class="stat num">€ <span id="t_cost">—</span></div></div>
-    <div class="card"><div class="card-label">Default price</div><div class="stat num" id="t_default">—<span class="unit">ct/kWh</span></div><div class="stat-sub"><a href="/settings">change in settings</a></div></div>
+    <div class="card"><div class="card-label">{{ t("Sessions") }}</div><div class="stat num" id="t_count">—</div></div>
+    <div class="card"><div class="card-label">{{ t("Energy total") }}</div><div class="stat num" id="t_kwh">—<span class="unit">kWh</span></div></div>
+    <div class="card"><div class="card-label">{{ t("Cost total") }}</div><div class="stat num">€ <span id="t_cost">—</span></div></div>
+    <div class="card"><div class="card-label">{{ t("Default price") }}</div><div class="stat num" id="t_default">—<span class="unit">ct/kWh</span></div><div class="stat-sub"><a href="/settings">{{ t("change in settings") }}</a></div></div>
   </div>
 
-  <div id="list" class="grid"><p class="muted">Loading…</p></div>
+  <div id="list" class="grid"><p class="muted">{{ t("Loading…") }}</p></div>
 
   <script>
     // Backend returns naive UTC ISO strings; force UTC interpretation so
@@ -34,7 +34,7 @@
 
     function render(items) {
       const el = document.getElementById('list');
-      if (!items.length) { el.innerHTML = '<p class="muted">No charging sessions recorded yet.</p>'; return; }
+      if (!items.length) { el.innerHTML = '<p class="muted">' + {{ t("No charging sessions recorded yet.") | tojson }} + '</p>'; return; }
       el.innerHTML = items.map(s => `
         <div class="card" data-id="${s.id}">
           <div class="card-label">${fmtDt(s.started_at)} → ${fmtDt(s.ended_at)}</div>
@@ -44,16 +44,16 @@
               <div class="stat num" style="font-size:28px">${s.soc_start ?? '–'}<span class="unit">→ ${s.soc_end ?? '–'} %</span></div>
             </div>
             <div>
-              <div class="mono-xs">Duration</div>
+              <div class="mono-xs">${ {{ t("Duration") | tojson }} }</div>
               <div class="stat num" style="font-size:28px">${fmtDur(s.started_at, s.ended_at)}</div>
-              <div class="stat-sub">peak ${((s.peak_power_w||0)/1000).toFixed(1)} / avg ${((s.avg_power_w||0)/1000).toFixed(1)} kW</div>
+              <div class="stat-sub">${ {{ t("peak") | tojson }} } ${((s.peak_power_w||0)/1000).toFixed(1)} / ${ {{ t("avg") | tojson }} } ${((s.avg_power_w||0)/1000).toFixed(1)} kW</div>
             </div>
             <div>
-              <div class="mono-xs">Energy</div>
+              <div class="mono-xs">${ {{ t("Energy") | tojson }} }</div>
               <div class="stat num" style="font-size:28px">${(s.energy_kwh ?? 0).toFixed(1)}<span class="unit">kWh</span></div>
             </div>
             <div>
-              <div class="mono-xs">Cost</div>
+              <div class="mono-xs">${ {{ t("Cost") | tojson }} }</div>
               <div class="stat num" style="font-size:28px">€ <em class="accent">${s.cost_eur.toFixed(2)}</em></div>
               <div class="stat-sub">${s.effective_price_ct_per_kwh.toFixed(1)} ct/kWh · <span class="${s.price_source==='session' ? 'accent' : 'muted'}">${s.price_source}</span></div>
             </div>
@@ -61,22 +61,22 @@
               <div>
                 <div class="mono-xs">CO₂</div>
                 <div class="stat num" style="font-size:28px">${Math.round((s.energy_kwh||0) * s.co2_g_per_kwh / 1000)}<span class="unit">g</span></div>
-                <div class="stat-sub">${s.co2_g_per_kwh} g/kWh · AT mix</div>
+                <div class="stat-sub">${s.co2_g_per_kwh} g/kWh · ${ {{ t("AT mix") | tojson }} }</div>
               </div>` : ''}
           </div>
-          <div class="mt-4"><a class="mono-xs" href="/sessions/${s.id}">View charging curve →</a></div>
+          <div class="mt-4"><a class="mono-xs" href="/sessions/${s.id}">${ {{ t("View charging curve →") | tojson }} }</a></div>
           <div class="flex gap-4 mt-4" style="align-items:flex-end;flex-wrap:wrap">
             <div class="field" style="min-width:160px">
-              <label>Price override (ct/kWh)</label>
-              <input type="number" min="0" max="500" step="0.1" placeholder="default ${DEFAULT_PRICE.toFixed(1)}" value="${s.price_ct_per_kwh ?? ''}" data-field="price">
+              <label>${ {{ t("Price override (ct/kWh)") | tojson }} }</label>
+              <input type="number" min="0" max="500" step="0.1" placeholder="${ {{ t("default {price}") | tojson }}.replace('{price}', DEFAULT_PRICE.toFixed(1)) }" value="${s.price_ct_per_kwh ?? ''}" data-field="price">
             </div>
             <div class="field" style="flex:1;min-width:200px">
-              <label>Note</label>
-              <input type="text" placeholder="e.g. Wallbox home, IONITY A4" value="${escapeAttr(s.note)}" data-field="note">
+              <label>${ {{ t("Note") | tojson }} }</label>
+              <input type="text" placeholder="${ {{ t("e.g. Wallbox home, IONITY A4") | tojson }} }" value="${escapeAttr(s.note)}" data-field="note">
             </div>
-            <button class="btn ghost" onclick="saveSession(${s.id}, this)">Save <span class="arrow">→</span></button>
-            <button class="btn ghost" onclick="clearOverride(${s.id}, this)" title="Use default price">Reset <span class="arrow">→</span></button>
-            <span class="badge ${s.is_complete ? '' : 'live'}"><span class="dot"></span>${s.is_complete ? 'complete' : 'live'}</span>
+            <button class="btn ghost" onclick="saveSession(${s.id}, this)">${ {{ t("Save") | tojson }} } <span class="arrow">→</span></button>
+            <button class="btn ghost" onclick="clearOverride(${s.id}, this)" title="${ {{ t("Use default price") | tojson }} }">${ {{ t("Reset") | tojson }} } <span class="arrow">→</span></button>
+            <span class="badge ${s.is_complete ? '' : 'live'}"><span class="dot"></span>${s.is_complete ? {{ t("complete") | tojson }} : {{ t("live") | tojson }}}</span>
           </div>
         </div>
       `).join('');
@@ -109,7 +109,7 @@
       if (inp.price !== '') params.set('price_ct_per_kwh', inp.price);
       params.set('note', inp.note);
       const r = await fetch(`/api/sessions/${id}?${params}`, {method:'PATCH'});
-      if (!r.ok) return alert('save failed');
+      if (!r.ok) return alert({{ t("save failed") | tojson }});
       await load();
     }
 
@@ -119,7 +119,7 @@
       params.set('note', inp.note);
       // price omitted ⇒ FastAPI receives None ⇒ override cleared
       const r = await fetch(`/api/sessions/${id}?${params}`, {method:'PATCH'});
-      if (!r.ok) return alert('reset failed');
+      if (!r.ok) return alert({{ t("reset failed") | tojson }});
       await load();
     }
 

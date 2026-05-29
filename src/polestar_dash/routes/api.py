@@ -19,6 +19,7 @@ from ..app_settings import (
 )
 from ..db.models import ChargeSession, ChargingStation, JourneyImport, VehicleSnapshot
 from ..db.session import get_engine
+from ..i18n import SUPPORTED_LANGS, get_language, set_language
 from ..idle_drain import detect_idle_drains
 from ..insights_extras import (
     compute_charge_heatmap,
@@ -346,6 +347,19 @@ def app_settings_set_loss_factor(value: float = Query(..., ge=1.0, le=1.5)) -> d
     set_charging_loss_factor(value)
     _recalc_session_energy(value)
     return {"charging_loss_factor": get_charging_loss_factor()}
+
+
+@router.get("/app-settings/language")
+def app_settings_get_language() -> dict:
+    return {"language": get_language(), "supported": list(SUPPORTED_LANGS)}
+
+
+@router.post("/app-settings/language")
+def app_settings_set_language(value: str = Query(...)) -> dict:
+    if value not in SUPPORTED_LANGS:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {value}")
+    set_language(value)
+    return {"language": get_language()}
 
 
 def _recalc_session_energy(loss_factor: float) -> None:

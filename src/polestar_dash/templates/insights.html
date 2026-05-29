@@ -2,30 +2,30 @@
 {% block title %}Insights · poledash{% endblock %}
 {% block content %}
   <div class="section-head">
-    <div class="num-tag">06 / INSIGHTS</div>
-    <h1>Efficiency &amp; <em class="accent">cost</em></h1>
+    <div class="num-tag">{{ t("06 / INSIGHTS") }}</div>
+    <h1>{{ t("Efficiency &") }} <em class="accent">{{ t("cost") }}</em></h1>
     <p class="muted" id="hdr_meta">—</p>
   </div>
   <div id="errbox" class="card alert" style="display:none;margin-bottom:24px"></div>
 
   <div class="grid grid-4 mb-6">
     <div class="card">
-      <div class="card-label">Monthly forecast · km</div>
+      <div class="card-label">{{ t("Monthly forecast · km") }}</div>
       <div class="stat num" id="fc_km">—</div>
       <div class="stat-sub" id="fc_km_sub">—</div>
     </div>
     <div class="card">
-      <div class="card-label">Monthly forecast · kWh</div>
+      <div class="card-label">{{ t("Monthly forecast · kWh") }}</div>
       <div class="stat num" id="fc_kwh">—</div>
       <div class="stat-sub" id="fc_kwh_sub">—</div>
     </div>
     <div class="card">
-      <div class="card-label">Monthly forecast · cost</div>
+      <div class="card-label">{{ t("Monthly forecast · cost") }}</div>
       <div class="stat num">€ <em class="accent" id="fc_cost">—</em></div>
       <div class="stat-sub" id="fc_cost_sub">—</div>
     </div>
     <div class="card">
-      <div class="card-label">Avg consumption (window)</div>
+      <div class="card-label">{{ t("Avg consumption (window)") }}</div>
       <div class="stat num" id="fc_per100">—</div>
       <div class="stat-sub" id="fc_per100_sub">—</div>
     </div>
@@ -33,20 +33,20 @@
 
   <div class="grid grid-2 mb-6">
     <div class="card">
-      <div class="card-label">Range factor · implied 100% pack</div>
+      <div class="card-label">{{ t("Range factor · implied 100% pack") }}</div>
       <div style="position:relative;height:260px;margin-top:12px"><canvas id="range_chart"></canvas></div>
-      <div class="mono-xs muted mt-2">Daily mean of range_km ÷ (SoC/100). Higher = more optimistic onboard estimate.</div>
+      <div class="mono-xs muted mt-2">{{ t("Daily mean of range_km ÷ (SoC/100). Higher = more optimistic onboard estimate.") }}</div>
     </div>
     <div class="card">
-      <div class="card-label">Wh/km vs outside temperature</div>
+      <div class="card-label">{{ t("Wh/km vs outside temperature") }}</div>
       <div style="position:relative;height:260px;margin-top:12px"><canvas id="temp_chart"></canvas></div>
-      <div class="mono-xs muted mt-2">Each point = one imported trip with weather data. Cold = heater overhead.</div>
+      <div class="mono-xs muted mt-2">{{ t("Each point = one imported trip with weather data. Cold = heater overhead.") }}</div>
     </div>
   </div>
 
   <div class="card mb-6">
     <div class="flex-between">
-      <div class="card-label">Charging calendar · last 365 days</div>
+      <div class="card-label">{{ t("Charging calendar · last 365 days") }}</div>
       <div class="mono-xs muted" id="heatmap_legend">—</div>
     </div>
     <div id="heatmap" style="margin-top:16px;overflow-x:auto"></div>
@@ -54,39 +54,39 @@
 
   <div class="grid grid-2 mb-6">
     <div class="card">
-      <div class="card-label">Wh/km vs speed</div>
+      <div class="card-label">{{ t("Wh/km vs speed") }}</div>
       <div style="position:relative;height:300px;margin-top:12px"><canvas id="scatter"></canvas></div>
-      <div class="mono-xs muted mt-2">Each point = one trip. Speed = trip-km / trip-duration.</div>
+      <div class="mono-xs muted mt-2">{{ t("Each point = one trip. Speed = trip-km / trip-duration.") }}</div>
     </div>
     <div class="card">
-      <div class="card-label">Avg Wh/km by weekday</div>
+      <div class="card-label">{{ t("Avg Wh/km by weekday") }}</div>
       <div style="position:relative;height:300px;margin-top:12px"><canvas id="weekday"></canvas></div>
     </div>
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">Avg Wh/km by hour of day</div>
+    <div class="card-label">{{ t("Avg Wh/km by hour of day") }}</div>
     <div style="position:relative;height:240px;margin-top:12px"><canvas id="hour"></canvas></div>
   </div>
 
   <div class="card">
-    <div class="card-label">Cost per 100 km · weekly</div>
+    <div class="card-label">{{ t("Cost per 100 km · weekly") }}</div>
     <div style="position:relative;height:280px;margin-top:12px"><canvas id="cost"></canvas></div>
     <table class="mono-xs mt-4" style="width:100%;border-collapse:collapse" id="cost_tbl">
-      <thead><tr><th style="text-align:left;padding:4px 8px">Week</th><th>kWh</th><th>km</th><th>€</th><th>€/100km</th></tr></thead>
+      <thead><tr><th style="text-align:left;padding:4px 8px">{{ t("Week") }}</th><th>kWh</th><th>km</th><th>€</th><th>€/100km</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
 
   <div class="card mt-6">
     <div class="flex-between">
-      <div class="card-label">Idle drains <span class="muted">· pre-conditioning / standheizung / vampire</span></div>
+      <div class="card-label">{{ t("Idle drains") }} <span class="muted">· {{ t("pre-conditioning / standheizung / vampire") }}</span></div>
       <div class="mono-xs" id="drain_total">—</div>
     </div>
     <table class="mono-xs mt-4" style="width:100%;border-collapse:collapse" id="drain_tbl">
       <thead><tr>
-        <th style="text-align:left;padding:4px 8px">Started</th>
-        <th>Duration</th><th>SoC drop</th><th>≈ kWh</th>
+        <th style="text-align:left;padding:4px 8px">{{ t("Started") }}</th>
+        <th>{{ t("Duration") }}</th><th>{{ t("SoC drop") }}</th><th>≈ kWh</th>
       </tr></thead>
       <tbody></tbody>
     </table>
@@ -111,7 +111,7 @@
         line2: cssVar('--ujh-line-2') || '#36393e',
       };
     }
-    const WD = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const WD = [{{ t("Mon") | tojson }},{{ t("Tue") | tojson }},{{ t("Wed") | tojson }},{{ t("Thu") | tojson }},{{ t("Fri") | tojson }},{{ t("Sat") | tojson }},{{ t("Sun") | tojson }}];
 
     function noData(canvasId, msg) {
       const c = document.getElementById(canvasId);
@@ -163,17 +163,17 @@
       const weekdayHas = j.weekday.some(w => w.avg_wh_per_km != null);
       const hourHas    = j.by_hour.some(h => h.avg_wh_per_km != null);
       const costHas    = j.cost_by_week.length > 0;
-      if (!scatterData.length) { noData('scatter', 'No trips with efficiency data yet — drive a bit, the values appear after a few polls.'); }
-      if (!weekdayHas)         { noData('weekday', 'No weekday efficiency data yet.'); }
-      if (!hourHas)            { noData('hour',    'No hour-of-day data yet.'); }
-      if (!costHas)            { noData('cost',    'No completed charging sessions in the period — costs appear once a session finishes.'); }
+      if (!scatterData.length) { noData('scatter', {{ t("No trips with efficiency data yet — drive a bit, the values appear after a few polls.") | tojson }}); }
+      if (!weekdayHas)         { noData('weekday', {{ t("No weekday efficiency data yet.") | tojson }}); }
+      if (!hourHas)            { noData('hour',    {{ t("No hour-of-day data yet.") | tojson }}); }
+      if (!costHas)            { noData('cost',    {{ t("No completed charging sessions in the period — costs appear once a session finishes.") | tojson }}); }
 
       // Scatter: Wh/km vs speed
       if (scatterData.length) new Chart(document.getElementById('scatter'), {
         type: 'scatter',
         data: {
           datasets: [{
-            label: 'Trips',
+            label: {{ t("Trips") | tojson }},
             data: scatterData.map(s => ({x: s.avg_kmh, y: s.wh_per_km})),
             backgroundColor: p.orange + 'b0',
             borderColor: p.orange,
@@ -184,7 +184,7 @@
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            x: { ...baseAxis, title: { display: true, text: 'avg km/h', color: p.ink3 } },
+            x: { ...baseAxis, title: { display: true, text: {{ t("avg km/h") | tojson }}, color: p.ink3 } },
             y: { ...baseAxis, title: { display: true, text: 'Wh/km',    color: p.ink3 }, beginAtZero: true },
           },
         },
@@ -195,7 +195,7 @@
         type: 'bar',
         data: {
           labels: j.weekday.map(w => `${WD[w.day]} (${w.n})`),
-          datasets: [{ label: 'Avg Wh/km', data: j.weekday.map(w => w.avg_wh_per_km),
+          datasets: [{ label: {{ t("Avg Wh/km") | tojson }}, data: j.weekday.map(w => w.avg_wh_per_km),
                        backgroundColor: p.ink2, borderColor: p.ink, borderWidth: 1 }],
         },
         options: { responsive: true, maintainAspectRatio: false,
@@ -208,7 +208,7 @@
         type: 'bar',
         data: {
           labels: j.by_hour.map(h => `${h.hour.toString().padStart(2,'0')}h`),
-          datasets: [{ label: 'Avg Wh/km', data: j.by_hour.map(h => h.avg_wh_per_km),
+          datasets: [{ label: {{ t("Avg Wh/km") | tojson }}, data: j.by_hour.map(h => h.avg_wh_per_km),
                        backgroundColor: p.ink2, borderColor: p.ink, borderWidth: 1 }],
         },
         options: { responsive: true, maintainAspectRatio: false,
@@ -243,7 +243,7 @@
         new Chart(document.getElementById('range_chart'), {
           type: 'line',
           data: { datasets: [{
-            label: 'implied range at 100%',
+            label: {{ t("implied range at 100%") | tojson }},
             data: rf.map(d => ({x: d.date, y: d.range_at_100})),
             borderColor: p.orange, backgroundColor: p.orange + '30',
             pointRadius: 0, tension: 0.25, fill: true,
@@ -255,7 +255,7 @@
               y: { ...baseAxis, title: { display: true, text: 'km', color: p.ink3 } },
             } },
         });
-      } else { noData('range_chart', 'Need at least 2 days of snapshots with SoC + range.'); }
+      } else { noData('range_chart', {{ t("Need at least 2 days of snapshots with SoC + range.") | tojson }}); }
 
       // ---- Temperature scatter
       const ts = j.temp_scatter || [];
@@ -263,7 +263,7 @@
         new Chart(document.getElementById('temp_chart'), {
           type: 'scatter',
           data: { datasets: [{
-            label: 'Trips',
+            label: {{ t("Trips") | tojson }},
             data: ts.map(d => ({x: d.temp_c, y: d.wh_per_km})),
             backgroundColor: p.orange + 'b0', borderColor: p.orange, pointRadius: 4,
           }]},
@@ -274,7 +274,7 @@
               y: { ...baseAxis, title: { display: true, text: 'Wh/km',  color: p.ink3 }, beginAtZero: true },
             } },
         });
-      } else { noData('temp_chart', 'Import a journey log and run /api/journey-imports/enrich to fetch outside temperatures.'); }
+      } else { noData('temp_chart', {{ t("Import a journey log and run /api/journey-imports/enrich to fetch outside temperatures.") | tojson }}); }
 
       // ---- Charging calendar heatmap
       const hm = j.charge_heatmap || {};
@@ -290,7 +290,7 @@
       const weeks = Math.ceil(totalDays / 7);
       const cell = 12, gap = 3;
       const w = weeks * (cell + gap), h = 7 * (cell + gap) + 22;
-      const days = ['Mon','Wed','Fri'];
+      const days = [{{ t("Mon") | tojson }},{{ t("Wed") | tojson }},{{ t("Fri") | tojson }}];
       let svg = `<svg viewBox="0 0 ${w + 40} ${h}" style="width:100%;max-width:${(w+40)*1.3}px;height:auto">`;
       days.forEach((d, i) => {
         svg += `<text x="0" y="${i*2*(cell+gap)+cell}" fill="${p.ink3}" font-family="JetBrains Mono" font-size="10">${d}</text>`;

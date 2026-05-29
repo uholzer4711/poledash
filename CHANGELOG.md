@@ -3,6 +3,33 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.9.0] — 2026-05-29
+
+### Added — German UI + notifications, with a language switch
+
+- The whole interface and every notification/alert message are now available
+  in **German (default)** and **English**, switchable on `/settings` →
+  *Language*. The choice lives in the database (app-wide, no restart) and also
+  governs the wording of push/email alerts; the weekly digest is German.
+- Lightweight, no build step: a `t()` translator (`i18n.py`) with the English
+  source string as the lookup key (missing key → English fallback) and a
+  German catalog (`translations_de.py`). ~390 UI strings across all 14
+  templates (incl. the Lab page) plus the transactional notifications route
+  through it. New endpoint `GET/POST /api/app-settings/language`.
+
+### Fixed — Range-factor anomaly fired false alarms on a single noisy poll
+
+- The `range_km` field from the Polestar API occasionally returns a transient
+  garbage value for one or two polls and then self-corrects (e.g. 150 → 91 →
+  150 km at an unchanged SoC). The low-range-factor check evaluated a **single
+  snapshot**, so every alert it had ever produced was one of these spikes —
+  including physically impossible readings like 0.74 km/% (40 km at 54%).
+- The check now takes the **median km/% over the last 60 min** (≥5 samples)
+  instead of one reading. Replayed against the full history this turns 4 false
+  alarms into 0, while a genuinely sustained low factor (real cold/degradation)
+  still alerts. The threshold itself (2.5 km/%) is unchanged — the bug was
+  single-sample noise, not the cutoff.
+
 ## [1.8.3] — 2026-05-28
 
 ### Fixed — Tripbook consumption read far too low (10.9 vs ~15 kWh/100km)

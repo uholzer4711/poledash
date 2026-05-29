@@ -57,7 +57,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
 | `/routes` | Repeated routes aggregated from imported trips |
 | `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
-| `/settings` `/errors` `/raw` | Settings, recent errors, raw API dump |
+| `/settings` `/errors` `/raw` | Settings (incl. **language** switch), recent errors, raw API dump |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |
 
@@ -83,6 +83,11 @@ See [`.env.example`](.env.example). Most useful:
 | `MQTT_HOST` | — | Enables MQTT + HA discovery |
 | `BACKUP_KEEP_DAYS` | `14` | Daily SQLite backups |
 | `SOFTWARE_MANUAL_URL` | *(Polestar 2 MY2027 manual)* | Page scraped 2×/day for the latest software version |
+
+Language: the UI and all notification/alert messages are available in
+**German (default)** and **English**, switchable on `/settings` → *Language*.
+The choice is stored in the database (app-wide, no restart needed) and also
+governs the wording of push/email alerts. The weekly email digest is German.
 
 Electricity prices: set a default `ct/kWh` on `/settings` (defaults to 50);
 per-session overrides on the Sessions page get energy-weighted into the

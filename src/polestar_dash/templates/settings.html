@@ -1,31 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Settings · poledash{% endblock %}
+{% block title %}{{ t("Settings") }} · poledash{% endblock %}
 {% block content %}
   <div class="section-head">
-    <div class="num-tag">06 / SETTINGS</div>
-    <h1>Status &amp; <em class="accent">integrations</em></h1>
+    <div class="num-tag">{{ t("06 / SETTINGS") }}</div>
+    <h1>{{ t("Status &") }} <em class="accent">{{ t("integrations") }}</em></h1>
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">Electricity price (your tariff)</div>
+    <div class="card-label">{{ t("Language") }}</div>
+    <div class="flex gap-4" style="align-items:center;flex-wrap:wrap">
+      <button class="btn{% if ui_lang() == 'de' %} accent{% endif %}" onclick="setLang('de')">Deutsch</button>
+      <button class="btn{% if ui_lang() == 'en' %} accent{% endif %}" onclick="setLang('en')">English</button>
+    </div>
+    <div class="stat-sub mt-4">{{ t("Applies to the whole UI and notification messages.") }}</div>
+  </div>
+  <script>
+    async function setLang(v) {
+      const r = await fetch('/api/app-settings/language?value=' + encodeURIComponent(v), {method:'POST'});
+      if (!r.ok) return alert({{ t("save failed: ") | tojson }} + r.status);
+      location.reload();
+    }
+  </script>
+
+  <div class="card mb-6">
+    <div class="card-label">{{ t("Electricity price (your tariff)") }}</div>
     <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
       <div class="field" style="flex:1;min-width:160px">
-        <label>Default price (ct / kWh)</label>
+        <label>{{ t("Default price (ct / kWh)") }}</label>
         <input id="default_price" type="number" min="0" max="500" step="0.1" value="{{ "%.1f"|format(default_price_ct) }}">
       </div>
-      <button class="btn accent" onclick="savePrice()">Save <span class="arrow">→</span></button>
-      <span id="price_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">saved</span>
+      <button class="btn accent" onclick="savePrice()">{{ t("Save") }} <span class="arrow">→</span></button>
+      <span id="price_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">{{ t("saved") }}</span>
     </div>
     <div class="stat-sub mt-4">
-      Used for all <b>session cost</b> and <b>tripbook cost</b> calculations.
-      Each charging session can override this on the <a href="/sessions">Sessions</a> page.
+      {{ t("Used for all <b>session cost</b> and <b>tripbook cost</b> calculations. Each charging session can override this on the <a href=\"/sessions\">Sessions</a> page.") }}
     </div>
   </div>
   <script>
     async function savePrice() {
       const v = document.getElementById('default_price').value;
       const r = await fetch('/api/app-settings/price?value=' + encodeURIComponent(v), {method:'POST'});
-      if (!r.ok) return alert('save failed: ' + r.status);
+      if (!r.ok) return alert({{ t("save failed: ") | tojson }} + r.status);
       const el = document.getElementById('price_saved');
       el.style.opacity = 1;
       setTimeout(() => { el.style.opacity = 0; }, 1500);
@@ -33,25 +48,24 @@
   </script>
 
   <div class="card mb-6">
-    <div class="card-label">Charging loss factor</div>
+    <div class="card-label">{{ t("Charging loss factor") }}</div>
     <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
       <div class="field" style="flex:1;min-width:160px">
-        <label>Factor (1.0 = no loss, 1.12 = 12 %)</label>
+        <label>{{ t("Factor (1.0 = no loss, 1.12 = 12 %)") }}</label>
         <input id="loss_factor" type="number" min="1.0" max="1.5" step="0.01" value="{{ "%.2f"|format(charging_loss_factor) }}">
       </div>
-      <button class="btn accent" onclick="saveLossFactor()">Save <span class="arrow">→</span></button>
-      <span id="loss_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">saved</span>
+      <button class="btn accent" onclick="saveLossFactor()">{{ t("Save") }} <span class="arrow">→</span></button>
+      <span id="loss_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">{{ t("saved") }}</span>
     </div>
     <div class="stat-sub mt-4">
-      The charger draws more energy from the grid than arrives in the battery.
-      This factor compensates for AC charging losses (~10–15 %). Applied to all session kWh and cost calculations.
+      {{ t("The charger draws more energy from the grid than arrives in the battery. This factor compensates for AC charging losses (~10–15 %). Applied to all session kWh and cost calculations.") }}
     </div>
   </div>
   <script>
     async function saveLossFactor() {
       const v = document.getElementById('loss_factor').value;
       const r = await fetch('/api/app-settings/charging-loss-factor?value=' + encodeURIComponent(v), {method:'POST'});
-      if (!r.ok) return alert('save failed: ' + r.status);
+      if (!r.ok) return alert({{ t("save failed: ") | tojson }} + r.status);
       const el = document.getElementById('loss_saved');
       el.style.opacity = 1;
       setTimeout(() => { el.style.opacity = 0; }, 1500);
@@ -59,13 +73,11 @@
   </script>
 
   <div class="card mb-6">
-    <div class="card-label">Charging stations</div>
+    <div class="card-label">{{ t("Charging stations") }}</div>
     <div class="stat-sub mb-4">
-      Saved automatically when you set a note on a charging session (if GPS data
-      is available from imported trips). Future sessions at the same location
-      (~500 m) will suggest the station name and price. Edit or delete here.
+      {{ t("Saved automatically when you set a note on a charging session (if GPS data is available from imported trips). Future sessions at the same location (~500 m) will suggest the station name and price. Edit or delete here.") }}
     </div>
-    <div id="cs_list"><p class="muted">Loading…</p></div>
+    <div id="cs_list"><p class="muted">{{ t("Loading…") }}</p></div>
   </div>
   <script>
     function _csEsc(s) { return (s ?? '').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
@@ -73,20 +85,20 @@
       const r = await fetch('/api/charging-stations');
       const stations = r.ok ? await r.json() : [];
       const el = document.getElementById('cs_list');
-      if (!stations.length) { el.innerHTML = '<p class="muted">No stations saved yet. Set a note on a charging session in <a href="/history#sessions">History</a> to create one.</p>'; return; }
+      if (!stations.length) { el.innerHTML = '<p class="muted">' + {{ t("No stations saved yet. Set a note on a charging session in <a href=\"/history#sessions\">History</a> to create one.") | tojson }} + '</p>'; return; }
       el.innerHTML = stations.map(st => `
         <div class="flex gap-4 mb-2" style="align-items:flex-end;flex-wrap:wrap" data-station="${st.id}">
           <div class="field" style="flex:1;min-width:160px">
-            <label>Name</label>
+            <label>{{ t("Name") }}</label>
             <input type="text" value="${_csEsc(st.name)}" data-field="cs_name">
           </div>
           <div class="field" style="min-width:120px">
-            <label>Price (ct/kWh)</label>
+            <label>{{ t("Price (ct/kWh)") }}</label>
             <input type="number" min="0" max="500" step="0.1" value="${st.price_ct_per_kwh ?? ''}" data-field="cs_price">
           </div>
           <div class="mono-xs muted" style="white-space:nowrap">${st.lat.toFixed(4)}, ${st.lng.toFixed(4)}</div>
-          <button class="btn ghost" onclick="saveStation(${st.id}, this)">Save <span class="arrow">&rarr;</span></button>
-          <button class="btn ghost" onclick="deleteStation(${st.id}, this)">Delete <span class="arrow">&rarr;</span></button>
+          <button class="btn ghost" onclick="saveStation(${st.id}, this)">{{ t("Save") }} <span class="arrow">&rarr;</span></button>
+          <button class="btn ghost" onclick="deleteStation(${st.id}, this)">{{ t("Delete") }} <span class="arrow">&rarr;</span></button>
         </div>
       `).join('');
     }
@@ -98,32 +110,28 @@
       if (name) params.set('name', name);
       if (price !== '') params.set('price_ct_per_kwh', price);
       const r = await fetch('/api/charging-stations/' + id + '?' + params, {method:'PATCH'});
-      if (!r.ok) return alert('save failed');
+      if (!r.ok) return alert({{ t("save failed") | tojson }});
       await loadStations();
     }
     async function deleteStation(id, btn) {
-      if (!confirm('Delete this station?')) return;
+      if (!confirm({{ t("Delete this station?") | tojson }})) return;
       const r = await fetch('/api/charging-stations/' + id, {method:'DELETE'});
-      if (!r.ok) return alert('delete failed');
+      if (!r.ok) return alert({{ t("delete failed") | tojson }});
       await loadStations();
     }
     window.addEventListener('load', loadStations);
   </script>
 
   <div class="card mb-6">
-    <div class="card-label">Address labels</div>
+    <div class="card-label">{{ t("Address labels") }}</div>
     <div class="stat-sub mb-4">
-      Friendly names for frequent destinations. Shown on <a href="/tripbook">/tripbook</a>
-      as <span class="accent">orange</span> on the address with the label as
-      a hover tooltip. One label per line, format:
-      <code class="accent">Label: pattern1, pattern2, …</code>.
-      Patterns are case-insensitive substring matches.
+      {{ t("Friendly names for frequent destinations. Shown on <a href=\"/tripbook\">/tripbook</a> as <span class=\"accent\">orange</span> on the address with the label as a hover tooltip. One label per line, format: <code class=\"accent\">Label: pattern1, pattern2, …</code>. Patterns are case-insensitive substring matches.") }}
     </div>
     <form id="al_form" onsubmit="return saveLabels(event)">
       <textarea id="al_text" rows="6" style="width:100%;font-family:var(--ujh-mono);font-size:14px">{% for label, patterns in address_labels.items() %}{{ label }}: {{ patterns|join(', ') }}
 {% endfor %}</textarea>
       <div class="flex gap-4 mt-4" style="align-items:center">
-        <button class="btn accent" type="submit">Save <span class="arrow">→</span></button>
+        <button class="btn accent" type="submit">{{ t("Save") }} <span class="arrow">→</span></button>
         <span id="al_result" class="mono-xs muted"></span>
       </div>
     </form>
@@ -138,7 +146,7 @@
         const trimmed = line.trim();
         if (!trimmed) continue;
         const idx = trimmed.indexOf(':');
-        if (idx < 0) { out.textContent = `bad line: "${trimmed}" — need "Label: pattern"`; return false; }
+        if (idx < 0) { out.textContent = {{ t("bad line: ") | tojson }} + `"${trimmed}"` + {{ t(" — need \"Label: pattern\"") | tojson }}; return false; }
         const label = trimmed.slice(0, idx).trim();
         const patterns = trimmed.slice(idx + 1).split(',').map(p => p.trim()).filter(Boolean);
         if (label && patterns.length) payload[label] = patterns;
@@ -147,29 +155,25 @@
         method: 'PUT', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload),
       });
-      if (!r.ok) { out.textContent = 'error: ' + r.status; return false; }
-      out.textContent = 'saved · reload tripbook to see changes';
+      if (!r.ok) { out.textContent = {{ t("error: ") | tojson }} + r.status; return false; }
+      out.textContent = {{ t("saved · reload tripbook to see changes") | tojson }};
       return false;
     }
   </script>
 
   <div class="card mb-6">
-    <div class="card-label">Address map</div>
+    <div class="card-label">{{ t("Address map") }}</div>
     <div class="stat-sub mb-4">
-      Every dot is a unique start- or end-address from imported trips.
-      <span class="accent">Colored</span> = already labeled, <b>grey</b> = unassigned.
-      Click a dot to assign it to an existing label or create a new one — one
-      label can hold many addresses, so e.g. <code>Arbeit</code> can cover all
-      your parking spots near the office.
+      {{ t("Every dot is a unique start- or end-address from imported trips. <span class=\"accent\">Colored</span> = already labeled, <b>grey</b> = unassigned. Click a dot to assign it to an existing label or create a new one — one label can hold many addresses, so e.g. <code>Arbeit</code> can cover all your parking spots near the office.") }}
     </div>
     <div class="flex gap-4 mb-4" style="flex-wrap:wrap;align-items:center">
       <label class="mono-xs" style="display:flex;gap:6px;align-items:center">
         <input type="checkbox" id="am_only_near" onchange="amRender()">
-        only unassigned within 500&nbsp;m of a labeled point
+        {{ t("only unassigned within 500&nbsp;m of a labeled point") }}
       </label>
       <label class="mono-xs" style="display:flex;gap:6px;align-items:center">
         <input type="checkbox" id="am_show_radius" onchange="amRender()">
-        show 500&nbsp;m radius
+        {{ t("show 500&nbsp;m radius") }}
       </label>
       <span id="am_stats" class="mono-xs muted"></span>
     </div>
@@ -215,7 +219,7 @@
 
       function popupHtml(p) {
         const labelNames = Object.keys(amLabels).sort();
-        const opts = ['<option value="">— unassigned —</option>']
+        const opts = ['<option value="">' + {{ t("— unassigned —") | tojson }} + '</option>']
           .concat(labelNames.map(l => `<option value="${l}"${l === p.label ? ' selected' : ''}>${l}</option>`))
           .join('');
         const safe = p.address.replace(/"/g, '&quot;');
@@ -224,15 +228,15 @@
           <div style="font-family:var(--ujh-sans);min-width:240px">
             <div style="font-weight:600;margin-bottom:4px">${p.address}</div>
             <div class="mono-xs muted" style="margin-bottom:8px">
-              ${p.count}× · last ${lastSeen}
+              ${p.count}× · {{ t("last") }} ${lastSeen}
             </div>
-            <label class="mono-xs">Label</label>
+            <label class="mono-xs">{{ t("Label") }}</label>
             <select id="am_lbl_sel" style="width:100%;margin-bottom:6px">${opts}</select>
-            <label class="mono-xs">new label (optional)</label>
-            <input id="am_lbl_new" type="text" placeholder="e.g. Arbeit" style="width:100%;margin-bottom:6px">
-            <label class="mono-xs">pattern (stored as substring)</label>
+            <label class="mono-xs">{{ t("new label (optional)") }}</label>
+            <input id="am_lbl_new" type="text" placeholder="{{ t("e.g. Arbeit") }}" style="width:100%;margin-bottom:6px">
+            <label class="mono-xs">{{ t("pattern (stored as substring)") }}</label>
             <input id="am_pat" type="text" value="${safe}" style="width:100%;margin-bottom:8px">
-            <button class="btn accent" onclick="amAssign('${safe.replace(/'/g, "\\'")}')">Save <span class="arrow">→</span></button>
+            <button class="btn accent" onclick="amAssign('${safe.replace(/'/g, "\\'")}')">{{ t("Save") }} <span class="arrow">→</span></button>
             <span id="am_pop_msg" class="mono-xs muted" style="margin-left:8px"></span>
           </div>`;
       }
@@ -243,8 +247,8 @@
         const pattern = document.getElementById('am_pat').value.trim();
         const label = fresh || sel.value;
         const msg = document.getElementById('am_pop_msg');
-        if (!pattern) { msg.textContent = 'pattern empty'; return; }
-        msg.textContent = 'saving…';
+        if (!pattern) { msg.textContent = {{ t("pattern empty") | tojson }}; return; }
+        msg.textContent = {{ t("saving…") | tojson }};
         // Always send the original full address first to unassign it cleanly,
         // then (if pattern differs) assign the edited pattern.
         try {
@@ -258,7 +262,7 @@
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({pattern, label}),
           });
-          if (!r.ok) { msg.textContent = 'error ' + r.status; return; }
+          if (!r.ok) { msg.textContent = {{ t("error ") | tojson }} + r.status; return; }
           amLabels = await r.json();
           await amLoadPoints();
           amRender();
@@ -269,7 +273,7 @@
             ta.value = Object.entries(amLabels)
               .map(([l, ps]) => `${l}: ${ps.join(', ')}`).join('\n') + '\n';
           }
-        } catch (e) { msg.textContent = 'error: ' + e; }
+        } catch (e) { msg.textContent = {{ t("error: ") | tojson }} + e; }
       };
 
       async function amLoadPoints() {
@@ -310,7 +314,7 @@
           }
         });
         document.getElementById('am_stats').textContent =
-          `${labeled.length} labeled · ${unlabeled.length} unassigned${onlyNear ? ' (filtered)' : ''}`;
+          `${labeled.length} ` + {{ t("labeled") | tojson }} + ` · ${unlabeled.length} ` + {{ t("unassigned") | tojson }} + `${onlyNear ? ' ' + {{ t("(filtered)") | tojson }} : ''}`;
         if (visible.length) {
           amMap.fitBounds(Leaflet.latLngBounds(visible.map(p => [p.lat, p.lng])).pad(0.2));
         }
@@ -329,11 +333,11 @@
           await amLoadPoints();
           if (!amPoints.length) {
             document.getElementById('am_msg').textContent =
-              'no geocoded addresses yet — import a Polestar journey CSV above first.';
+              {{ t("no geocoded addresses yet — import a Polestar journey CSV above first.") | tojson }};
           }
           amRender();
         } catch (e) {
-          document.getElementById('am_msg').textContent = 'load error: ' + e;
+          document.getElementById('am_msg').textContent = {{ t("load error: ") | tojson }} + e;
         }
       }
       if (document.readyState === 'loading') {
@@ -343,24 +347,21 @@
   </script>
 
   <div class="card mb-6">
-    <div class="card-label">Journey log import (Polestar app CSV)</div>
+    <div class="card-label">{{ t("Journey log import (Polestar app CSV)") }}</div>
     <div class="stat-sub mb-4">
-      Upload the CSV exported from the Polestar app's <em class="accent">Journey log</em>.
-      Gives us <b>real kWh</b>, geocoded addresses, and crisp trip boundaries —
-      shown as a separate section on <a href="/tripbook">/tripbook</a>. Re-upload
-      to add new rows; duplicates are skipped.
+      {{ t("Upload the CSV exported from the Polestar app's <em class=\"accent\">Journey log</em>. Gives us <b>real kWh</b>, geocoded addresses, and crisp trip boundaries — shown as a separate section on <a href=\"/tripbook\">/tripbook</a>. Re-upload to add new rows; duplicates are skipped.") }}
     </div>
     <form id="ji_form" enctype="multipart/form-data" onsubmit="return uploadJourney(event)">
       <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
         <div class="field" style="flex:2;min-width:240px">
-          <label>CSV file</label>
+          <label>{{ t("CSV file") }}</label>
           <input type="file" name="file" accept=".csv,text/csv" required>
         </div>
         <div class="field" style="flex:1;min-width:120px">
-          <label>TZ offset (h)</label>
-          <input type="number" name="tz_offset_hours" step="0.5" value="2" title="CSV times are local; subtract this many hours to normalise to UTC. Vienna summer = 2, winter = 1.">
+          <label>{{ t("TZ offset (h)") }}</label>
+          <input type="number" name="tz_offset_hours" step="0.5" value="2" title="{{ t("CSV times are local; subtract this many hours to normalise to UTC. Vienna summer = 2, winter = 1.") }}">
         </div>
-        <button class="btn accent" type="submit">Import <span class="arrow">→</span></button>
+        <button class="btn accent" type="submit">{{ t("Import") }} <span class="arrow">→</span></button>
         <span id="ji_result" class="mono-xs muted"></span>
       </div>
     </form>
@@ -370,11 +371,11 @@
       ev.preventDefault();
       const fd = new FormData(document.getElementById('ji_form'));
       const out = document.getElementById('ji_result');
-      out.textContent = 'uploading…';
+      out.textContent = {{ t("uploading…") | tojson }};
       const r = await fetch('/api/journey-import', { method: 'POST', body: fd });
-      if (!r.ok) { out.textContent = 'error: ' + r.status + ' ' + (await r.text()); return false; }
+      if (!r.ok) { out.textContent = {{ t("error: ") | tojson }} + r.status + ' ' + (await r.text()); return false; }
       const j = await r.json();
-      out.textContent = `parsed ${j.parsed}, inserted ${j.inserted}, skipped ${j.skipped}`;
+      out.textContent = {{ t("parsed") | tojson }} + ` ${j.parsed}, ` + {{ t("inserted") | tojson }} + ` ${j.inserted}, ` + {{ t("skipped") | tojson }} + ` ${j.skipped}`;
       return false;
     }
   </script>
@@ -384,7 +385,7 @@
       <div class="card">
         <div class="flex-between">
           <h2>{{ name }}</h2>
-          <span class="badge {% if enabled %}live{% endif %}"><span class="dot"></span>{{ "enabled" if enabled else "disabled" }}</span>
+          <span class="badge {% if enabled %}live{% endif %}"><span class="dot"></span>{{ t("enabled") if enabled else t("disabled") }}</span>
         </div>
         <div class="stat-sub">{{ note }}</div>
       </div>
@@ -393,92 +394,89 @@
 
   {% if not demo_mode %}
   <div class="card mb-6">
-    <div class="card-label">Grafana dashboards</div>
-    <p>Drop-in dashboards for the Prometheus <code>/metrics</code> scrape.
-       In Grafana <em>Dashboards → New → Import</em> → paste JSON URL or upload file. Each has its own UID, import as many as you like.</p>
+    <div class="card-label">{{ t("Grafana dashboards") }}</div>
+    <p>{{ t("Drop-in dashboards for the Prometheus <code>/metrics</code> scrape. In Grafana <em>Dashboards → New → Import</em> → paste JSON URL or upload file. Each has its own UID, import as many as you like.") }}</p>
 
     <div class="grid grid-2 mt-4" style="gap:16px">
       <div class="card" style="background:#1a1c20">
         <div class="card-label">Main</div>
         <h2 style="margin:0 0 4px">Polestar · poledash</h2>
-        <div class="stat-sub mb-2">The original. 15 panels: SoC, power, range, consumption, odometer, service due, AC/DC current &amp; voltage, charging timeline, power-vs-SoC scatter, heatmap.</div>
+        <div class="stat-sub mb-2">{{ t("The original. 15 panels: SoC, power, range, consumption, odometer, service due, AC/DC current &amp; voltage, charging timeline, power-vs-SoC scatter, heatmap.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana-dashboard.json" download>Download <span class="arrow">→</span></a>
-          <a class="btn ghost" href="/static/grafana-dashboard.json" target="_blank">View raw <span class="arrow">→</span></a>
+          <a class="btn accent" href="/static/grafana-dashboard.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana-dashboard.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
 
       <div class="card" style="background:#1a1c20">
         <div class="card-label">Presentation</div>
         <h2 style="margin:0 0 4px">Cockpit</h2>
-        <div class="stat-sub mb-2">Big-screen showcase. Giant SoC gauge centerpiece, hero stats, smooth SoC trajectory, charging timeline. Built for demos &amp; presentations.</div>
+        <div class="stat-sub mb-2">{{ t("Big-screen showcase. Giant SoC gauge centerpiece, hero stats, smooth SoC trajectory, charging timeline. Built for demos &amp; presentations.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/cockpit.json" download>Download <span class="arrow">→</span></a>
-          <a class="btn ghost" href="/static/grafana/cockpit.json" target="_blank">View raw <span class="arrow">→</span></a>
+          <a class="btn accent" href="/static/grafana/cockpit.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/cockpit.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
 
       <div class="card" style="background:#1a1c20">
         <div class="card-label">Deep technical</div>
         <h2 style="margin:0 0 4px">Charging Lab</h2>
-        <div class="stat-sub mb-2">Charging forensics: P×SoC curve, power-density heatmap, voltage/current/power waveforms, AC↔DC state strip, P=U·I sanity check, ΔSoC bars, minutes-to-full prediction.</div>
+        <div class="stat-sub mb-2">{{ t("Charging forensics: P×SoC curve, power-density heatmap, voltage/current/power waveforms, AC↔DC state strip, P=U·I sanity check, ΔSoC bars, minutes-to-full prediction.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/charging-lab.json" download>Download <span class="arrow">→</span></a>
-          <a class="btn ghost" href="/static/grafana/charging-lab.json" target="_blank">View raw <span class="arrow">→</span></a>
+          <a class="btn accent" href="/static/grafana/charging-lab.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/charging-lab.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
 
       <div class="card" style="background:#1a1c20">
         <div class="card-label">Rhythm</div>
         <h2 style="margin:0 0 4px">Fleet Pulse</h2>
-        <div class="stat-sub mb-2">30-day rhythm view: long charging timeline, hour-of-day activity &amp; SoC heatmaps, weekly min/avg/max SoC band, sessions/24h, polling cadence bars.</div>
+        <div class="stat-sub mb-2">{{ t("30-day rhythm view: long charging timeline, hour-of-day activity &amp; SoC heatmaps, weekly min/avg/max SoC band, sessions/24h, polling cadence bars.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/fleet-pulse.json" download>Download <span class="arrow">→</span></a>
-          <a class="btn ghost" href="/static/grafana/fleet-pulse.json" target="_blank">View raw <span class="arrow">→</span></a>
+          <a class="btn accent" href="/static/grafana/fleet-pulse.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/fleet-pulse.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
 
       <div class="card" style="background:#1a1c20">
         <div class="card-label">Sustainability</div>
         <h2 style="margin:0 0 4px">Eco Impact</h2>
-        <div class="stat-sub mb-2">kWh delivered, efficiency score gauge, consumption trend with 7d-avg overlay, range-factor (km/% SoC), CO₂ saved vs petrol, €-equivalent. The "look how much we saved" board.</div>
+        <div class="stat-sub mb-2">{{ t("kWh delivered, efficiency score gauge, consumption trend with 7d-avg overlay, range-factor (km/% SoC), CO₂ saved vs petrol, €-equivalent. The \"look how much we saved\" board.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/eco-impact.json" download>Download <span class="arrow">→</span></a>
-          <a class="btn ghost" href="/static/grafana/eco-impact.json" target="_blank">View raw <span class="arrow">→</span></a>
+          <a class="btn accent" href="/static/grafana/eco-impact.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/eco-impact.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
 
       <div class="card" style="background:#1a1c20">
         <div class="card-label">Ops</div>
         <h2 style="margin:0 0 4px">Mission Control</h2>
-        <div class="stat-sub mb-2">Dense cyberpunk grid: 24 panels, 8 micro-stats, status strip, sparklines, twin scatter+heatmap, gauges for U/I/P, service countdown. 10s refresh.</div>
+        <div class="stat-sub mb-2">{{ t("Dense cyberpunk grid: 24 panels, 8 micro-stats, status strip, sparklines, twin scatter+heatmap, gauges for U/I/P, service countdown. 10s refresh.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/mission-control.json" download>Download <span class="arrow">→</span></a>
-          <a class="btn ghost" href="/static/grafana/mission-control.json" target="_blank">View raw <span class="arrow">→</span></a>
+          <a class="btn accent" href="/static/grafana/mission-control.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/mission-control.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
     </div>
 
     <div class="stat-sub mt-4">
-      All boards use orange (<code>#ff5b14</code>) only for live charging signals — matches poledash design tokens.
-      Import one or pick favorites; UIDs are distinct (<code>poledash-main</code>, <code>poledash-cockpit</code>, <code>poledash-charging-lab</code>, <code>poledash-fleet-pulse</code>, <code>poledash-eco-impact</code>, <code>poledash-mission-control</code>).
+      {{ t("All boards use orange (<code>#ff5b14</code>) only for live charging signals — matches poledash design tokens. Import one or pick favorites; UIDs are distinct (<code>poledash-main</code>, <code>poledash-cockpit</code>, <code>poledash-charging-lab</code>, <code>poledash-fleet-pulse</code>, <code>poledash-eco-impact</code>, <code>poledash-mission-control</code>).") }}
     </div>
   </div>
   {% endif %}
 
-  <div class="card-label mb-4">Active configuration</div>
+  <div class="card-label mb-4">{{ t("Active configuration") }}</div>
   <div class="card grid grid-2">
-    <div><span class="mono-xs">Poll idle</span><br><span class="num">{{ s.poll_interval_min }} min</span></div>
-    <div><span class="mono-xs">Poll charging</span><br><span class="num">{{ s.fast_poll_interval_min }} min</span></div>
-    <div><span class="mono-xs">Low-SoC alert</span><br><span class="num">≤ {{ s.notify_low_soc }}%</span></div>
-    <div><span class="mono-xs">Service alert</span><br><span class="num">≤ {{ s.notify_service_days }} days</span></div>
-    <div><span class="mono-xs">MQTT base topic</span><br><code>{{ s.mqtt_base_topic }}</code></div>
-    <div><span class="mono-xs">DB path</span><br><code>{{ s.db_path }}</code></div>
-    <div><span class="mono-xs">Backup retention</span><br><span class="num">{{ s.backup_keep_days }} days</span></div>
+    <div><span class="mono-xs">{{ t("Poll idle") }}</span><br><span class="num">{{ s.poll_interval_min }} min</span></div>
+    <div><span class="mono-xs">{{ t("Poll charging") }}</span><br><span class="num">{{ s.fast_poll_interval_min }} min</span></div>
+    <div><span class="mono-xs">{{ t("Low-SoC alert") }}</span><br><span class="num">≤ {{ s.notify_low_soc }}%</span></div>
+    <div><span class="mono-xs">{{ t("Service alert") }}</span><br><span class="num">≤ {{ t("{n} days", n=s.notify_service_days) }}</span></div>
+    <div><span class="mono-xs">{{ t("MQTT base topic") }}</span><br><code>{{ s.mqtt_base_topic }}</code></div>
+    <div><span class="mono-xs">{{ t("DB path") }}</span><br><code>{{ s.db_path }}</code></div>
+    <div><span class="mono-xs">{{ t("Backup retention") }}</span><br><span class="num">{{ t("{n} days", n=s.backup_keep_days) }}</span></div>
   </div>
 
   <p class="stat-sub mt-6">
-    Change settings by editing <code>.env</code> on the host and running <code>docker restart polestar-dash</code>.
-    See <a href="/errors">recent errors</a>.
+    {{ t("Change settings by editing <code>.env</code> on the host and running <code>docker restart polestar-dash</code>. See <a href=\"/errors\">recent errors</a>.") }}
   </p>
 {% endblock %}

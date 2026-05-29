@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% block title %}Session #{{ session_id }} · poledash{% endblock %}
+{% block title %}{{ t("Session #{n}", n=session_id) }} · poledash{% endblock %}
 {% block content %}
   <div class="section-head">
-    <div class="num-tag">03 / SESSION DETAIL</div>
-    <h1>Charging <em class="accent">curve</em></h1>
-    <p class="muted"><a href="/sessions">← back to all sessions</a></p>
+    <div class="num-tag">{{ t("03 / SESSION DETAIL") }}</div>
+    <h1>{{ t("Charging curve")|safe }}</h1>
+    <p class="muted"><a href="/sessions">{{ t("← back to all sessions") }}</a></p>
   </div>
 
   <div id="stats" class="grid grid-4 mb-6">
-    <div class="card"><div class="card-label">SoC</div><div class="stat num" id="s_soc">—</div></div>
-    <div class="card"><div class="card-label">Duration</div><div class="stat num" id="s_dur">—</div></div>
-    <div class="card"><div class="card-label">Peak / Avg</div><div class="stat num" id="s_pa">—<span class="unit">kW</span></div></div>
-    <div class="card"><div class="card-label">Energy · Cost</div><div class="stat num" id="s_ec">—</div></div>
+    <div class="card"><div class="card-label">{{ t("SoC") }}</div><div class="stat num" id="s_soc">—</div></div>
+    <div class="card"><div class="card-label">{{ t("Duration") }}</div><div class="stat num" id="s_dur">—</div></div>
+    <div class="card"><div class="card-label">{{ t("Peak / Avg") }}</div><div class="stat num" id="s_pa">—<span class="unit">kW</span></div></div>
+    <div class="card"><div class="card-label">{{ t("Energy · Cost") }}</div><div class="stat num" id="s_ec">—</div></div>
   </div>
 
   <div class="card mb-6">
@@ -25,7 +25,7 @@
   </div>
 
   <div class="card">
-    <div class="card-label">Current &amp; voltage</div>
+    <div class="card-label">{{ t("Current & voltage") }}</div>
     <div style="position:relative;height:240px;margin-top:8px">
       <canvas id="chartIV"></canvas>
     </div>
@@ -65,7 +65,7 @@
 
     async function load() {
       const r = await fetch(`/api/sessions/${SID}`);
-      if (!r.ok) { document.body.innerHTML += '<p class="muted">session not found</p>'; return; }
+      if (!r.ok) { document.body.innerHTML += '<p class="muted">' + {{ t("session not found") | tojson }} + '</p>'; return; }
       const j = await r.json();
       const s = j.session, c = j.curve, st = j.stats;
       const p = palette();
@@ -79,9 +79,9 @@
       document.getElementById('s_ec').innerHTML =
         `${(s.energy_kwh ?? 0).toFixed(1)} <span class="unit">kWh · € ${s.cost_eur.toFixed(2)}</span>`;
       document.getElementById('s_meta').textContent =
-        `${fmtDt(s.started_at)} → ${fmtDt(s.ended_at)} · ${st.samples} samples`;
+        `${fmtDt(s.started_at)} → ${fmtDt(s.ended_at)} · ${st.samples} {{ t("samples") }}`;
       document.getElementById('s_type').textContent =
-        `${st.charging_type ?? 'unknown'} · ${s.effective_price_ct_per_kwh.toFixed(1)} ct/kWh · ${s.is_complete ? 'complete' : 'LIVE'}`;
+        `${st.charging_type ?? {{ t("unknown") | tojson }}} · ${s.effective_price_ct_per_kwh.toFixed(1)} ct/kWh · ${s.is_complete ? {{ t("complete") | tojson }} : {{ t("LIVE") | tojson }}}`;
 
       // Build datasets
       const tPoints = c.map(x => x.t);
@@ -98,7 +98,7 @@
           labels: tPoints,
           datasets: [
             {
-              label: 'Power (kW)',
+              label: {{ t("Power (kW)") | tojson }},
               data: powerKw,
               yAxisID: 'y1',
               borderColor: liveColor,
@@ -110,7 +110,7 @@
               spanGaps: true,
             },
             {
-              label: 'SoC (%)',
+              label: {{ t("SoC (%)") | tojson }},
               data: soc,
               yAxisID: 'y2',
               borderColor: p.ink2,
@@ -159,9 +159,9 @@
         data: {
           labels: tPoints,
           datasets: [
-            { label: 'Current (A)', data: currI, yAxisID: 'yA',
+            { label: {{ t("Current (A)") | tojson }}, data: currI, yAxisID: 'yA',
               borderColor: p.ink, borderWidth: 1.5, pointRadius: 0, tension: 0.2, spanGaps: true },
-            { label: 'Voltage (V)', data: voltV, yAxisID: 'yV',
+            { label: {{ t("Voltage (V)") | tojson }}, data: voltV, yAxisID: 'yV',
               borderColor: p.ink3, borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, tension: 0.2, spanGaps: true },
           ],
         },

@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 from fastapi.templating import Jinja2Templates
 
 from . import __version__
+from .i18n import get_language, t
 from .journey_import import label_for
 
 DISPLAY_TZ = ZoneInfo("Europe/Vienna")
@@ -33,10 +34,15 @@ def make_templates() -> Jinja2Templates:
     from .config import get_settings
 
     s = get_settings()
-    t = Jinja2Templates(directory=str(_TEMPLATES_DIR))
-    t.env.filters["localtime"] = _localtime
-    t.env.filters["address_label"] = label_for
-    t.env.globals["demo_mode"] = s.demo_mode
-    t.env.globals["demo_banner_text"] = s.demo_banner_text
-    t.env.globals["app_version"] = __version__
-    return t
+    tpl = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    tpl.env.filters["localtime"] = _localtime
+    tpl.env.filters["address_label"] = label_for
+    tpl.env.globals["demo_mode"] = s.demo_mode
+    tpl.env.globals["demo_banner_text"] = s.demo_banner_text
+    tpl.env.globals["app_version"] = __version__
+    # i18n: `t()` for strings, `ui_lang` for <html lang> + the settings toggle.
+    # Globals are evaluated per render, and t() reads the live language cache,
+    # so a language switch takes effect on the next page load without a rebuild.
+    tpl.env.globals["t"] = t
+    tpl.env.globals["ui_lang"] = get_language
+    return tpl

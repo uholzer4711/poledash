@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 
 from .db.models import VehicleSnapshot
 from .db.session import get_engine
+from .i18n import t
 from .notify import notify
 from .polestar.fetcher import Snapshot
 from .util import utcnow
@@ -23,6 +24,8 @@ log = logging.getLogger(__name__)
 SOC_DROP_PERCENT = 8         # |Δ SoC| between consecutive samples
 CHARGING_POWER_COLLAPSE_W = 3000  # power fell below this from > 30 kW peak
 RANGE_FACTOR_FLOOR_KMPP = 2.5   # km per % SoC — winter-cold floor is ~3 normally
+RANGE_FACTOR_WINDOW_MIN = 60    # median over this window kills 1-2 poll API spikes
+RANGE_FACTOR_MIN_SAMPLES = 5    # need a stable window before trusting the median
 LOOKBACK_HOURS = 6
 LOW_SOC_REMINDER_THRESHOLD = 25  # %, nudge if not plugged in below this
 LOW_SOC_REMINDER_HOUR_FROM = 17  # local-hour window when nudges are useful
@@ -70,10 +73,13 @@ def _check_soc_drop(snap: Snapshot, prev: VehicleSnapshot) -> None:
     _alert(
         kind="anomaly_soc_drop",
         key=key,
-        title=f"Unexpected SoC drop · −{drop}%",
-        body=(
-            f"Battery dropped {prev.soc_percent}% → {snap.soc_percent}% with no "
-            f"driving and no charging since {prev.fetched_at:%H:%M}."
+        title=t("Unexpected SoC drop · −{drop}%", drop=drop),
+        body=t(
+            "Battery dropped {prev}% → {cur}% with no driving and no "
+            "charging since {since}.",
+            prev=prev.soc_percent,
+            cur=snap.soc_percent,
+            since=f"{prev.fetched_at:%H:%M}",
         ),
         vin=snap.vin,
     )
@@ -101,34 +107,67 @@ def _check_power_collapse(snap: Snapshot, prev: VehicleSnapshot) -> None:
     _alert(
         kind="anomaly_power_collapse",
         key=key,
-        title="Charging power collapsed",
-        body=(
-            f"Power dropped from {prev.charging_power_w/1000:.1f} kW to "
-            f"{snap.charging_power_w/1000:.1f} kW at SoC {snap.soc_percent}%. "
-            "Possible charger fault or thermal throttling."
+        title=t("Charging power collapsed"),
+        body=t(
+            "Power dropped from {before:.1f} kW to {after:.1f} kW at SoC {soc}%. "
+            "Possible charger fault or thermal throttling.",
+            before=prev.charging_power_w / 1000,
+            after=snap.charging_power_w / 1000,
+            soc=snap.soc_percent,
         ),
         vin=snap.vin,
     )
 
 
+def _recent_range_factors(vin: str, before: Snapshot, minutes: int) -> list[float]:
+    """Per-sample km/% factors over the last `minutes`, excluding `before`
+    itself (the caller appends the current reading). The Polestar API's
+    `range_km` field occasionally returns a transient garbage value for a
+    single poll, so a one-shot check produces only false positives — we work
+    off the window instead."""
+    with Session(get_engine()) as s:
+        stmt = (
+            select(VehicleSnapshot.range_km, VehicleSnapshot.soc_percent)
+            .where(VehicleSnapshot.vin == vin)
+            .where(VehicleSnapshot.fetched_at < before.fetched_at)
+            .where(VehicleSnapshot.fetched_at >= before.fetched_at - timedelta(minutes=minutes))
+            .where(VehicleSnapshot.range_km.is_not(None))
+            .where(VehicleSnapshot.soc_percent > 0)
+        )
+        rows = s.exec(stmt).all()
+    return [rng / soc for rng, soc in rows if rng and soc]
+
+
 def _check_range_factor(snap: Snapshot) -> None:
     """Range per %-SoC dropped below the floor — e.g. severe cold or
-    degradation. Daily dedup; informational rather than urgent."""
+    degradation. Median over a window so a 1-2 poll `range_km` API spike
+    can't fire a false alert. Daily dedup; informational rather than urgent."""
     if not snap.range_km or not snap.soc_percent:
         return
-    factor = snap.range_km / snap.soc_percent
-    if factor >= RANGE_FACTOR_FLOOR_KMPP:
+    factors = _recent_range_factors(snap.vin, snap, RANGE_FACTOR_WINDOW_MIN)
+    factors.append(snap.range_km / snap.soc_percent)
+    # Need a stable window: a lone reading (e.g. just after wake) isn't enough
+    # to distinguish a real condition from API noise.
+    if len(factors) < RANGE_FACTOR_MIN_SAMPLES:
+        return
+    factors.sort()
+    median = factors[len(factors) // 2]
+    if median >= RANGE_FACTOR_FLOOR_KMPP:
         return
     day = snap.fetched_at.strftime("%Y-%m-%d")
     key = f"{snap.vin}-{day}-rangefactor"
     _alert(
         kind="anomaly_range_factor",
         key=key,
-        title=f"Low range factor · {factor:.2f} km/%",
-        body=(
-            f"{snap.range_km} km at {snap.soc_percent}% — "
-            f"below the {RANGE_FACTOR_FLOOR_KMPP} km/% threshold. "
-            "Cold weather or check tyre pressure / drag."
+        title=t("Low range factor · {factor:.2f} km/%", factor=median),
+        body=t(
+            "Median range per %-SoC is {factor:.2f} km/% over the last {win} min "
+            "({n} samples) — below the {floor} km/% threshold. "
+            "Possible causes: cold, tyre pressure or drag.",
+            factor=median,
+            win=RANGE_FACTOR_WINDOW_MIN,
+            n=len(factors),
+            floor=RANGE_FACTOR_FLOOR_KMPP,
         ),
         vin=snap.vin,
     )
@@ -162,10 +201,10 @@ def _check_low_soc_unplugged(snap: Snapshot) -> None:
     _alert(
         kind="low_soc_unplugged",
         key=key,
-        title=f"Low battery · {snap.soc_percent}% and not plugged in",
-        body=(
-            f"~{snap.range_km or '?'} km of range left. "
-            f"Consider plugging in tonight."
+        title=t("Low battery · {soc}% and not plugged in", soc=snap.soc_percent),
+        body=t(
+            "~{range} km of range left. Consider plugging in tonight.",
+            range=snap.range_km or "?",
         ),
         vin=snap.vin,
     )

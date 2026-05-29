@@ -7,7 +7,7 @@
 {%- endmacro %}
 
 {% if not s %}
-  <p class="muted">No data yet. The first poll runs at startup; refresh in a minute.</p>
+  <p class="muted">{{ t("No data yet. The first poll runs at startup; refresh in a minute.") }}</p>
 {% else %}
   {% set is_charging = s.charging_status in ('Charging', 'Smart Charging') %}
   {% set is_plugged = s.charger_connection_status == 'Connected' %}
@@ -16,9 +16,9 @@
 
   {% if service_alert %}
     <div class="card alert mb-4">
-      <div class="card-label accent">Service approaching</div>
+      <div class="card-label accent">{{ t("Service approaching") }}</div>
       <div class="muted-2">
-        {% if s.days_to_service is not none %}{{ s.days_to_service }} days{% endif %}
+        {% if s.days_to_service is not none %}{{ s.days_to_service }} {{ t("days") }}{% endif %}
         {% if s.distance_to_service_km is not none %} · {{ s.distance_to_service_km }} km{% endif %}
         {% if s.service_warning not in ok %} · {{ s.service_warning }}{% endif %}
       </div>
@@ -59,7 +59,7 @@
         {% set max_kw = 22 if power_kw <= 22 else (50 if power_kw <= 50 else 150) %}
         <div class="vu-meter">
           <div class="vu-head">
-            <span class="mono-xs">Power</span>
+            <span class="mono-xs">{{ t("Power") }}</span>
           </div>
           <div class="vu-reading">
             <span class="vu-val num">{{ "%.1f"|format(power_kw) }}</span>
@@ -83,7 +83,7 @@
         {% set v_max = 260 if v <= 260 else 500 %}
         <div class="vu-meter">
           <div class="vu-head">
-            <span class="mono-xs">Voltage</span>
+            <span class="mono-xs">{{ t("Voltage") }}</span>
           </div>
           <div class="vu-reading">
             <span class="vu-val num">{{ v }}</span>
@@ -117,23 +117,23 @@
       {% endif %}
       {% if time_label %}
       <div class="charge-stat-item">
-        <div class="mono-xs">{{ time_label }}</div>
+        <div class="mono-xs">{{ t(time_label) }}</div>
         <div class="charge-stat-val num">{{ fmt_min(time_to_show) }}</div>
       </div>
       {% endif %}
       <div class="charge-stat-item">
-        <div class="mono-xs">Range</div>
+        <div class="mono-xs">{{ t("Range") }}</div>
         <div class="charge-stat-val num">{{ s.range_km if s.range_km is not none else "–" }}<span class="unit">km</span></div>
       </div>
       {% if s.charging_current_a %}
       <div class="charge-stat-item">
-        <div class="mono-xs">Current</div>
+        <div class="mono-xs">{{ t("Current") }}</div>
         <div class="charge-stat-val num">{{ s.charging_current_a }}<span class="unit">A</span></div>
       </div>
       {% endif %}
       {% if s.target_soc_percent %}
       <div class="charge-stat-item">
-        <div class="mono-xs">Target</div>
+        <div class="mono-xs">{{ t("Target") }}</div>
         <div class="charge-stat-val num">{{ s.target_soc_percent }}<span class="unit">%</span>
           {%- if s.target_soc_type %} <span class="muted" style="font-size:11px">{{ s.target_soc_type }}</span>{% endif -%}
         </div>
@@ -144,7 +144,7 @@
     {% if s.minutes_to_full and time_label == "To target" %}
     <div class="mt-3 chips">
       {% set ftf = s.minutes_to_full %}
-      <span class="badge">{% if ftf >= 60 %}{{ (ftf // 60)|int }}h {{ (ftf % 60)|int }}m{% else %}{{ ftf }}m{% endif %} to 100%</span>
+      <span class="badge">{% if ftf >= 60 %}{{ (ftf // 60)|int }}h {{ (ftf % 60)|int }}m{% else %}{{ ftf }}m{% endif %} {{ t("to 100%") }}</span>
     </div>
     {% endif %}
   </div>
@@ -154,7 +154,7 @@
     {% if not is_charging %}
     <!-- SoC + range -->
     <div class="card">
-      <div class="card-label">State of charge</div>
+      <div class="card-label">{{ t("State of charge") }}</div>
       <div class="card-row">
         {% set pct = s.soc_percent or 0 %}
         {% set offset = (1 - pct/100) * 251 %}
@@ -166,15 +166,15 @@
         <div>
           <div class="stat num">{{ s.range_km if s.range_km is not none else "–" }}<span class="unit">km</span></div>
           <div class="stat-sub">
-            {% if s.avg_consumption_kwh_per_100km is not none %}{{ "%.1f"|format(s.avg_consumption_kwh_per_100km) }} kWh / 100 km{% else %}consumption pending{% endif %}
+            {% if s.avg_consumption_kwh_per_100km is not none %}{{ "%.1f"|format(s.avg_consumption_kwh_per_100km) }} kWh / 100 km{% else %}{{ t("consumption pending") }}{% endif %}
           </div>
           {% if s.target_soc_percent %}
             <div class="kv mt-3">
-              <span class="mono-xs">Charge limit</span>
+              <span class="mono-xs">{{ t("Charge limit") }}</span>
               <span class="num">
                 {{ s.target_soc_percent }}%{% if s.target_soc_type %} <span class="muted">· {{ s.target_soc_type }}</span>{% endif %}
                 {% if s.pending_target_soc_percent and s.pending_target_soc_percent != s.target_soc_percent %}
-                  <span class="accent" title="Queued in the Polestar app, applies on next plug-in">→ {{ s.pending_target_soc_percent }}%</span>
+                  <span class="accent" title="{{ t("Queued in the Polestar app, applies on next plug-in") }}">→ {{ s.pending_target_soc_percent }}%</span>
                 {% endif %}
               </span>
             </div>
@@ -186,53 +186,53 @@
     <!-- Charging -->
     <div class="card">
       <div class="card-label">
-        {% if s.charging_status == 'Done' %}<span class="badge"><span class="dot"></span>Done</span>
-        {% elif is_plugged %}<span class="badge"><span class="dot"></span>Plugged</span>
-        {% else %}Charging{% endif %}
+        {% if s.charging_status == 'Done' %}<span class="badge"><span class="dot"></span>{{ t("Done") }}</span>
+        {% elif is_plugged %}<span class="badge"><span class="dot"></span>{{ t("Plugged") }}</span>
+        {% else %}{{ t("Charging") }}{% endif %}
       </div>
       <div class="stat-muted">
-        {% if s.charging_status == 'Error' and not is_plugged %}Idle
-        {% else %}{{ s.charging_status or "Idle" }}{% endif %}
+        {% if s.charging_status == 'Error' and not is_plugged %}{{ t("Idle") }}
+        {% else %}{{ t(s.charging_status) if s.charging_status else t("Idle") }}{% endif %}
       </div>
       <div class="stat-sub">
-        {% if is_plugged %}Cable connected, not drawing{% else %}Not plugged in{% endif %}
+        {% if is_plugged %}{{ t("Cable connected, not drawing") }}{% else %}{{ t("Not plugged in") }}{% endif %}
       </div>
     </div>
     {% endif %}
 
     <!-- Odometer -->
     <div class="card">
-      <div class="card-label">Odometer</div>
+      <div class="card-label">{{ t("Odometer") }}</div>
       <div class="stat num">{{ "%.0f"|format(s.odometer_km) if s.odometer_km is not none else "–" }}<span class="unit">km</span></div>
       <div class="stat-sub">
-        {% if s.avg_speed_kmh is not none %}avg {{ s.avg_speed_kmh }} km/h{% else %}—{% endif %}
-        {% if s.trip_auto_km is not none %} · auto trip {{ "%.1f"|format(s.trip_auto_km) }} km{% endif %}
+        {% if s.avg_speed_kmh is not none %}{{ t("avg {n} km/h", n=s.avg_speed_kmh) }}{% else %}—{% endif %}
+        {% if s.trip_auto_km is not none %} · {{ t("auto trip {n} km", n="%.1f"|format(s.trip_auto_km)) }}{% endif %}
       </div>
     </div>
 
     <!-- Service -->
     <div class="card">
-      <div class="card-label">Service</div>
+      <div class="card-label">{{ t("Service") }}</div>
       {% if s.service_warning not in ok %}
         <div class="stat-muted accent">{{ s.service_warning }}</div>
       {% else %}
-        <div class="stat-muted">All good</div>
+        <div class="stat-muted">{{ t("All good") }}</div>
       {% endif %}
       <div class="stat-sub">
-        {% if s.days_to_service is not none %}in {{ s.days_to_service }} days{% endif %}
+        {% if s.days_to_service is not none %}{{ t("in {n} days", n=s.days_to_service) }}{% endif %}
         {% if s.distance_to_service_km is not none %} · {{ "{:,}".format(s.distance_to_service_km).replace(",", " ") }} km{% endif %}
       </div>
       <div class="mt-4 chips">
-        <span class="badge {% if s.oil_level_warning not in ok %}warn{% endif %}">Oil</span>
-        <span class="badge {% if s.brake_fluid_level_warning not in ok %}warn{% endif %}">Brake</span>
-        <span class="badge {% if s.engine_coolant_level_warning not in ok %}warn{% endif %}">Coolant</span>
+        <span class="badge {% if s.oil_level_warning not in ok %}warn{% endif %}">{{ t("Oil") }}</span>
+        <span class="badge {% if s.brake_fluid_level_warning not in ok %}warn{% endif %}">{{ t("Brake") }}</span>
+        <span class="badge {% if s.engine_coolant_level_warning not in ok %}warn{% endif %}">{{ t("Coolant") }}</span>
       </div>
     </div>
   </div>
 
   <!-- Vehicle (full width) -->
   <div class="card mt-4">
-    <div class="card-label">Vehicle</div>
+    <div class="card-label">{{ t("Vehicle") }}</div>
     <div class="flex gap-4" style="align-items:center">
       {% if s.image_url %}
         <img src="{{ s.image_url }}" alt="" class="veh-image" loading="lazy"/>
@@ -240,28 +240,28 @@
       <div style="flex:1">
         <div class="veh-title">{{ s.model_name or "Polestar" }} <span class="muted">{{ s.model_year or "" }}</span></div>
         <div class="kv-row">
-          <div class="kv"><span class="mono-xs">VIN</span><code>{{ s.vin }}</code></div>
-          {% if s.registration_no %}<div class="kv"><span class="mono-xs">Reg</span><span class="num">{{ s.registration_no }}</span></div>{% endif %}
-          {% if s.software_version %}<div class="kv"><span class="mono-xs">SW</span><span class="num">{{ s.software_version }}</span></div>{% endif %}
+          <div class="kv"><span class="mono-xs">{{ t("VIN") }}</span><code>{{ s.vin }}</code></div>
+          {% if s.registration_no %}<div class="kv"><span class="mono-xs">{{ t("Reg") }}</span><span class="num">{{ s.registration_no }}</span></div>{% endif %}
+          {% if s.software_version %}<div class="kv"><span class="mono-xs">{{ t("SW") }}</span><span class="num">{{ s.software_version }}</span></div>{% endif %}
           {% if s.battery_capacity_kwh %}
-            <div class="kv"><span class="mono-xs">Battery</span><span>
+            <div class="kv"><span class="mono-xs">{{ t("Battery") }}</span><span>
               {{ "%g"|format(s.battery_capacity_kwh) }} kWh
               {% if s.battery_voltage_v %}<span class="muted">· {{ "%g"|format(s.battery_voltage_v) }} V</span>{% endif %}
-              {% if s.battery_modules %}<span class="muted">· {{ s.battery_modules }} modules</span>{% endif %}
-              {% if s.battery_cells %}<span class="muted">/ {{ s.battery_cells }} cells</span>{% endif %}
+              {% if s.battery_modules %}<span class="muted">· {{ t("{n} modules", n=s.battery_modules) }}</span>{% endif %}
+              {% if s.battery_cells %}<span class="muted">/ {{ t("{n} cells", n=s.battery_cells) }}</span>{% endif %}
             </span></div>
           {% elif s.battery_spec %}<div class="kv"><span class="mono-xs">Battery</span><span>{{ s.battery_spec }}</span></div>{% endif %}
-          {% if s.torque %}<div class="kv"><span class="mono-xs">Torque</span><span>{{ s.torque }}</span></div>{% endif %}
-          {% if s.registration_date %}<div class="kv"><span class="mono-xs">Registered</span><span class="num">{{ s.registration_date }}</span></div>{% endif %}
-          {% if s.factory_complete_date %}<div class="kv"><span class="mono-xs">Built</span><span class="num">{{ s.factory_complete_date }}</span></div>{% endif %}
-          {% if s.software_version_ts %}<div class="kv"><span class="mono-xs">SW updated</span><span class="num">{{ s.software_version_ts|localtime('%Y-%m-%d') }}</span></div>{% endif %}
+          {% if s.torque %}<div class="kv"><span class="mono-xs">{{ t("Torque") }}</span><span>{{ s.torque }}</span></div>{% endif %}
+          {% if s.registration_date %}<div class="kv"><span class="mono-xs">{{ t("Registered") }}</span><span class="num">{{ s.registration_date }}</span></div>{% endif %}
+          {% if s.factory_complete_date %}<div class="kv"><span class="mono-xs">{{ t("Built") }}</span><span class="num">{{ s.factory_complete_date }}</span></div>{% endif %}
+          {% if s.software_version_ts %}<div class="kv"><span class="mono-xs">{{ t("SW updated") }}</span><span class="num">{{ s.software_version_ts|localtime('%Y-%m-%d') }}</span></div>{% endif %}
         </div>
       </div>
     </div>
   </div>
 
   <div class="meta-row mt-6">
-    <span class="mono-xs">Last fetch</span>
+    <span class="mono-xs">{{ t("Last fetch") }}</span>
     <span class="num">{{ s.fetched_at|localtime('%Y-%m-%d %H:%M:%S') }}</span>
   </div>
 {% endif %}

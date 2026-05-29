@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="{{ ui_lang() }}" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -27,30 +27,30 @@
   {% endif %}
   <div class="shell">
     <div class="topbar">
-      <div><span class="live-dot" id="live-dot"></span><span id="live-text">LIVE</span></div>
+      <div><span class="live-dot" id="live-dot"></span><span id="live-text">{{ t("LIVE") }}</span></div>
       <div class="center">POLEDASH · POLESTAR TELEMETRY</div>
       <div class="right">
-        <button class="theme-toggle" onclick="(()=>{const r=document.documentElement;const d=r.dataset.design==='v2'?'':'v2';if(d){r.dataset.design=d;localStorage.setItem('design',d);}else{delete r.dataset.design;localStorage.removeItem('design');}})()" title="Toggle the readability-focused v2 design">Design</button>
-        <button class="theme-toggle" onclick="(()=>{const r=document.documentElement;const t=r.dataset.theme==='light'?'dark':'light';r.dataset.theme=t;localStorage.setItem('theme',t);window.dispatchEvent(new Event('themechange'));})()">Theme</button>
+        <button class="theme-toggle" onclick="(()=>{const r=document.documentElement;const d=r.dataset.design==='v2'?'':'v2';if(d){r.dataset.design=d;localStorage.setItem('design',d);}else{delete r.dataset.design;localStorage.removeItem('design');}})()" title="{{ t('Toggle the readability-focused v2 design') }}">{{ t("Design") }}</button>
+        <button class="theme-toggle" onclick="(()=>{const r=document.documentElement;const t=r.dataset.theme==='light'?'dark':'light';r.dataset.theme=t;localStorage.setItem('theme',t);window.dispatchEvent(new Event('themechange'));})()">{{ t("Theme") }}</button>
       </div>
     </div>
     <nav class="navbar">
       <a class="logo" href="/">POLEDASH</a>
       <div class="nav">
         {% set path = request.url.path %}
-        <a href="/" class="{% if path == '/' %}active{% endif %}">Dashboard</a>
-        <a href="/history" class="{% if path == '/history' or path == '/sessions' %}active{% endif %}">History</a>
-        <a href="/tripbook" class="{% if path == '/tripbook' %}active{% endif %}">Tripbook</a>
-        <a href="/routes" class="{% if path == '/routes' %}active{% endif %}">Routes</a>
-        <a href="/insights" class="{% if path == '/insights' %}active{% endif %}">Insights</a>
-        <a href="/software" class="{% if path == '/software' %}active{% endif %}">Software</a>
-        <a href="/settings" class="{% if path == '/settings' %}active{% endif %}">Settings</a>
+        <a href="/" class="{% if path == '/' %}active{% endif %}">{{ t("Dashboard") }}</a>
+        <a href="/history" class="{% if path == '/history' or path == '/sessions' %}active{% endif %}">{{ t("History") }}</a>
+        <a href="/tripbook" class="{% if path == '/tripbook' %}active{% endif %}">{{ t("Tripbook") }}</a>
+        <a href="/routes" class="{% if path == '/routes' %}active{% endif %}">{{ t("Routes") }}</a>
+        <a href="/insights" class="{% if path == '/insights' %}active{% endif %}">{{ t("Insights") }}</a>
+        <a href="/software" class="{% if path == '/software' %}active{% endif %}">{{ t("Software") }}</a>
+        <a href="/settings" class="{% if path == '/settings' %}active{% endif %}">{{ t("Settings") }}</a>
         {% if demo_mode %}
-        <span class="nav-disabled" title="Disabled in demo">Raw</span>
-        <span class="nav-disabled" title="Disabled in demo">Lab</span>
+        <span class="nav-disabled" title="{{ t('Disabled in demo') }}">{{ t("Raw") }}</span>
+        <span class="nav-disabled" title="{{ t('Disabled in demo') }}">{{ t("Lab") }}</span>
         {% else %}
-        <a href="/raw" class="{% if path == '/raw' %}active{% endif %}">Raw</a>
-        <a href="/lab" class="{% if path == '/lab' %}active{% endif %}">Lab</a>
+        <a href="/raw" class="{% if path == '/raw' %}active{% endif %}">{{ t("Raw") }}</a>
+        <a href="/lab" class="{% if path == '/lab' %}active{% endif %}">{{ t("Lab") }}</a>
         {% endif %}
       </div>
       <div class="mono-xs">v{{ app_version }}</div>
@@ -59,7 +59,7 @@
     <footer class="foot">
       <div class="flex-between">
         <span>POLEDASH · {{ request.url.hostname or 'localhost' }}</span>
-        <span><a href="/errors">errors</a> · <a href="/api/export.csv">csv</a> · <a href="/api/tripbook.ics">ical</a></span>
+        <span><a href="/errors">{{ t("errors") }}</a> · <a href="/api/export.csv">{{ t("csv") }}</a> · <a href="/api/tripbook.ics">{{ t("ical") }}</a></span>
       </div>
     </footer>
   </div>
@@ -70,6 +70,7 @@
       const savedDesign = localStorage.getItem('design');
       if (savedDesign) document.documentElement.dataset.design = savedDesign;
     })();
+    const LIVE_LABELS = {{ {"idle": t("IDLE"), "charging": t("CHARGING"), "plugged": t("PLUGGED"), "km": t("KM")} | tojson }};
     async function pollLive() {
       try {
         const r = await fetch('/api/latest');
@@ -79,10 +80,10 @@
         const txt = document.getElementById('live-text');
         const charging = j.charging_status === 'Charging' || j.charging_status === 'Smart Charging';
         const plugged = j.charger_connection_status === 'Connected';
-        let label = 'IDLE';
-        if (charging) label = j.charging_power_w ? `CHARGING · ${(j.charging_power_w/1000).toFixed(1)} kW` : 'CHARGING';
-        else if (plugged) label = 'PLUGGED';
-        else if (j.soc_percent != null) label = `${j.soc_percent}% · ${j.range_km ?? '?'} KM`;
+        let label = LIVE_LABELS.idle;
+        if (charging) label = j.charging_power_w ? `${LIVE_LABELS.charging} · ${(j.charging_power_w/1000).toFixed(1)} kW` : LIVE_LABELS.charging;
+        else if (plugged) label = LIVE_LABELS.plugged;
+        else if (j.soc_percent != null) label = `${j.soc_percent}% · ${j.range_km ?? '?'} ${LIVE_LABELS.km}`;
         txt.textContent = label;
         dot.style.background = charging ? 'var(--ujh-orange)' : 'var(--ujh-ink-3)';
         dot.style.animation = charging ? 'pulse 2s infinite' : 'none';

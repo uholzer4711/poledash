@@ -2,89 +2,81 @@
 {% block title %}Polestar Lab · poledash{% endblock %}
 {% block content %}
   <div class="section-head">
-    <div class="num-tag">09 / LAB</div>
-    <h1>Polestar <em class="accent">field discovery</em></h1>
+    <div class="num-tag">{{ t("09 / LAB") }}</div>
+    <h1>{{ t("Polestar") }} <em class="accent">{{ t("field discovery") }}</em></h1>
     <p class="muted" style="max-width:720px">
-      Live tooling to probe the Polestar API beyond what pypolestar maps.
-      GraphQL introspection is locked down (Polestar disabled
-      <code>__Schema.types</code>, <code>__Type.fields</code>, etc.), so we
-      enumerate by guessing field names against known parent types and
-      reading the error response. gRPC payloads carry many more fields than
-      pypolestar exposes — we surface the raw protobuf dump below.
+      {{ t("Live tooling to probe the Polestar API beyond what pypolestar maps. GraphQL introspection is locked down (Polestar disabled") }}
+      <code>__Schema.types</code>, <code>__Type.fields</code>, {{ t("etc.), so we enumerate by guessing field names against known parent types and reading the error response. gRPC payloads carry many more fields than pypolestar exposes — we surface the raw protobuf dump below.") }}
     </p>
   </div>
 
   <div class="card mb-6">
     <div class="flex-between" style="align-items:center">
-      <div class="card-label" style="margin:0">Latest snapshot — all fields from this poll</div>
+      <div class="card-label" style="margin:0">{{ t("Latest snapshot — all fields from this poll") }}</div>
       <span id="latestTs" class="mono-xs muted">—</span>
     </div>
-    <p class="muted mono-xs">Live values from the running app. <span class="accent">Coloured rows</span> = populated; grey = null / proto-3 zero. Click any value to copy.</p>
-    <div id="latestGrid" class="mono-xs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 16px;margin-top:8px">loading…</div>
+    <p class="muted mono-xs">{{ t("Live values from the running app.") }} <span class="accent">{{ t("Coloured rows") }}</span> {{ t("= populated; grey = null / proto-3 zero. Click any value to copy.") }}</p>
+    <div id="latestGrid" class="mono-xs" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 16px;margin-top:8px">{{ t("loading…") }}</div>
   </div>
 
   <div class="grid grid-2 mb-6">
     <div class="card">
-      <div class="card-label">Upstream pypolestar</div>
-      <div id="upstream" class="mono-xs" style="white-space:pre-wrap">loading…</div>
+      <div class="card-label">{{ t("Upstream pypolestar") }}</div>
+      <div id="upstream" class="mono-xs" style="white-space:pre-wrap">{{ t("loading…") }}</div>
     </div>
     <div class="card">
-      <div class="card-label">Recent issues</div>
+      <div class="card-label">{{ t("Recent issues") }}</div>
       <ul id="issues" class="mono-xs" style="padding-left:18px;margin:8px 0">
-        <li class="muted">loading…</li>
+        <li class="muted">{{ t("loading…") }}</li>
       </ul>
     </div>
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">Volvo Developer API — official sibling source</div>
+    <div class="card-label">{{ t("Volvo Developer API — official sibling source") }}</div>
     <p class="muted mono-xs">
-      Polestar runs on Volvo's connected-car platform. Volvo publishes
-      <em>some</em> APIs publicly at <a href="https://developer.volvocars.com/apis" target="_blank">developer.volvocars.com/apis</a>.
-      Practical reality for Polestar 2 / EX40:
+      {{ t("Polestar runs on Volvo's connected-car platform. Volvo publishes") }}
+      <em>{{ t("some") }}</em> {{ t("APIs publicly at") }} <a href="https://developer.volvocars.com/apis" target="_blank">developer.volvocars.com/apis</a>.
+      {{ t("Practical reality for Polestar 2 / EX40:") }}
     </p>
     <table class="mono-xs" style="width:100%;border-collapse:collapse">
-      <thead><tr><th align="left">API</th><th align="left">PS2 / EX40 support</th><th align="left">What it gives</th></tr></thead>
+      <thead><tr><th align="left">{{ t("API") }}</th><th align="left">{{ t("PS2 / EX40 support") }}</th><th align="left">{{ t("What it gives") }}</th></tr></thead>
       <tbody>
         <tr>
           <td><a href="https://developer.volvocars.com/apis/connected-vehicle/v2/overview/" target="_blank">Connected Vehicle v2</a></td>
-          <td class="muted">Legacy Volvos only — no PS2 / Recharge</td>
-          <td class="muted">Door/window/lock, fuel, engine, climate (legacy ICE)</td>
+          <td class="muted">{{ t("Legacy Volvos only — no PS2 / Recharge") }}</td>
+          <td class="muted">{{ t("Door/window/lock, fuel, engine, climate (legacy ICE)") }}</td>
         </tr>
         <tr>
           <td><a href="https://developer.volvocars.com/apis/extended-vehicle/v1/overview/" target="_blank">Extended Vehicle v1</a></td>
-          <td class="muted">Same — legacy only</td>
-          <td class="muted">Distance, fuel level, windows, lights</td>
+          <td class="muted">{{ t("Same — legacy only") }}</td>
+          <td class="muted">{{ t("Distance, fuel level, windows, lights") }}</td>
         </tr>
         <tr>
           <td><a href="https://developer.volvocars.com/apis/energy/v1/overview/" target="_blank">Energy v1</a></td>
-          <td><strong class="accent">Works with PS2 VINs</strong></td>
-          <td>SoC, target SoC, charging system status, charging connection</td>
+          <td><strong class="accent">{{ t("Works with PS2 VINs") }}</strong></td>
+          <td>{{ t("SoC, target SoC, charging system status, charging connection") }}</td>
         </tr>
       </tbody>
     </table>
     <p class="muted mono-xs" style="margin-top:12px">
-      Energy-API endpoint shape:
+      {{ t("Energy-API endpoint shape:") }}
       <code>GET https://api.volvocars.com/energy/v1/vehicles/{vin}/recharge-status[/&lt;subresource&gt;]</code><br>
-      Auth: OAuth2 bearer + <code>vcc-api-key</code> header. Test tokens
-      on the dev portal after Volvo-ID login; production needs Volvo
-      partner approval (callback URL etc.). Rate limit: 100 req/min per
-      (Volvo-ID × Client-ID).<br>
-      Sample code: <a href="https://github.com/volvo-cars/developer-portal-api-samples" target="_blank">github.com/volvo-cars/developer-portal-api-samples</a>
+      {{ t("Auth: OAuth2 bearer +") }} <code>vcc-api-key</code> {{ t("header. Test tokens on the dev portal after Volvo-ID login; production needs Volvo partner approval (callback URL etc.). Rate limit: 100 req/min per (Volvo-ID × Client-ID).") }}<br>
+      {{ t("Sample code:") }} <a href="https://github.com/volvo-cars/developer-portal-api-samples" target="_blank">github.com/volvo-cars/developer-portal-api-samples</a>
     </p>
-    <p class="mono-xs"><em class="accent">Trade-off:</em> documented + stable, but requires registration. Our reverse-engineered consumer route gets ~10× more fields (gRPC battery, target, telematics) without paperwork — at the cost of breaking when Polestar reshuffles.</p>
+    <p class="mono-xs"><em class="accent">{{ t("Trade-off:") }}</em> {{ t("documented + stable, but requires registration. Our reverse-engineered consumer route gets ~10× more fields (gRPC battery, target, telematics) without paperwork — at the cost of breaking when Polestar reshuffles.") }}</p>
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">GraphQL probe</div>
+    <div class="card-label">{{ t("GraphQL probe") }}</div>
     <p class="muted mono-xs">
-      Wrap candidate field names with the parent's query shell. Use a leaf
-      name like <code>chargingPower</code> or a nested shape like
+      {{ t("Wrap candidate field names with the parent's query shell. Use a leaf name like") }} <code>chargingPower</code> {{ t("or a nested shape like") }}
       <code>location { latitude longitude }</code>.
     </p>
     <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
       <div class="field">
-        <label>Parent</label>
+        <label>{{ t("Parent") }}</label>
         <select id="probeParent">
           <option>BatteryV2</option>
           <option>OdometerV2</option>
@@ -95,7 +87,7 @@
         </select>
       </div>
       <div class="field" style="flex:1;min-width:280px">
-        <label>Fields (one per line, or comma-separated)</label>
+        <label>{{ t("Fields (one per line, or comma-separated)") }}</label>
         <textarea id="probeFields" rows="4" style="font-family:JetBrains Mono;font-size:12px">chargingPower
 chargingState
 location
@@ -106,54 +98,48 @@ climate
 doors
 tirePressure</textarea>
       </div>
-      <button class="btn" onclick="runProbe()">Probe <span class="arrow">→</span></button>
+      <button class="btn" onclick="runProbe()">{{ t("Probe") }} <span class="arrow">→</span></button>
     </div>
     <div id="probeSummary" class="mono-xs muted" style="margin-top:12px"></div>
     <table id="probeResults" class="mono-xs" style="width:100%;margin-top:8px;border-collapse:collapse">
-      <thead><tr style="border-bottom:1px solid var(--ujh-line)"><th align="left" style="padding:4px 8px 4px 0">field</th><th align="left" style="padding:4px 8px">status</th><th align="left" style="padding:4px 0">message / value</th></tr></thead>
+      <thead><tr style="border-bottom:1px solid var(--ujh-line)"><th align="left" style="padding:4px 8px 4px 0">{{ t("field") }}</th><th align="left" style="padding:4px 8px">{{ t("status") }}</th><th align="left" style="padding:4px 0">{{ t("message / value") }}</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">gRPC battery — raw proto dump</div>
+    <div class="card-label">{{ t("gRPC battery — raw proto dump") }}</div>
     <p class="muted mono-xs">
-      pypolestar's <code>_parse_battery</code> only maps ~13 of the proto's
-      26 fields. The full <code>Battery</code> message dump below shows
-      everything the server returned this poll. Numeric fields default to
-      0 when unset (proto3 semantics).
+      {{ t("pypolestar's") }} <code>_parse_battery</code> {{ t("only maps ~13 of the proto's 26 fields. The full") }} <code>Battery</code> {{ t("message dump below shows everything the server returned this poll. Numeric fields default to 0 when unset (proto3 semantics).") }}
     </p>
-    <div class="flex gap-4 mb-4"><button class="btn ghost" onclick="loadGrpc()">Refresh <span class="arrow">→</span></button></div>
-    <pre id="grpcRaw" class="mono-xs" style="background:var(--ujh-bg-2);padding:12px;overflow:auto;max-height:480px">click refresh</pre>
-    <div class="card-label" style="margin-top:16px">Widened fields we now read</div>
+    <div class="flex gap-4 mb-4"><button class="btn ghost" onclick="loadGrpc()">{{ t("Refresh") }} <span class="arrow">→</span></button></div>
+    <pre id="grpcRaw" class="mono-xs" style="background:var(--ujh-bg-2);padding:12px;overflow:auto;max-height:480px">{{ t("click refresh") }}</pre>
+    <div class="card-label" style="margin-top:16px">{{ t("Widened fields we now read") }}</div>
     <pre id="grpcExtras" class="mono-xs" style="background:var(--ujh-bg-2);padding:12px">—</pre>
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">Proto catalog (battery, target_soc, …)</div>
+    <div class="card-label">{{ t("Proto catalog (battery, target_soc, …)") }}</div>
     <p class="muted mono-xs">
-      Source: <code id="protoDir">/usr/local/lib/python3.12/site-packages/pypolestar/proto/</code>.
-      <em class="accent">Bold green</em> rows = fields our app maps to the
-      database. Rest = exposed by Polestar's APK but ignored by us.
+      {{ t("Source:") }} <code id="protoDir">/usr/local/lib/python3.12/site-packages/pypolestar/proto/</code>.
+      <em class="accent">{{ t("Bold green") }}</em> {{ t("rows = fields our app maps to the database. Rest = exposed by Polestar's APK but ignored by us.") }}
     </p>
-    <div id="protoCatalog">loading…</div>
+    <div id="protoCatalog">{{ t("loading…") }}</div>
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">Known GraphQL queries (pypolestar source)</div>
-    <pre id="knownQueries" class="mono-xs" style="background:var(--ujh-bg-2);padding:12px;overflow:auto;max-height:360px">loading…</pre>
+    <div class="card-label">{{ t("Known GraphQL queries (pypolestar source)") }}</div>
+    <pre id="knownQueries" class="mono-xs" style="background:var(--ujh-bg-2);padding:12px;overflow:auto;max-height:360px">{{ t("loading…") }}</pre>
   </div>
 
   <div class="card">
-    <div class="card-label">Reasoning log — what we tried, what we learned</div>
+    <div class="card-label">{{ t("Reasoning log — what we tried, what we learned") }}</div>
     <p class="muted mono-xs">
-      Persisted at <code id="notesPath">/data/lab_notes.md</code>. Append
-      timestamped entries; useful when API behavior shifts and we want a
-      record of past investigations.
+      {{ t("Persisted at") }} <code id="notesPath">/data/lab_notes.md</code>. {{ t("Append timestamped entries; useful when API behavior shifts and we want a record of past investigations.") }}
     </p>
-    <textarea id="noteInput" rows="3" style="width:100%;font-family:JetBrains Mono;font-size:12px" placeholder="Hypothesis, observation, idea…"></textarea>
-    <div class="flex gap-4 mt-4"><button class="btn" onclick="postNote()">Append <span class="arrow">→</span></button></div>
-    <pre id="notesBody" class="mono-xs" style="background:var(--ujh-bg-2);padding:12px;margin-top:16px;overflow:auto;max-height:480px;white-space:pre-wrap">loading…</pre>
+    <textarea id="noteInput" rows="3" style="width:100%;font-family:JetBrains Mono;font-size:12px" placeholder="{{ t("Hypothesis, observation, idea…") }}"></textarea>
+    <div class="flex gap-4 mt-4"><button class="btn" onclick="postNote()">{{ t("Append") }} <span class="arrow">→</span></button></div>
+    <pre id="notesBody" class="mono-xs" style="background:var(--ujh-bg-2);padding:12px;margin-top:16px;overflow:auto;max-height:480px;white-space:pre-wrap">{{ t("loading…") }}</pre>
   </div>
 
   <script>
@@ -183,7 +169,7 @@ tirePressure</textarea>
       const parent=document.getElementById('probeParent').value;
       const raw=document.getElementById('probeFields').value;
       const fields=raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
-      document.getElementById('probeSummary').textContent='probing '+fields.length+' field(s)…';
+      document.getElementById('probeSummary').textContent={{ t("probing {n} field(s)…") | tojson }}.replace('{n}',fields.length);
       const r=await fetch('/api/lab/probe',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({parent,fields})});
       if(!r.ok){ alert(await r.text()); return; }
@@ -283,7 +269,7 @@ tirePressure</textarea>
     async function loadNotes(){
       const r=await fetch('/api/lab/notes'); const j=await r.json();
       document.getElementById('notesPath').textContent=j.path;
-      document.getElementById('notesBody').textContent=j.content||'(empty)';
+      document.getElementById('notesBody').textContent=j.content||{{ t("(empty)") | tojson }};
     }
     async function postNote(){
       const text=document.getElementById('noteInput').value;
@@ -298,8 +284,8 @@ tirePressure</textarea>
     async function loadLatest(){
       const r=await fetch('/api/latest'); const s=await r.json();
       const grid=document.getElementById('latestGrid');
-      if(!s || !s.fetched_at){ grid.textContent='no snapshot yet'; return; }
-      document.getElementById('latestTs').textContent='fetched '+(s.fetched_at||'?');
+      if(!s || !s.fetched_at){ grid.textContent={{ t("no snapshot yet") | tojson }}; return; }
+      document.getElementById('latestTs').textContent={{ t("fetched") | tojson }}+' '+(s.fetched_at||'?');
       const keys=Object.keys(s).filter(k=>k!=='raw');
       keys.sort();
       grid.innerHTML='';
@@ -310,7 +296,7 @@ tirePressure</textarea>
         const accent=filled?'var(--ujh-orange)':'var(--ujh-ink-3)';
         const div=document.createElement('div');
         div.style.cssText='display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted var(--ujh-line);padding:2px 0;cursor:pointer';
-        div.title='click to copy';
+        div.title={{ t("click to copy") | tojson }};
         const shown=v===null||v===undefined?'null':(typeof v==='object'?JSON.stringify(v):String(v));
         div.innerHTML=`<span style="color:${color}">${esc(k)}</span><span style="color:${accent};text-align:right;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(shown)}</span>`;
         div.onclick=()=>navigator.clipboard?.writeText(shown);
