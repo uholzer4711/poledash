@@ -12,13 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from .util import utcnow
-
 from sqlmodel import Session, select
 
 from .app_settings import get_calibrated_battery_kwh
 from .db.models import VehicleSnapshot
 from .db.session import get_engine
+from .util import utcnow
 
 GAP_MINUTES = 360  # 6 h
 

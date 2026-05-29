@@ -19,9 +19,7 @@ from __future__ import annotations
 
 import math
 from collections import Counter
-from datetime import datetime, timedelta
-
-from .util import utcnow
+from datetime import timedelta
 from statistics import mean
 
 from sqlmodel import Session, select
@@ -29,6 +27,7 @@ from sqlmodel import Session, select
 from .db.models import JourneyImport
 from .db.session import get_engine
 from .journey_import import get_address_labels, label_for
+from .util import utcnow
 
 
 def _short(addr: str | None) -> str:

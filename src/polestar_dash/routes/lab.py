@@ -7,10 +7,9 @@ API; nothing writes back to Polestar.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -54,7 +53,7 @@ def append_notes(body: dict = Body(...)):
     if not text:
         raise HTTPException(400, "text required")
     author = (body or {}).get("author", "user")
-    ts = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    ts = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M UTC")
     entry = f"\n### {ts} — {author}\n\n{text}\n"
     p = _notes_path()
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -313,7 +312,7 @@ def known_queries():
         import pypolestar.graphql as g
         src = Path(g.__file__).read_text(encoding="utf-8")
     except Exception as e:
-        raise HTTPException(500, f"cannot read pypolestar.graphql: {e}")
+        raise HTTPException(500, f"cannot read pypolestar.graphql: {e}") from e
     queries = []
     for m in re.finditer(r"(QUERY_[A-Z_]+)\s*=\s*gql\(\s*\"\"\"(.*?)\"\"\"\s*\)", src, re.DOTALL):
         queries.append({"name": m.group(1), "body": m.group(2).strip()})

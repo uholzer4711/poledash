@@ -18,12 +18,11 @@ import csv
 import io
 from datetime import datetime, timedelta
 
-from .util import utcnow
-
 from sqlmodel import Session, select
 
 from .db.models import JourneyImport
 from .db.session import get_engine
+from .util import utcnow
 
 _DATE_FMT = "%Y-%m-%d, %H:%M"
 

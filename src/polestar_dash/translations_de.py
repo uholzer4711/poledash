@@ -2,6 +2,14 @@
 from __future__ import annotations
 
 TRANSLATIONS_DE: dict[str, str] = {
+    # --- Raw page (raw.html) ---
+    "08 / RAW": "08 / ROHDATEN",
+    "API response": "API-Antwort",
+    "No data yet — wait for the first poll to complete.":
+        "Noch keine Daten — warte auf den ersten Abruf.",
+    "Fetched": "Abgerufen",
+    "Format": "Format",
+    "JSON": "JSON",
     # --- Language switcher (settings.html) ---
     "Language": "Sprache",
     "Applies to the whole UI and notification messages.":

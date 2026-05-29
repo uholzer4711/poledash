@@ -3,6 +3,31 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.9.1] — 2026-05-29
+
+### Fixed — ntfy notifications re-fired on every poll
+
+- `_send_ntfy` logged `kind`/`key` that aren't in its scope, so the line raised
+  `NameError` **after** a successful POST. The channel wrapper caught it and
+  bailed before writing the dedup row — so every ntfy alert was actually sent
+  but never marked delivered, re-firing on each poll and logging a spurious
+  "send failed". Now logs the title; the dedup row records correctly. (Found by
+  enabling ruff — `F821 undefined-name`.)
+
+### Fixed — A few strings were still English
+
+- `/raw` was never wrapped for translation (missed in the v1.9.0 sweep) and the
+  vehicle-card battery label had one unwrapped branch. Both are German now.
+
+### Changed — Lint cleanup (ruff)
+
+- Activated the already-configured ruff lint and made the tree pass: removed
+  unused imports, sorted imports, modernised `datetime.timezone.utc` →
+  `datetime.UTC`, added `raise … from …` in two handlers, simplified one
+  branch. Config: line length is left to the formatter (`E501` not linted), and
+  FastAPI's `Query`/`File`/`Body`/… are whitelisted for `B008` (framework
+  idiom). Run with `ruff check src tests`.
+
 ## [1.9.0] — 2026-05-29
 
 ### Added — German UI + notifications, with a language switch

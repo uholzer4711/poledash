@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from sqlalchemy import inspect, text
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import SQLModel, create_engine
 
 _engine = None
 

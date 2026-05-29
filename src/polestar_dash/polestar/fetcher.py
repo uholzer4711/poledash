@@ -3,11 +3,10 @@ from __future__ import annotations
 import dataclasses
 import logging
 from datetime import date, datetime
-
-from ..util import utcnow
 from enum import Enum
 from typing import Any
 
+from ..util import utcnow
 from .client import PolestarClient
 
 log = logging.getLogger(__name__)

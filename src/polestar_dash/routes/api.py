@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import UTC, date, datetime, timedelta
-
-from ..util import utcnow
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -38,8 +36,9 @@ from ..journey_import import (
     upsert,
 )
 from ..routes_stats import list_routes, trips_for_route
-from ..weather import enrich_pending as enrich_weather_pending
 from ..tripbook import detect_trips
+from ..util import utcnow
+from ..weather import enrich_pending as enrich_weather_pending
 
 
 def _session_to_dict(cs: ChargeSession, default_price: float) -> dict:
@@ -595,7 +594,7 @@ async def journey_import(
     try:
         records = parse_csv(content, tz_offset_hours=tz_offset_hours)
     except UnicodeDecodeError:
-        raise HTTPException(400, "file is not UTF-8 text")
+        raise HTTPException(400, "file is not UTF-8 text") from None
     if not records:
         raise HTTPException(400, "no parseable rows — wrong format?")
     inserted, skipped = upsert(records, vin=vin)

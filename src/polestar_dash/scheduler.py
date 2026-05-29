@@ -3,28 +3,27 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from datetime import datetime, timedelta, timezone
-
-from .util import utcnow
+from datetime import UTC, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 from sqlmodel import Session
 
+from .anomalies import run_anomaly_checks
 from .backup import run_backup
-from .digest import weekly_digest
 from .config import get_settings
 from .db.models import FetchError, RawSnapshot, VehicleSnapshot
 from .db.session import get_engine
+from .digest import weekly_digest
 from .i18n import t
 from .mqtt import schedule_publish
 from .notify import notify
 from .polestar.client import PolestarClient
 from .polestar.fetcher import Snapshot, fetch_snapshot
-from .software import check_software_updates, record_installed_version
-from .anomalies import run_anomaly_checks
 from .sessions import CHARGING_STATES, previous_snapshot, update_session
+from .software import check_software_updates, record_installed_version
+from .util import utcnow
 
 # Retention for the raw-JSON safety net. Structured rows in VehicleSnapshot
 # stay forever; the verbatim API payloads we keep just long enough to debug
@@ -238,7 +237,7 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
     # Pin to UTC — every timestamp we write uses utcnow(), and APScheduler
     # interprets naive datetimes in *its* timezone. Without this, deploying
     # the image with TZ=Europe/Vienna would offset every reschedule by 2h.
-    sched = AsyncIOScheduler(timezone=timezone.utc)
+    sched = AsyncIOScheduler(timezone=UTC)
     sched.add_job(
         poll_once,
         DateTrigger(run_date=utcnow()),  # immediately

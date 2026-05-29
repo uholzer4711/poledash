@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-
-from .util import utcnow
 
 import httpx
 from sqlmodel import Session, select
@@ -11,6 +8,7 @@ from sqlmodel import Session, select
 from .config import get_settings
 from .db.models import NotificationLog
 from .db.session import get_engine
+from .util import utcnow
 
 log = logging.getLogger(__name__)
 
@@ -94,4 +92,4 @@ def _send_ntfy(s, title: str, body: str, priority: str, tags: list[str] | None) 
     with httpx.Client(timeout=10) as client:
         r = client.post(url, content=body.encode("utf-8"), headers=headers, auth=auth)
         r.raise_for_status()
-    log.info("Sent notification kind=%s key=%s", kind, key)
+    log.info("Sent ntfy notification: %s", title)

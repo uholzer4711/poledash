@@ -1,19 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Raw · poledash{% endblock %}
+{% block title %}{{ t("Raw") }} · poledash{% endblock %}
 {% block content %}
   <div class="section-head">
-    <div class="num-tag">08 / RAW</div>
-    <h1>Raw <em class="accent">API response</em></h1>
+    <div class="num-tag">{{ t("08 / RAW") }}</div>
+    <h1>{{ t("Raw") }} <em class="accent">{{ t("API response") }}</em></h1>
   </div>
   {% if not row %}
-    <p class="muted">No data yet — wait for the first poll to complete.</p>
+    <p class="muted">{{ t("No data yet — wait for the first poll to complete.") }}</p>
   {% else %}
     <div class="card mb-4">
       <div class="kv-row">
         <div class="kv"><span class="mono-xs">VIN</span><code>{{ row.vin }}</code></div>
-        <div class="kv"><span class="mono-xs">Fetched</span><code>{{ row.fetched_at.isoformat() }}</code></div>
-        <div class="kv"><span class="mono-xs">Format</span><code>application/json</code></div>
-        <div class="kv"><span class="mono-xs">JSON</span><a href="/raw.json{% if row.vin %}?vin={{ row.vin }}{% endif %}">/raw.json</a></div>
+        <div class="kv"><span class="mono-xs">{{ t("Fetched") }}</span><code>{{ row.fetched_at.isoformat() }}</code></div>
+        <div class="kv"><span class="mono-xs">{{ t("Format") }}</span><code>application/json</code></div>
+        <div class="kv"><span class="mono-xs">{{ t("JSON") }}</span><a href="/raw.json{% if row.vin %}?vin={{ row.vin }}{% endif %}">/raw.json</a></div>
       </div>
     </div>
     <div class="card">

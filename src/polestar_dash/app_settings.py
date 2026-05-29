@@ -8,15 +8,13 @@ the user wants to tweak from the web UI without restarting the container
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from .util import utcnow
 from typing import Any
 
 from sqlmodel import Session, select
 
 from .db.models import AppSetting
 from .db.session import get_engine
+from .util import utcnow
 
 DEFAULT_PRICE_KEY = "default_price_ct_per_kwh"
 DEFAULT_PRICE_FALLBACK = 50.0  # ct/kWh — user-requested starter

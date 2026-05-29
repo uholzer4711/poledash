@@ -18,7 +18,9 @@ def _patch_pypolestar_schema() -> None:
     """
     try:
         from gql import gql
-        from pypolestar import api as _pp_api, graphql as _pp_gql, models as _pp_models
+        from pypolestar import api as _pp_api
+        from pypolestar import graphql as _pp_gql
+        from pypolestar import models as _pp_models
     except Exception:
         log.exception("pypolestar import failed; cannot apply schema patch")
         return

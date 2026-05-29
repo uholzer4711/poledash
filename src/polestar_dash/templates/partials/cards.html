@@ -250,7 +250,7 @@
               {% if s.battery_modules %}<span class="muted">· {{ t("{n} modules", n=s.battery_modules) }}</span>{% endif %}
               {% if s.battery_cells %}<span class="muted">/ {{ t("{n} cells", n=s.battery_cells) }}</span>{% endif %}
             </span></div>
-          {% elif s.battery_spec %}<div class="kv"><span class="mono-xs">Battery</span><span>{{ s.battery_spec }}</span></div>{% endif %}
+          {% elif s.battery_spec %}<div class="kv"><span class="mono-xs">{{ t("Battery") }}</span><span>{{ s.battery_spec }}</span></div>{% endif %}
           {% if s.torque %}<div class="kv"><span class="mono-xs">{{ t("Torque") }}</span><span>{{ s.torque }}</span></div>{% endif %}
           {% if s.registration_date %}<div class="kv"><span class="mono-xs">{{ t("Registered") }}</span><span class="num">{{ s.registration_date }}</span></div>{% endif %}
           {% if s.factory_complete_date %}<div class="kv"><span class="mono-xs">{{ t("Built") }}</span><span class="num">{{ s.factory_complete_date }}</span></div>{% endif %}

@@ -9,13 +9,12 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from .util import utcnow
-
 from sqlmodel import Session, select
 
 from .app_settings import blended_price_ct
 from .db.models import ChargeSession, JourneyImport, VehicleSnapshot
 from .db.session import get_engine
+from .util import utcnow
 
 
 def compute_forecast(days: int = 30) -> dict:

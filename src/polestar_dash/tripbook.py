@@ -10,14 +10,13 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from .util import utcnow
-
 from sqlmodel import Session, select
 
 from .app_settings import get_calibrated_battery_kwh
 from .db.models import VehicleSnapshot
 from .db.session import get_engine
 from .sessions import DEFAULT_BATTERY_KWH
+from .util import utcnow
 
 _battery_kwh_cache: tuple[float, float] | None = None  # (value, timestamp)
 _BATTERY_KWH_TTL = 300  # 5 minutes
@@ -284,10 +283,7 @@ def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) 
                 # the previous (parked) poll. When motion was detected purely
                 # from an advancing event timestamp (odometer value still
                 # flat), that event timestamp *is* the start.
-                if value_moved:
-                    trip_start = forced_start or prev.fetched_at
-                else:
-                    trip_start = motion_ts
+                trip_start = (forced_start or prev.fetched_at) if value_moved else motion_ts
                 cur = Trip(
                     started_at=trip_start,
                     ended_at=motion_ts,
