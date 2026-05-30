@@ -382,8 +382,21 @@ def app_settings_set_language(value: str = Query(...)) -> dict:
     return {"language": get_language()}
 
 
-def _recalc_session_energy(loss_factor: float) -> None:
+def _recalc_session_energy(loss_factor: float | None = None) -> None:
+    """Recompute stored energy for every complete session from its SoC delta.
+
+    Mirrors the close-time formula in ``sessions.py`` (ΔSoC × usable capacity ×
+    loss factor) so History stays consistent after the calibrated battery
+    capacity or the loss factor changes. Previously this hardcoded
+    ``DEFAULT_BATTERY_KWH``, so sessions recalculated here drifted from sessions
+    closed with the calibrated capacity. Uses the calibrated capacity (the same
+    value the close path falls back to when a snapshot carries no capacity).
+    """
+    from ..app_settings import get_calibrated_battery_kwh
     from ..sessions import DEFAULT_BATTERY_KWH
+    if loss_factor is None:
+        loss_factor = get_charging_loss_factor()
+    capacity = get_calibrated_battery_kwh(fallback=DEFAULT_BATTERY_KWH)
     with Session(get_engine()) as s:
         rows = list(s.exec(
             select(ChargeSession).where(ChargeSession.is_complete.is_(True))
@@ -391,7 +404,7 @@ def _recalc_session_energy(loss_factor: float) -> None:
         for cs in rows:
             if cs.soc_start is not None and cs.soc_end is not None:
                 delta = max(0, cs.soc_end - cs.soc_start)
-                net_kwh = delta / 100 * DEFAULT_BATTERY_KWH
+                net_kwh = delta / 100 * capacity
                 cs.energy_kwh = round(net_kwh * loss_factor, 1)
                 s.add(cs)
         s.commit()
@@ -623,6 +636,8 @@ async def journey_import(
     if calibrated is not None:
         from ..app_settings import CALIBRATED_BATTERY_KEY, set_setting
         set_setting(CALIBRATED_BATTERY_KEY, calibrated)
+        # Keep existing sessions consistent with the new capacity.
+        _recalc_session_energy()
     co2_tagged = tag_co2_for_imports()
     weather = await enrich_weather_pending(limit=200)
     return {

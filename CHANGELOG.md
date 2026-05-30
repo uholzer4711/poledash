@@ -3,6 +3,27 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.4] — 2026-05-30
+
+### Fixed — Dropdown options unreadable in the dark theme
+
+- The session Location `<select>` was `background: transparent`, so the native
+  option popup fell back to white and the light `--ujh-ink` text vanished
+  against it. The control and its `option`s now get an explicit themed surface
+  (`--ujh-bg-2`), readable in both themes.
+
+### Fixed — Session energy/cost inconsistent after battery calibration
+
+- `_recalc_session_energy` hardcoded `DEFAULT_BATTERY_KWH` (78 kWh) while the
+  close-time formula uses the **calibrated** usable capacity. After a CSV import
+  re-calibrated the pack (to 82.9 kWh here), only newly-closed sessions used the
+  new figure — older ones stayed at 78, so their kWh and cost were ~6 % low and
+  History mixed two capacities. Recalc now uses the calibrated capacity, and a
+  CSV-import re-calibration re-runs it across all complete sessions. The formula
+  itself is correct and does **not** double-count losses: calibration derives
+  *net* usable capacity from driving consumption, and the loss factor (×1.12) is
+  applied only on top for grid draw.
+
 ## [1.10.3] — 2026-05-30
 
 ### Changed — Picking a place fills the price field

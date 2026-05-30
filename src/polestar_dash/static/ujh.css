@@ -394,6 +394,11 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .field > input:focus, .field > select:focus {
   outline: none; border-bottom-color: var(--ujh-orange);
 }
+/* The native option popup ignores `transparent` and falls back to white, which
+   hides light-on-light text in the dark theme. Give the control + its options an
+   explicit themed surface so unselected entries stay readable in both themes. */
+.field > select { background-color: var(--ujh-bg-2); color: var(--ujh-ink); }
+.field > select option { background-color: var(--ujh-bg-2); color: var(--ujh-ink); }
 
 /* ---------- Table / index row ---------- */
 table.index { font-size: 14px; }
