@@ -3,6 +3,23 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.2] — 2026-05-30
+
+### Fixed — `_stations is not a function` broke the sessions list
+
+- Root cause of the *"Could not load charging sessions"* error: the dropdown
+  helper was a top-level `function _stations()` while the data was stored in
+  `window._stations`. At browser **script scope** a function declaration and a
+  same-named `window` property are the *same* global slot, so assigning the
+  station array (`window._stations = […]`) overwrote the function — the next
+  `_stations()` call threw `_stations is not a function`. (It never reproduced
+  in Node because function declarations there don't attach to the global
+  object; confirmed both directions with `vm.runInContext`.)
+- The station list now lives in a dedicated block-scoped `let _knownStations`,
+  so the function and the data can't collide. Also keeps the v1.10.1 hardening:
+  stations load in their own try/catch and the panel shows a real error + retry
+  instead of sticking on *Loading…*.
+
 ## [1.10.1] — 2026-05-30
 
 ### Fixed — Sessions panel could stick on "Loading…"
