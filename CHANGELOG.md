@@ -3,6 +3,37 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.0] — 2026-05-30
+
+### Added — Location dropdown on charging sessions, GPS-optional places
+
+- The charging-session **Location** field (renamed from *Note* / *Notiz* →
+  *Ort*) is now a **dropdown of known places**. Picking one applies its saved
+  price; an explicit **"+ New place…"** entry keeps free-text input and
+  remembers what you type.
+- Known places no longer require GPS. `ChargingStation.lat/lng` are now
+  nullable, so a place can be a **name + price only** entry — add or edit them
+  directly on `/settings` → *Charging stations* (new *Add place* form), or by
+  saving a new place from a session. A forward-only, guarded, atomic migration
+  relaxes the old `NOT NULL` constraint on existing databases.
+- GPS auto-tag still works when imported-trip coordinates are available;
+  `upsert_station` now also matches by name, so a name-only place gets
+  **upgraded** with coordinates instead of duplicated.
+- Fixes the reported case: typing a known place (`Heim`) didn't pull its known
+  price. Background: the consumer API exposes **no live GPS**, so a session's
+  location can only be inferred from an imported journey-log CSV within ~4 h of
+  the charge — the dropdown removes that dependency for the common case.
+
+### Fixed — Stale tests (no production impact)
+
+- `test_tripbook.py` pinned trip data to a hardcoded 2026-05-28 date while
+  `detect_trips(days=1)` filters relative to *now*; once the wall clock passed
+  that date the fixtures fell outside the window and detected zero trips. Bases
+  are now `utcnow()`-relative so they never drift again.
+- `test_fetcher.py`'s fake API object predated the gRPC telematics rewrite and
+  several `CarInformationData` fields (`internal_vehicle_identifier`, battery
+  object, …); updated to match the current `fetch_snapshot` contract.
+
 ## [1.9.1] — 2026-05-29
 
 ### Fixed — ntfy notifications re-fired on every poll

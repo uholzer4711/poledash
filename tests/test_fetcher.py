@@ -16,9 +16,13 @@ def _fake_info():
         model_year="2024",
         registration_no="W-12345",
         software_version="P3.2",
-        battery="78 kWh",
+        battery=SimpleNamespace(voltage=400.0, capacity=78.0, modules=27, cells=324),
         torque="660 Nm",
         image_url="https://example.com/car.png",
+        internal_vehicle_identifier="INT-VIN-1",
+        registration_date=None,
+        factory_complete_date=None,
+        software_version_timestamp=None,
     )
 
 
@@ -60,6 +64,11 @@ async def test_fetch_snapshot_maps_fields():
     fake_api.update_latest_data = AsyncMock()
     fake_api.get_car_information = MagicMock(return_value=_fake_info())
     fake_api.get_car_telematics = MagicMock(return_value=_fake_telematics())
+    # gRPC sources are optional and guarded; treat them as unavailable so this
+    # test pins the car-information / telematics mapping path.
+    fake_api.get_grpc_battery = MagicMock(return_value=None)
+    fake_api.get_grpc_target_soc = MagicMock(return_value=None)
+    fake_api.get_car_images = MagicMock(return_value=None)
     client._api = fake_api
     client._vins = ["VIN1"]
 
@@ -76,4 +85,6 @@ async def test_fetch_snapshot_maps_fields():
     assert snap.trip_auto_km == 123.4
     assert snap.service_warning == "NoWarning"
     assert "information" in snap.raw and "telematics" in snap.raw
-    fake_api.update_latest_data.assert_awaited_once_with(vin="VIN1", update_telematics=True)
+    fake_api.update_latest_data.assert_awaited_once_with(
+        vin="VIN1", update_vehicle=True, update_telematics=True, update_grpc=True
+    )

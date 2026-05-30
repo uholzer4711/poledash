@@ -93,6 +93,15 @@ Electricity prices: set a default `ct/kWh` on `/settings` (defaults to 50);
 per-session overrides on the Sessions page get energy-weighted into the
 tripbook cost columns.
 
+Charging locations: each session has a **Location** field — a dropdown of
+known places where picking one applies its saved price, plus a *+ New place…*
+option for free-text entry that is remembered. Known places live in a small
+registry (manage on `/settings` → *Charging stations*, or add one by name +
+price there). GPS is optional: when imported-trip coordinates happen to match a
+place within ~500 m the session auto-tags itself, but a place can be name-only.
+The consumer API exposes no live GPS, so without that auto-tag you pick the
+place from the dropdown.
+
 Trip energy: trips are detected from the odometer plus the car's own
 `odometer_event_ts`, so a drive whose odometer reports in one batch still
 gets its real duration. The per-trip **kWh/100km** is estimated from the

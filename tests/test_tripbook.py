@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlmodel import Session
 
 from polestar_dash.db.models import VehicleSnapshot
 from polestar_dash.db.session import get_engine
 from polestar_dash.tripbook import detect_trips
+from polestar_dash.util import utcnow
 
 
 def _insert(rows: list[dict]) -> None:
@@ -23,7 +24,7 @@ def test_event_ts_advance_recovers_full_drive_duration(tmp_db):
 
     Mirrors a real Polestar trace: the odometer reading lags behind motion and
     updates in a single batch, while `odometer_event_ts` advances each poll."""
-    base = datetime(2026, 5, 28, 4, 0, 0)
+    base = utcnow().replace(microsecond=0) - timedelta(hours=2)
     rows = [
         # parked
         {"fetched_at": base, "odometer_km": 1074.9,
@@ -58,7 +59,7 @@ def test_event_ts_advance_recovers_full_drive_duration(tmp_db):
 def test_value_move_trip_anchors_start_to_parked_poll(tmp_db):
     """When the odometer value jumps across one poll gap with no prior
     event-ts pre-signal, the start anchors to the last parked poll."""
-    base = datetime(2026, 5, 28, 10, 0, 0)
+    base = utcnow().replace(microsecond=0) - timedelta(hours=2)
     rows = [
         {"fetched_at": base, "odometer_km": 100.0,
          "odometer_event_ts": base - timedelta(hours=2), "soc_percent": 80, "charging_status": "Idle"},
@@ -81,7 +82,7 @@ def test_value_move_trip_anchors_start_to_parked_poll(tmp_db):
 def test_short_trip_energy_uses_car_consumption_not_soc(tmp_db):
     """On a short trip the 1%-quantized SoC drop wildly overstates energy.
     When the car reports its own consumption figure, use that instead."""
-    base = datetime(2026, 5, 28, 4, 0, 0)
+    base = utcnow().replace(microsecond=0) - timedelta(hours=2)
     rows = [
         {"fetched_at": base, "odometer_km": 100.0,
          "odometer_event_ts": base - timedelta(hours=2), "soc_percent": 58,
@@ -107,7 +108,7 @@ def test_short_trip_energy_uses_car_consumption_not_soc(tmp_db):
 
 def test_kwh_falls_back_to_soc_when_no_consumption(tmp_db):
     """With no car-reported consumption, fall back to the SoC-delta estimate."""
-    base = datetime(2026, 5, 28, 8, 0, 0)
+    base = utcnow().replace(microsecond=0) - timedelta(hours=2)
     rows = [
         {"fetched_at": base, "odometer_km": 200.0,
          "odometer_event_ts": base - timedelta(hours=2), "soc_percent": 80, "charging_status": "Idle"},
