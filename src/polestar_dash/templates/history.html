@@ -113,10 +113,11 @@
         newInput.focus();
       } else {
         newInput.style.display = 'none';
-        // Apply the known place's price (don't clobber a non-empty override).
+        // Show the selected place's known price up front (data-price="" when the
+        // place has no saved price → leave the field as-is). "0" is a real price.
         const opt = selEl.selectedOptions[0];
         const p = opt ? opt.getAttribute('data-price') : '';
-        if (p && priceInput.value === '') priceInput.value = p;
+        if (p !== null && p !== '') priceInput.value = p;
       }
     }
 

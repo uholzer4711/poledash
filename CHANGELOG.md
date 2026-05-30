@@ -3,6 +3,15 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.3] — 2026-05-30
+
+### Changed — Picking a place fills the price field
+
+- Selecting a known place from a session's Location dropdown now puts that
+  place's saved price straight into the **Price (ct/kWh)** field, instead of
+  only filling it when the field was empty. A place with no saved price leaves
+  the field untouched; `0 ct` is treated as a real price.
+
 ## [1.10.2] — 2026-05-30
 
 ### Fixed — `_stations is not a function` broke the sessions list
