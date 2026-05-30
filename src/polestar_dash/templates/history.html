@@ -71,6 +71,50 @@
     function _escAttr(s) { return (s ?? '').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
     let DEFAULT_PRICE = 50;
 
+    // Known places (charging stations) for the Location dropdown.
+    function _stations() { return window._stations || []; }
+    function _stationByName(name) {
+      if (!name) return null;
+      const n = name.toLowerCase();
+      return _stations().find(st => (st.name || '').toLowerCase() === n) || null;
+    }
+    // Which dropdown entry is preselected for a session: its saved place, a
+    // GPS suggestion, the "new place" slot, or none.
+    function _locPreselect(s) {
+      if (s.note) return _stationByName(s.note) ? _stationByName(s.note).name : '__new__';
+      if (s.station_suggestion) return s.station_suggestion.name;
+      return '';
+    }
+    function _locOptions(s) {
+      const sel = _locPreselect(s);
+      const selLc = (sel || '').toLowerCase();
+      let html = `<option value="" ${sel === '' ? 'selected' : ''}>${ {{ t("— no location —") | tojson }} }</option>`;
+      html += _stations().map(st => {
+        const price = st.price_ct_per_kwh != null ? ` · ${st.price_ct_per_kwh} ct` : '';
+        const isSel = selLc === (st.name || '').toLowerCase() ? 'selected' : '';
+        return `<option value="${_escAttr(st.name)}" data-price="${st.price_ct_per_kwh ?? ''}" ${isSel}>${_escAttr(st.name)}${price}</option>`;
+      }).join('');
+      html += `<option value="__new__" ${sel === '__new__' ? 'selected' : ''}>${ {{ t("+ New place…") | tojson }} }</option>`;
+      return html;
+    }
+    // Show the free-text input only when "new place" is the active choice.
+    function _showNew(s) { return !!s.note && !_stationByName(s.note); }
+    function onLocChange(selEl) {
+      const card = selEl.closest('.card');
+      const newInput = card.querySelector('[data-field=note_new]');
+      const priceInput = card.querySelector('[data-field=price]');
+      if (selEl.value === '__new__') {
+        newInput.style.display = '';
+        newInput.focus();
+      } else {
+        newInput.style.display = 'none';
+        // Apply the known place's price (don't clobber a non-empty override).
+        const opt = selEl.selectedOptions[0];
+        const p = opt ? opt.getAttribute('data-price') : '';
+        if (p && priceInput.value === '') priceInput.value = p;
+      }
+    }
+
     function renderSessions(items) {
       const el = document.getElementById('sessList');
       if (!items.length) { el.innerHTML = '<p class="muted">' + {{ t("No charging sessions recorded yet.") | tojson }} + '</p>'; return; }
@@ -105,11 +149,11 @@
               <label>${ {{ t("Price (ct/kWh)") | tojson }} }</label>
               <input type="number" min="0" max="500" step="0.1" placeholder="${ {{ t("def {price}") | tojson }}.replace('{price}', DEFAULT_PRICE.toFixed(1)) }" value="${s.price_ct_per_kwh ?? ''}" data-field="price">
             </div>
-            <div class="field" style="flex:1;min-width:180px">
+            <div class="field" style="flex:1;min-width:200px">
               <label>${ {{ t("Location") | tojson }} }</label>
-              <input type="text" placeholder="${ {{ t("e.g. Wallbox home, IONITY A4") | tojson }} }" value="${_escAttr(s.note)}" data-field="note">
+              <select data-field="note_select" onchange="onLocChange(this)">${_locOptions(s)}</select>
+              <input type="text" data-field="note_new" placeholder="${ {{ t("e.g. Wallbox home, IONITY A4") | tojson }} }" value="${_showNew(s) ? _escAttr(s.note) : ''}" style="margin-top:6px;${_showNew(s) ? '' : 'display:none'}">
             </div>
-            ${s.station_suggestion && !s.note ? `<button class="btn ghost" onclick="applyStation(${s.id}, this)" title="${ {{ t("Auto-fill from known station: {name}") | tojson }}.replace('{name}', _escAttr(s.station_suggestion.name)) }${s.station_suggestion.price_ct_per_kwh != null ? ' @ '+s.station_suggestion.price_ct_per_kwh+' ct' : ''}">${ {{ t("Apply:") | tojson }} } ${_escAttr(s.station_suggestion.name)} <span class="arrow">→</span></button>` : ''}
             <button class="btn ghost" onclick="saveSession(${s.id}, this)">${ {{ t("Save") | tojson }} } <span class="arrow">→</span></button>
             <button class="btn ghost" onclick="clearOverride(${s.id}, this)" title="${ {{ t("Use default price") | tojson }} }">${ {{ t("Reset") | tojson }} } <span class="arrow">→</span></button>
             <a class="mono-xs" href="/sessions/${s.id}" style="margin-left:auto">${ {{ t("View curve →") | tojson }} }</a>
@@ -119,8 +163,12 @@
     }
 
     async function loadSessions() {
-      const r = await fetch('/api/sessions?days=180');
+      const [r, sr] = await Promise.all([
+        fetch('/api/sessions?days=180'),
+        fetch('/api/charging-stations'),
+      ]);
       const j = await r.json();
+      window._stations = sr.ok ? await sr.json() : [];
       DEFAULT_PRICE = j.default_price_ct_per_kwh;
       document.getElementById('t_count').textContent = j.totals.count;
       document.getElementById('t_kwh').innerHTML = `${j.totals.kwh.toFixed(1)}<span class="unit">kWh</span>`;
@@ -130,33 +178,31 @@
       renderSessions(j.items);
     }
 
+    // Resolve the Location combo to {note, isNew}: a known place, a freshly
+    // typed place (→ remember it), or empty (→ clear).
+    function _resolveNote(card) {
+      const sel = card.querySelector('[data-field=note_select]');
+      if (!sel || sel.value === '') return { note: '', isNew: false };
+      if (sel.value === '__new__') {
+        return { note: card.querySelector('[data-field=note_new]').value.trim(), isNew: true };
+      }
+      return { note: sel.value, isNew: false };
+    }
     function _rowInputs(btn) {
       const card = btn.closest('.card');
       return { id: card.dataset.id,
         price: card.querySelector('[data-field=price]').value,
-        note: card.querySelector('[data-field=note]').value };
+        ..._resolveNote(card) };
     }
     async function saveSession(id, btn) {
       const inp = _rowInputs(btn);
       const params = new URLSearchParams();
       if (inp.price !== '') params.set('price_ct_per_kwh', inp.price);
       params.set('note', inp.note);
+      if (inp.isNew && inp.note) params.set('save_place', '1');
       const r = await fetch(`/api/sessions/${id}?${params}`, {method:'PATCH'});
       if (!r.ok) return alert({{ t("save failed") | tojson }});
       await loadSessions();
-    }
-    async function applyStation(id, btn) {
-      const card = btn.closest('.card');
-      const noteInput = card.querySelector('[data-field=note]');
-      const priceInput = card.querySelector('[data-field=price]');
-      const items = window._sessItems || [];
-      const sess = items.find(s => s.id === id);
-      if (!sess || !sess.station_suggestion) return;
-      noteInput.value = sess.station_suggestion.name;
-      if (sess.station_suggestion.price_ct_per_kwh != null) {
-        priceInput.value = sess.station_suggestion.price_ct_per_kwh;
-      }
-      await saveSession(id, btn);
     }
     async function clearOverride(id, btn) {
       const inp = _rowInputs(btn);

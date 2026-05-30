@@ -76,8 +76,20 @@
     <div class="card-label">{{ t("Charging stations") }}</div>
     <div class="stat-sub mb-4">
       {{ t("Saved automatically when you set a note on a charging session (if GPS data is available from imported trips). Future sessions at the same location (~500 m) will suggest the station name and price. Edit or delete here.") }}
+      {{ t("You can also add a place by name only below — it becomes selectable from the Location dropdown on each charging session.") }}
     </div>
     <div id="cs_list"><p class="muted">{{ t("Loading…") }}</p></div>
+    <div class="flex gap-4 mt-4" style="align-items:flex-end;flex-wrap:wrap;border-top:1px solid var(--ujh-line);padding-top:16px">
+      <div class="field" style="flex:1;min-width:160px">
+        <label>{{ t("Add place") }}</label>
+        <input type="text" id="cs_new_name" placeholder="{{ t('e.g. Wallbox home, IONITY A4') }}">
+      </div>
+      <div class="field" style="min-width:120px">
+        <label>{{ t("Price (ct/kWh)") }}</label>
+        <input type="number" min="0" max="500" step="0.1" id="cs_new_price">
+      </div>
+      <button class="btn accent" onclick="addStation(this)">{{ t("Add") }} <span class="arrow">&rarr;</span></button>
+    </div>
   </div>
   <script>
     function _csEsc(s) { return (s ?? '').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
@@ -96,7 +108,7 @@
             <label>{{ t("Price (ct/kWh)") }}</label>
             <input type="number" min="0" max="500" step="0.1" value="${st.price_ct_per_kwh ?? ''}" data-field="cs_price">
           </div>
-          <div class="mono-xs muted" style="white-space:nowrap">${st.lat.toFixed(4)}, ${st.lng.toFixed(4)}</div>
+          <div class="mono-xs muted" style="white-space:nowrap">${(st.lat != null && st.lng != null) ? st.lat.toFixed(4) + ', ' + st.lng.toFixed(4) : {{ t("no GPS") | tojson }}}</div>
           <button class="btn ghost" onclick="saveStation(${st.id}, this)">{{ t("Save") }} <span class="arrow">&rarr;</span></button>
           <button class="btn ghost" onclick="deleteStation(${st.id}, this)">{{ t("Delete") }} <span class="arrow">&rarr;</span></button>
         </div>
@@ -117,6 +129,19 @@
       if (!confirm({{ t("Delete this station?") | tojson }})) return;
       const r = await fetch('/api/charging-stations/' + id, {method:'DELETE'});
       if (!r.ok) return alert({{ t("delete failed") | tojson }});
+      await loadStations();
+    }
+    async function addStation(btn) {
+      const name = document.getElementById('cs_new_name').value.trim();
+      const price = document.getElementById('cs_new_price').value;
+      if (!name) return alert({{ t("Enter a place name first.") | tojson }});
+      const params = new URLSearchParams();
+      params.set('name', name);
+      if (price !== '') params.set('price_ct_per_kwh', price);
+      const r = await fetch('/api/charging-stations?' + params, {method:'POST'});
+      if (!r.ok) return alert({{ t("save failed") | tojson }});
+      document.getElementById('cs_new_name').value = '';
+      document.getElementById('cs_new_price').value = '';
       await loadStations();
     }
     window.addEventListener('load', loadStations);

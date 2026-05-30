@@ -184,8 +184,12 @@ class ChargingStation(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str
-    lat: float
-    lng: float
+    # GPS is optional: a station may be name-only (manually added as a known
+    # place / price-book entry). Coordinates, when present, drive the 500 m
+    # GPS auto-tag of charge sessions; name-only entries are still selectable
+    # from the session Location dropdown.
+    lat: float | None = None
+    lng: float | None = None
     price_ct_per_kwh: float | None = None
     updated_at: datetime = Field(default_factory=utcnow)
 

@@ -86,6 +86,8 @@ def find_station(lat: float, lng: float) -> ChargingStation | None:
         stations = s.exec(select(ChargingStation)).all()
     best, best_dist = None, MATCH_RADIUS_M
     for st in stations:
+        if st.lat is None or st.lng is None:
+            continue  # name-only station — no GPS to match against
         d = _haversine_m(lat, lng, st.lat, st.lng)
         if d <= best_dist:
             best_dist = d
@@ -96,18 +98,33 @@ def find_station(lat: float, lng: float) -> ChargingStation | None:
 def upsert_station(
     name: str, lat: float, lng: float, price_ct_per_kwh: float | None
 ) -> ChargingStation:
-    """Create or update a station at the given location (500 m match)."""
+    """Create or update a station at the given location (500 m match).
+
+    Matches by GPS proximity first; failing that, by exact name so a name-only
+    entry (added manually, no GPS) gets upgraded with coordinates instead of
+    spawning a duplicate.
+    """
     with Session(get_engine()) as s:
         stations = s.exec(select(ChargingStation)).all()
         best, best_dist = None, MATCH_RADIUS_M
         for st in stations:
+            if st.lat is None or st.lng is None:
+                continue
             d = _haversine_m(lat, lng, st.lat, st.lng)
             if d <= best_dist:
                 best_dist = d
                 best = st
 
+        if best is None:
+            best = next(
+                (st for st in stations if st.name.casefold() == name.casefold()),
+                None,
+            )
+
         if best is not None:
             best.name = name
+            best.lat = lat
+            best.lng = lng
             if price_ct_per_kwh is not None:
                 best.price_ct_per_kwh = price_ct_per_kwh
             best.updated_at = utcnow()
@@ -119,6 +136,37 @@ def upsert_station(
         station = ChargingStation(
             name=name, lat=lat, lng=lng, price_ct_per_kwh=price_ct_per_kwh
         )
+        s.add(station)
+        s.commit()
+        s.refresh(station)
+        return station
+
+
+def upsert_named_station(
+    name: str, price_ct_per_kwh: float | None
+) -> ChargingStation:
+    """Create or update a known place by name only (no GPS required).
+
+    Used when the user adds a place manually (session form / settings) without
+    any imported trip to anchor coordinates. If a station with the same name
+    already exists (GPS or not), its price is updated rather than duplicated.
+    """
+    name = name.strip()
+    with Session(get_engine()) as s:
+        existing = s.exec(select(ChargingStation)).all()
+        match = next(
+            (st for st in existing if st.name.casefold() == name.casefold()), None
+        )
+        if match is not None:
+            match.name = name
+            if price_ct_per_kwh is not None:
+                match.price_ct_per_kwh = price_ct_per_kwh
+            match.updated_at = utcnow()
+            s.add(match)
+            s.commit()
+            s.refresh(match)
+            return match
+        station = ChargingStation(name=name, price_ct_per_kwh=price_ct_per_kwh)
         s.add(station)
         s.commit()
         s.refresh(station)
@@ -202,6 +250,8 @@ def batch_suggest(sessions: list[ChargeSession]) -> dict[int, dict]:
             continue
         best_st, best_dist = None, MATCH_RADIUS_M
         for st in stations:
+            if st.lat is None or st.lng is None:
+                continue
             d = _haversine_m(coords[0], coords[1], st.lat, st.lng)
             if d <= best_dist:
                 best_dist = d

@@ -255,14 +255,17 @@ def patch_session(
     session_id: int,
     price_ct_per_kwh: float | None = None,
     note: str | None = None,
+    save_place: bool = False,
 ) -> dict:
     """Update price / note for one charging session. price=null clears the override.
 
-    When a note is saved, the session's GPS location is looked up and a
-    ChargingStation is created/updated so future sessions at the same spot
-    (~500 m) auto-fill name + price.
+    When a note is saved and the session's GPS location can be inferred from
+    imported trips, a ChargingStation is created/updated so future sessions at
+    the same spot (~500 m) auto-fill name + price. When ``save_place`` is set
+    (user explicitly added a new place) but no GPS is available, the place is
+    still remembered name-only so it appears in the Location dropdown.
     """
-    from ..stations import locate_session, upsert_station
+    from ..stations import locate_session, upsert_named_station, upsert_station
 
     if price_ct_per_kwh is not None and not (0 <= price_ct_per_kwh <= 500):
         raise HTTPException(400, "price_ct_per_kwh out of range")
@@ -282,6 +285,8 @@ def patch_session(
         coords = locate_session(row)
         if coords:
             upsert_station(effective_note, coords[0], coords[1], price_ct_per_kwh)
+        elif save_place:
+            upsert_named_station(effective_note, price_ct_per_kwh)
 
     return _session_to_dict(row, get_default_price_ct())
 
@@ -290,6 +295,22 @@ def patch_session(
 def charging_stations_list() -> list[dict]:
     from ..stations import list_stations
     return [st.model_dump(mode="json") for st in list_stations()]
+
+
+@router.post("/charging-stations")
+def charging_station_create(
+    name: str = Query(..., min_length=1),
+    price_ct_per_kwh: float | None = None,
+) -> dict:
+    """Add a known place by name (no GPS). Updates price if the name exists."""
+    from ..stations import upsert_named_station
+
+    if price_ct_per_kwh is not None and not (0 <= price_ct_per_kwh <= 500):
+        raise HTTPException(400, "price_ct_per_kwh out of range")
+    if not name.strip():
+        raise HTTPException(400, "name required")
+    st = upsert_named_station(name, price_ct_per_kwh)
+    return st.model_dump(mode="json")
 
 
 @router.patch("/charging-stations/{station_id}")

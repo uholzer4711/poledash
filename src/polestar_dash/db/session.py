@@ -84,6 +84,41 @@ def _ensure_columns(engine) -> None:
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
 
 
+def _relax_chargingstation_gps(engine) -> None:
+    """Drop the NOT NULL constraint on chargingstation.lat/lng (forward-only).
+
+    Stations used to require GPS; they may now be name-only (price-book
+    entries added manually). SQLite cannot ALTER a column's nullability, so
+    rebuild the tiny table once, guarded by the current schema and wrapped in
+    a single transaction (SQLite DDL is transactional → all-or-nothing).
+    """
+    insp = inspect(engine)
+    if "chargingstation" not in insp.get_table_names():
+        return
+    cols = {c["name"]: c for c in insp.get_columns("chargingstation")}
+    if "lat" not in cols or cols["lat"]["nullable"]:
+        return  # already nullable (new DB) or table missing → nothing to do
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE chargingstation_new ("
+                "id INTEGER NOT NULL PRIMARY KEY, name VARCHAR NOT NULL, "
+                "lat FLOAT, lng FLOAT, price_ct_per_kwh FLOAT, "
+                "updated_at DATETIME NOT NULL)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO chargingstation_new "
+                "(id, name, lat, lng, price_ct_per_kwh, updated_at) "
+                "SELECT id, name, lat, lng, price_ct_per_kwh, updated_at "
+                "FROM chargingstation"
+            )
+        )
+        conn.execute(text("DROP TABLE chargingstation"))
+        conn.execute(text("ALTER TABLE chargingstation_new RENAME TO chargingstation"))
+
+
 def init_engine(db_path: Path):
     global _engine
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -94,6 +129,7 @@ def init_engine(db_path: Path):
 
     SQLModel.metadata.create_all(_engine)
     _ensure_columns(_engine)
+    _relax_chargingstation_gps(_engine)
     return _engine
 
 
