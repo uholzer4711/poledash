@@ -3,6 +3,14 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.5] — 2026-05-30
+
+### Docs — README
+
+- Document the session **energy & cost model** (ΔSoC × calibrated usable
+  capacity × loss factor, no double-counting) and that picking a place from the
+  Location dropdown fills the price field. No code change.
+
 ## [1.10.4] — 2026-05-30
 
 ### Fixed — Dropdown options unreadable in the dark theme
