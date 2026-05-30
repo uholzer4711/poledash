@@ -106,7 +106,7 @@
               <input type="number" min="0" max="500" step="0.1" placeholder="${ {{ t("def {price}") | tojson }}.replace('{price}', DEFAULT_PRICE.toFixed(1)) }" value="${s.price_ct_per_kwh ?? ''}" data-field="price">
             </div>
             <div class="field" style="flex:1;min-width:180px">
-              <label>${ {{ t("Note") | tojson }} }</label>
+              <label>${ {{ t("Location") | tojson }} }</label>
               <input type="text" placeholder="${ {{ t("e.g. Wallbox home, IONITY A4") | tojson }} }" value="${_escAttr(s.note)}" data-field="note">
             </div>
             ${s.station_suggestion && !s.note ? `<button class="btn ghost" onclick="applyStation(${s.id}, this)" title="${ {{ t("Auto-fill from known station: {name}") | tojson }}.replace('{name}', _escAttr(s.station_suggestion.name)) }${s.station_suggestion.price_ct_per_kwh != null ? ' @ '+s.station_suggestion.price_ct_per_kwh+' ct' : ''}">${ {{ t("Apply:") | tojson }} } ${_escAttr(s.station_suggestion.name)} <span class="arrow">→</span></button>` : ''}

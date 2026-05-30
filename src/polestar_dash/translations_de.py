@@ -227,6 +227,7 @@ TRANSLATIONS_DE: dict[str, str] = {
     "No weekday efficiency data yet.": "Noch keine Effizienzdaten nach Wochentag.",
     "Not plugged in": "Nicht angesteckt",
     "Note": "Notiz",
+    "Location": "Ort",
     "Odo": "Km-Stand",
     "Odometer": "Kilometerstand",
     "Odometer km": "Kilometerstand km",
