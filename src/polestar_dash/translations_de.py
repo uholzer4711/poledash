@@ -228,6 +228,8 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Not plugged in": "Nicht angesteckt",
     "Note": "Notiz",
     "Location": "Ort",
+    "Could not load charging sessions.": "Ladevorgänge konnten nicht geladen werden.",
+    "Retry →": "Erneut versuchen →",
     "— no location —": "— kein Ort —",
     "+ New place…": "+ Neuer Ort…",
     "no GPS": "kein GPS",

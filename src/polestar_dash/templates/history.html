@@ -163,19 +163,28 @@
     }
 
     async function loadSessions() {
-      const [r, sr] = await Promise.all([
-        fetch('/api/sessions?days=180'),
-        fetch('/api/charging-stations'),
-      ]);
-      const j = await r.json();
-      window._stations = sr.ok ? await sr.json() : [];
-      DEFAULT_PRICE = j.default_price_ct_per_kwh;
-      document.getElementById('t_count').textContent = j.totals.count;
-      document.getElementById('t_kwh').innerHTML = `${j.totals.kwh.toFixed(1)}<span class="unit">kWh</span>`;
-      document.getElementById('t_cost').textContent = j.totals.cost_eur.toFixed(2);
-      document.getElementById('t_default').innerHTML = `${DEFAULT_PRICE.toFixed(1)}<span class="unit">ct/kWh</span>`;
-      window._sessItems = j.items;
-      renderSessions(j.items);
+      const el = document.getElementById('sessList');
+      try {
+        const [r, sr] = await Promise.all([
+          fetch('/api/sessions?days=180'),
+          fetch('/api/charging-stations'),
+        ]);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const j = await r.json();
+        window._stations = sr.ok ? await sr.json() : [];
+        DEFAULT_PRICE = j.default_price_ct_per_kwh;
+        document.getElementById('t_count').textContent = j.totals.count;
+        document.getElementById('t_kwh').innerHTML = `${j.totals.kwh.toFixed(1)}<span class="unit">kWh</span>`;
+        document.getElementById('t_cost').textContent = j.totals.cost_eur.toFixed(2);
+        document.getElementById('t_default').innerHTML = `${DEFAULT_PRICE.toFixed(1)}<span class="unit">ct/kWh</span>`;
+        window._sessItems = j.items;
+        renderSessions(j.items);
+      } catch (e) {
+        // Never leave the panel stuck on "Loading…" — show the error + a retry.
+        el.innerHTML = `<p class="muted">${ {{ t("Could not load charging sessions.") | tojson }} } `
+          + `<a href="#" onclick="loadSessions();return false" class="accent">${ {{ t("Retry →") | tojson }} }</a></p>`;
+        console.error('loadSessions failed', e);
+      }
     }
 
     // Resolve the Location combo to {note, isNew}: a known place, a freshly

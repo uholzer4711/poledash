@@ -3,6 +3,17 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.1] — 2026-05-30
+
+### Fixed — Sessions panel could stick on "Loading…"
+
+- `loadSessions()` had no error handling, so a single failed fetch — e.g. the
+  few seconds the container is down during a redeploy — left the charging-
+  sessions panel stuck on *Loading…* forever with no error and no retry. It now
+  catches failures, shows a message and a **Retry →** link, and logs to the
+  console. (The dropdown/data path itself was fine — verified against the live
+  endpoints.)
+
 ## [1.10.0] — 2026-05-30
 
 ### Added — Location dropdown on charging sessions, GPS-optional places
