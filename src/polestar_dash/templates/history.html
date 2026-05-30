@@ -72,7 +72,7 @@
     let DEFAULT_PRICE = 50;
 
     // Known places (charging stations) for the Location dropdown.
-    function _stations() { return window._stations || []; }
+    function _stations() { return Array.isArray(window._stations) ? window._stations : []; }
     function _stationByName(name) {
       if (!name) return null;
       const n = name.toLowerCase();
@@ -164,14 +164,20 @@
 
     async function loadSessions() {
       const el = document.getElementById('sessList');
+      // Known places are optional dropdown enrichment — load them separately so
+      // a stations hiccup can never block the charging-sessions list.
       try {
-        const [r, sr] = await Promise.all([
-          fetch('/api/sessions?days=180'),
-          fetch('/api/charging-stations'),
-        ]);
+        const sr = await fetch('/api/charging-stations');
+        const data = sr.ok ? await sr.json() : [];
+        window._stations = Array.isArray(data) ? data : [];
+      } catch (e) {
+        window._stations = [];
+        console.error('stations load failed', e);
+      }
+      try {
+        const r = await fetch('/api/sessions?days=180');
         if (!r.ok) throw new Error('HTTP ' + r.status);
         const j = await r.json();
-        window._stations = sr.ok ? await sr.json() : [];
         DEFAULT_PRICE = j.default_price_ct_per_kwh;
         document.getElementById('t_count').textContent = j.totals.count;
         document.getElementById('t_kwh').innerHTML = `${j.totals.kwh.toFixed(1)}<span class="unit">kWh</span>`;
@@ -182,7 +188,8 @@
       } catch (e) {
         // Never leave the panel stuck on "Loading…" — show the error + a retry.
         el.innerHTML = `<p class="muted">${ {{ t("Could not load charging sessions.") | tojson }} } `
-          + `<a href="#" onclick="loadSessions();return false" class="accent">${ {{ t("Retry →") | tojson }} }</a></p>`;
+          + `<a href="#" onclick="loadSessions();return false" class="accent">${ {{ t("Retry →") | tojson }} }</a></p>`
+          + `<p class="mono-xs muted" style="margin-top:8px">${_escAttr(e && e.message || e)}</p>`;
         console.error('loadSessions failed', e);
       }
     }
