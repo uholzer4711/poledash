@@ -50,7 +50,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 | Path | Purpose |
 |---|---|
 | `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info |
-| `/history` | Time-series + charging sessions |
+| `/history` | **Battery & Charging** — telemetry time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
 | `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector |

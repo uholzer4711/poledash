@@ -3,6 +3,18 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.8] — 2026-06-01
+
+### Changed — "History" page renamed to "Battery & Charging"
+
+- The `/history` page (battery/SoC/range/charging-power time-series plus the
+  charging-sessions list) is renamed from **History / Verlauf** to
+  **Battery & Charging / Akku & Laden** — "Verlauf" read as generic browser
+  history and didn't convey the battery/charging focus. Nav label, page title,
+  the `02 / …` section tag and the settings "no stations yet" hint all follow;
+  the German catalog gains `"Battery & Charging"` → `"Akku & Laden"`. The
+  `/history` route itself is unchanged, so links and bookmarks keep working.
+
 ## [1.10.7] — 2026-06-01
 
 ### Changed — Tripbook trips grouped into collapsible months

@@ -39,7 +39,7 @@
       <div class="nav">
         {% set path = request.url.path %}
         <a href="/" class="{% if path == '/' %}active{% endif %}">{{ t("Dashboard") }}</a>
-        <a href="/history" class="{% if path == '/history' or path == '/sessions' %}active{% endif %}">{{ t("History") }}</a>
+        <a href="/history" class="{% if path == '/history' or path == '/sessions' %}active{% endif %}">{{ t("Battery & Charging") }}</a>
         <a href="/tripbook" class="{% if path == '/tripbook' %}active{% endif %}">{{ t("Tripbook") }}</a>
         <a href="/routes" class="{% if path == '/routes' %}active{% endif %}">{{ t("Routes") }}</a>
         <a href="/insights" class="{% if path == '/insights' %}active{% endif %}">{{ t("Insights") }}</a>

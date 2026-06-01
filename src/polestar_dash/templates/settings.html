@@ -97,7 +97,7 @@
       const r = await fetch('/api/charging-stations');
       const stations = r.ok ? await r.json() : [];
       const el = document.getElementById('cs_list');
-      if (!stations.length) { el.innerHTML = '<p class="muted">' + {{ t("No stations saved yet. Set a note on a charging session in <a href=\"/history#sessions\">History</a> to create one.") | tojson }} + '</p>'; return; }
+      if (!stations.length) { el.innerHTML = '<p class="muted">' + {{ t("No stations saved yet. Set a note on a charging session in <a href=\"/history#sessions\">Battery & Charging</a> to create one.") | tojson }} + '</p>'; return; }
       el.innerHTML = stations.map(st => `
         <div class="flex gap-4 mb-2" style="align-items:flex-end;flex-wrap:wrap" data-station="${st.id}">
           <div class="field" style="flex:1;min-width:160px">
