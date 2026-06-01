@@ -194,6 +194,24 @@ def tripbook_page(
         )
         v["cost_eur"] = round(v["kwh"] * price_ct / 100.0, 2)
 
+    # Group detected trips by month for the collapsible tripbook list — newest
+    # month first, newest trip first within each — so a long window doesn't
+    # render one endless table. Reuses the per-month `totals` computed above for
+    # the summary shown on each (collapsed) month header.
+    months_map: dict[str, list] = {}
+    for pair in triples:
+        months_map.setdefault(pair[0].started_at.strftime("%Y-%m"), []).append(pair)
+    months = [
+        {
+            "key": key,
+            "entries": sorted(
+                months_map[key], key=lambda pe: pe[0].started_at, reverse=True
+            ),
+            "totals": totals.get(key),
+        }
+        for key in sorted(months_map, reverse=True)
+    ]
+
     charge_locations = _charge_locations(days=days, vin=vin, price_ct=price_ct)
 
     imp_km = round(sum((j.distance_km or 0) for j in imports), 1)
@@ -231,6 +249,7 @@ def tripbook_page(
         "tripbook.html",
         {
             "paired": triples,
+            "months": months,
             "trips": trips,
             "totals": totals,
             "grand_km": grand_km,

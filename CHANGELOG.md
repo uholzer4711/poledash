@@ -3,6 +3,17 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.7] — 2026-06-01
+
+### Changed — Tripbook trips grouped into collapsible months
+
+- The detected-trips list is now grouped by month into native
+  `<details>/<summary>` accordions (newest month first, newest trip first
+  within each); the most recent month is expanded, older ones collapsed, so a
+  long window no longer renders one endless table. Each month header shows its
+  trip count, km, kWh and cost even while collapsed. No JS, no build step —
+  UJH-styled (border-radius 0, mono labels, typographic `→` disclosure mark).
+
 ## [1.10.6] — 2026-06-01
 
 ### Changed — Session energy from integrated charging power

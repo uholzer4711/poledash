@@ -52,7 +52,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info |
 | `/history` | Time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
-| `/tripbook` | Trips from odometer, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
+| `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
 | `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector |
 | `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
 | `/routes` | Repeated routes aggregated from imported trips |
