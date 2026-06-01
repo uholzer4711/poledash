@@ -152,6 +152,16 @@
     <div class="stat-sub mb-4">
       {{ t("Friendly names for frequent destinations. Shown on <a href=\"/tripbook\">/tripbook</a> as <span class=\"accent\">orange</span> on the address with the label as a hover tooltip. One label per line, format: <code class=\"accent\">Label: pattern1, pattern2, …</code>. Patterns are case-insensitive substring matches.") }}
     </div>
+    {% if label_warnings %}
+      <div class="card alert mb-4" style="border-left:3px solid var(--ujh-orange)">
+        <div class="mono-xs" style="margin-bottom:6px"><span class="accent">⚠ {{ t("Too-broad patterns") }}</span></div>
+        {% for label, pats in label_warnings.items() %}
+          {% for pat, n in pats.items() %}
+            <div class="mono-xs muted">{{ t("Pattern <code class=\"accent\">{pattern}</code> under <code>{label}</code> matches {n} different addresses — it collapses distinct places into one label.", pattern=pat, label=label, n=n)|safe }}</div>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    {% endif %}
     <form id="al_form" onsubmit="return saveLabels(event)">
       <textarea id="al_text" rows="6" style="width:100%;font-family:var(--ujh-mono);font-size:14px">{% for label, patterns in address_labels.items() %}{{ label }}: {{ patterns|join(', ') }}
 {% endfor %}</textarea>
@@ -182,6 +192,48 @@
       });
       if (!r.ok) { out.textContent = {{ t("error: ") | tojson }} + r.status; return false; }
       out.textContent = {{ t("saved · reload tripbook to see changes") | tojson }};
+      return false;
+    }
+  </script>
+
+  <div class="card mb-6">
+    <div class="card-label">{{ t("Geofence labels (radius)") }}</div>
+    <div class="stat-sub mb-4">
+      {{ t("Radius-based labels — more robust than text patterns when geocoding varies street by street. Any trip endpoint within the radius gets the label. One per line, format: <code class=\"accent\">Label: lat, lng, radius_m</code>. Checked after text patterns.") }}
+    </div>
+    <form id="gf_form" onsubmit="return saveGeofences(event)">
+      <textarea id="gf_text" rows="4" style="width:100%;font-family:var(--ujh-mono);font-size:14px">{% for label, geo in address_geofences.items() %}{{ label }}: {{ "%g"|format(geo.lat) }}, {{ "%g"|format(geo.lng) }}, {{ "%g"|format(geo.radius_m) }}
+{% endfor %}</textarea>
+      <div class="flex gap-4 mt-4" style="align-items:center">
+        <button class="btn accent" type="submit">{{ t("Save") }} <span class="arrow">→</span></button>
+        <span id="gf_result" class="mono-xs muted"></span>
+      </div>
+    </form>
+  </div>
+  <script>
+    async function saveGeofences(ev) {
+      ev.preventDefault();
+      const out = document.getElementById('gf_result');
+      const payload = {};
+      for (const line of document.getElementById('gf_text').value.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const idx = trimmed.indexOf(':');
+        if (idx < 0) { out.textContent = {{ t("bad line: ") | tojson }} + `"${trimmed}"`; return false; }
+        const label = trimmed.slice(0, idx).trim();
+        const parts = trimmed.slice(idx + 1).split(',').map(p => parseFloat(p.trim()));
+        if (!label || parts.length !== 3 || parts.some(isNaN)) {
+          out.textContent = {{ t("bad line: ") | tojson }} + `"${trimmed}"` + {{ t(" — need \"Label: lat, lng, radius_m\"") | tojson }}; return false;
+        }
+        payload[label] = {lat: parts[0], lng: parts[1], radius_m: parts[2]};
+      }
+      const r = await fetch('/api/address-geofences', {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) { out.textContent = {{ t("error: ") | tojson }} + r.status; return false; }
+      out.textContent = {{ t("saved · reload tripbook to see changes") | tojson }};
+      if (typeof tfRender === 'function') tfRender();
       return false;
     }
   </script>
@@ -368,6 +420,292 @@
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', amInit);
       } else { amInit(); }
+    })();
+  </script>
+
+  <div class="card mb-6">
+    <div class="flex-between" style="flex-wrap:wrap;gap:12px">
+      <div class="card-label">{{ t("Trip flow") }} <span class="muted">· {{ t("every imported drive") }}</span></div>
+      <div id="tf_lenses" class="flex gap-2 no-print">
+        <a class="badge solid" data-metric="efficiency">kWh/100km</a>
+        <a class="badge" data-metric="co2">CO₂</a>
+        <a class="badge" data-metric="temp">°C</a>
+        <a class="badge" data-metric="cost">€</a>
+      </div>
+    </div>
+    <div class="stat-sub mb-4">
+      {{ t("Each arc is one trip (start → end as the crow flies), coloured by the selected metric and thickened by how often you drive it. Orange rings are your geofence labels. Hit play to replay your trips in time.") }}
+    </div>
+    <div class="flex gap-4 mb-4" style="flex-wrap:wrap;align-items:center">
+      <button id="tf_play" class="btn" type="button" onclick="tfTogglePlay()">▶ {{ t("Play") }}</button>
+      <input id="tf_scrub" type="range" min="0" max="1000" value="1000" step="1" style="flex:1;min-width:160px" oninput="tfSeek(this.value)">
+      <span id="tf_clock" class="mono-xs muted" style="min-width:130px">—</span>
+      <label class="mono-xs" style="display:flex;gap:6px;align-items:center">
+        <select id="tf_speed" class="mono-xs" style="background:var(--ujh-bg-elev);color:var(--ujh-ink);border:1px solid var(--ujh-line)">
+          <option value="3">3 h/s</option><option value="12" selected>12 h/s</option>
+          <option value="48">48 h/s</option><option value="168">7 d/s</option>
+        </select>
+      </label>
+      <label class="mono-xs" style="display:flex;gap:6px;align-items:center">
+        <input type="checkbox" id="tf_labeled" onchange="tfRender()"> {{ t("only labeled trips") }}
+      </label>
+      <span id="tf_legend" class="mono-xs muted"></span>
+    </div>
+    <div id="tf_map" style="width:100%;height:560px;background:var(--ujh-bg-elev)"></div>
+    <div id="tf_msg" class="mono-xs muted mt-2"></div>
+  </div>
+  <style>
+    .tf-arc { stroke-dasharray: 5 9; animation: tf-flow 0.9s linear infinite; }
+    @keyframes tf-flow { to { stroke-dashoffset: -14; } }
+    @media (prefers-reduced-motion: reduce) { .tf-arc { animation: none; } }
+  </style>
+  <script>
+    (function () {
+      let tfMap = null, tfArcLayer = null, tfGeoLayer = null, tfCarLayer = null, tfTiles = null;
+      let tfTrips = [];        // raw trips with sampled bezier points
+      let tfGeofences = {};
+      let tfMetric = 'efficiency';
+      let tfPlaying = false, tfRaf = null, tfLastTs = 0;
+      let tfT0 = 0, tfT1 = 0, tfNow = 0;  // epoch ms timeline bounds + cursor
+
+      function tfCss(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+      function tfHexToRgb(h) {
+        h = h.replace('#', '');
+        if (h.length === 3) h = h.split('').map(c => c + c).join('');
+        return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+      }
+      function tfMix(a, b, t) {
+        t = Math.max(0, Math.min(1, t));
+        const A = tfHexToRgb(a), B = tfHexToRgb(b);
+        return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`;
+      }
+      function tfIsLight() {
+        return document.documentElement.getAttribute('data-theme') === 'light';
+      }
+
+      // Lens config — gradient endpoints read from CSS tokens at draw time so
+      // the light/dark themes stay correct. Cold→warm uses blue→orange.
+      function tfLenses() {
+        const orange = tfCss('--ujh-orange') || '#ff5b14';
+        return {
+          efficiency: { get: t => t.per100, c0: '#7bd389', c1: orange, unit: ' kWh/100km' },
+          co2:        { get: t => t.co2_g,  c0: '#7bd389', c1: orange, unit: ' g' },
+          temp:       { get: t => t.temp,   c0: '#4ea1ff', c1: orange, unit: ' °C' },
+          cost:       { get: t => t.cost_eur, c0: '#7bd389', c1: orange, unit: ' €' },
+        };
+      }
+
+      // Quadratic bezier from s to e, control point pushed perpendicular off the
+      // midpoint so overlapping routes fan out instead of stacking.
+      function tfBezier(s, e) {
+        const mx = (s[0] + e[0]) / 2, my = (s[1] + e[1]) / 2;
+        const dx = e[0] - s[0], dy = e[1] - s[1];
+        const len = Math.hypot(dx, dy) || 1e-6;
+        const bow = 0.18;  // curvature as a fraction of leg length
+        const cx = mx - dy * bow, cy = my + dx * bow;
+        const pts = [];
+        const N = 26;
+        for (let i = 0; i <= N; i++) {
+          const u = i / N, v = 1 - u;
+          pts.push([
+            v * v * s[0] + 2 * v * u * cx + u * u * e[0],
+            v * v * s[1] + 2 * v * u * cy + u * u * e[1],
+          ]);
+        }
+        return pts;
+      }
+
+      function tfDomain() {
+        const lens = tfLenses()[tfMetric];
+        const vals = tfTrips.map(t => lens.get(t)).filter(v => v != null);
+        if (!vals.length) return [0, 1];
+        let lo = Math.min(...vals), hi = Math.max(...vals);
+        if (lo === hi) hi = lo + 1;
+        return [lo, hi];
+      }
+
+      window.tfRender = function () {
+        if (!tfMap) return;
+        const lens = tfLenses()[tfMetric];
+        const [lo, hi] = tfDomain();
+        const onlyLabeled = document.getElementById('tf_labeled').checked;
+        if (tfArcLayer) tfArcLayer.remove();
+        if (tfGeoLayer) tfGeoLayer.remove();
+        if (tfCarLayer) tfCarLayer.remove();
+        tfArcLayer = Leaflet.layerGroup().addTo(tfMap);
+        tfGeoLayer = Leaflet.layerGroup().addTo(tfMap);
+        tfCarLayer = Leaflet.layerGroup().addTo(tfMap);
+
+        // Geofence rings (orange — the live signal colour).
+        const orange = tfCss('--ujh-orange') || '#ff5b14';
+        Object.entries(tfGeofences).forEach(([label, g]) => {
+          Leaflet.circle([g.lat, g.lng], {
+            radius: g.radius_m, color: orange, weight: 1.5,
+            fillColor: orange, fillOpacity: 0.06, dashArray: '4 4',
+          }).bindTooltip(label, { permanent: false }).addTo(tfGeoLayer);
+        });
+
+        let shown = 0, carPlaced = false;
+        // newest last so the in-progress trip's car marker draws on top
+        for (const t of tfTrips) {
+          if (onlyLabeled && !(t.start_label && t.end_label)) continue;
+          if (t.tStart > tfNow) continue;  // not yet reached on the timeline
+          shown++;
+          const v = lens.get(t);
+          const color = v == null ? (tfIsLight() ? '#9aa0a6' : '#6b6f76')
+                                  : tfMix(lens.c0, lens.c1, (v - lo) / (hi - lo));
+          Leaflet.polyline(t.pts, {
+            color, weight: t.weight, opacity: 0.85,
+            className: 'tf-arc', lineCap: 'round',
+          }).bindPopup(tfPopup(t)).addTo(tfArcLayer);
+
+          // Car marker: the trip currently in progress at tfNow.
+          if (tfPlaying && t.tStart <= tfNow && tfNow <= t.tEnd && t.tEnd > t.tStart) {
+            const frac = (tfNow - t.tStart) / (t.tEnd - t.tStart);
+            const idx = Math.min(t.pts.length - 2, Math.floor(frac * (t.pts.length - 1)));
+            const f2 = frac * (t.pts.length - 1) - idx;
+            const a = t.pts[idx], b = t.pts[idx + 1];
+            const pos = [a[0] + (b[0] - a[0]) * f2, a[1] + (b[1] - a[1]) * f2];
+            Leaflet.circleMarker(pos, {
+              radius: 7, color: orange, fillColor: orange, fillOpacity: 1, weight: 2,
+            }).addTo(tfCarLayer);
+            carPlaced = true;
+          }
+        }
+        const dom = tfDomain();
+        document.getElementById('tf_legend').textContent =
+          `${shown} ${ {{ t("trips") | tojson }} } · ${dom[0].toFixed(1)}–${dom[1].toFixed(1)}${lens.unit}`;
+        tfUpdateClock();
+        return carPlaced;
+      };
+
+      function tfPopup(t) {
+        const s = t.start_label || t.start_addr || '—';
+        const e = t.end_label || t.end_addr || '—';
+        const when = new Date(t.tStart).toLocaleString();
+        const rows = [
+          [`${t.km} km`, t.kwh != null ? `${t.kwh} kWh` : null],
+          [t.per100 != null ? `${t.per100} kWh/100km` : null, t.co2_g != null ? `${t.co2_g} g CO₂` : null],
+          [t.temp != null ? `${t.temp} °C` : null, t.cost_eur != null ? `€ ${t.cost_eur}` : null],
+        ].map(([a, b]) => `<div class="mono-xs muted">${[a, b].filter(Boolean).join(' · ')}</div>`).join('');
+        return `<div style="font-family:var(--ujh-sans);min-width:200px">
+          <div style="font-weight:600">${s} <span class="muted">→</span> ${e}</div>
+          <div class="mono-xs muted" style="margin-bottom:6px">${when}</div>${rows}</div>`;
+      }
+
+      function tfUpdateClock() {
+        const el = document.getElementById('tf_clock');
+        if (el) el.textContent = tfNow ? new Date(tfNow).toLocaleString() : '—';
+      }
+
+      window.tfSeek = function (val) {
+        tfNow = tfT0 + (tfT1 - tfT0) * (val / 1000);
+        tfRender();
+      };
+
+      function tfStep(ts) {
+        if (!tfPlaying) return;
+        if (!tfLastTs) tfLastTs = ts;
+        const dtSec = (ts - tfLastTs) / 1000;
+        tfLastTs = ts;
+        const hps = parseFloat(document.getElementById('tf_speed').value) || 12;
+        tfNow += dtSec * hps * 3600 * 1000;
+        if (tfNow >= tfT1) {
+          tfNow = tfT1;
+          tfRender();
+          tfStopPlay();
+          return;
+        }
+        document.getElementById('tf_scrub').value = Math.round((tfNow - tfT0) / (tfT1 - tfT0) * 1000);
+        tfRender();
+        tfRaf = requestAnimationFrame(tfStep);
+      }
+
+      function tfStopPlay() {
+        tfPlaying = false;
+        tfLastTs = 0;
+        if (tfRaf) cancelAnimationFrame(tfRaf);
+        document.getElementById('tf_play').textContent = '▶ ' + {{ t("Play") | tojson }};
+      }
+
+      window.tfTogglePlay = function () {
+        if (tfPlaying) { tfStopPlay(); return; }
+        if (tfNow >= tfT1) { tfNow = tfT0; }  // restart from the beginning
+        tfPlaying = true;
+        document.getElementById('tf_play').textContent = '⏸ ' + {{ t("Pause") | tojson }};
+        tfRaf = requestAnimationFrame(tfStep);
+      };
+
+      function tfSetMetric(m) {
+        tfMetric = m;
+        document.querySelectorAll('#tf_lenses .badge').forEach(b =>
+          b.classList.toggle('solid', b.dataset.metric === m));
+        tfRender();
+      }
+
+      async function tfInit() {
+        const el = document.getElementById('tf_map');
+        if (!el || typeof Leaflet === 'undefined') return;
+        tfMap = Leaflet.map(el).setView([46.64, 14.29], 11);
+        tfApplyTiles();
+        document.querySelectorAll('#tf_lenses .badge').forEach(b =>
+          b.addEventListener('click', () => tfSetMetric(b.dataset.metric)));
+        try {
+          const [tr, gr] = await Promise.all([
+            fetch('/api/trip-paths?days=3650'),
+            fetch('/api/address-geofences'),
+          ]);
+          const raw = tr.ok ? await tr.json() : [];
+          tfGeofences = gr.ok ? await gr.json() : {};
+          tfTrips = raw.map(t => {
+            const tStart = new Date(t.started_at).getTime();
+            const tEnd = t.ended_at ? new Date(t.ended_at).getTime() : tStart + 600000;
+            return { ...t, tStart, tEnd, pts: tfBezier(t.s, t.e) };
+          }).sort((a, b) => a.tStart - b.tStart);
+          // frequency → weight: group by resolved endpoints
+          const freq = {};
+          tfTrips.forEach(t => {
+            const k = (t.start_label || t.start_addr) + '→' + (t.end_label || t.end_addr);
+            freq[k] = (freq[k] || 0) + 1;
+          });
+          tfTrips.forEach(t => {
+            const k = (t.start_label || t.start_addr) + '→' + (t.end_label || t.end_addr);
+            t.weight = Math.min(7, 1.6 + Math.log2(freq[k]) * 1.3);
+          });
+          if (!tfTrips.length) {
+            document.getElementById('tf_msg').textContent =
+              {{ t("no geocoded trips yet — import a Polestar journey CSV above first.") | tojson }};
+            return;
+          }
+          tfT0 = tfTrips[0].tStart;
+          tfT1 = tfTrips[tfTrips.length - 1].tEnd;
+          tfNow = tfT1;  // start fully revealed
+          tfRender();
+          const all = tfTrips.flatMap(t => [t.s, t.e]);
+          tfMap.fitBounds(Leaflet.latLngBounds(all).pad(0.15));
+        } catch (e) {
+          document.getElementById('tf_msg').textContent = {{ t("load error: ") | tojson }} + e;
+        }
+      }
+
+      function tfApplyTiles() {
+        if (tfTiles) tfTiles.remove();
+        const url = tfIsLight()
+          ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+          : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        tfTiles = Leaflet.tileLayer(url, {
+          attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19,
+        }).addTo(tfMap);
+      }
+
+      // Theme toggle dispatches `themechange` — swap tiles + recolour arcs.
+      window.addEventListener('themechange', () => { if (tfMap) { tfApplyTiles(); tfRender(); } });
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tfInit);
+      } else { tfInit(); }
     })();
   </script>
 

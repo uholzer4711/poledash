@@ -119,6 +119,105 @@ def compute_charge_heatmap(days: int = 365) -> dict:
     }
 
 
+def compute_co2(days: int = 365) -> dict:
+    """Tailpipe-equivalent grid CO₂ for imported trips in the window.
+
+    Each trip's grams = consumption_kwh × co2_g_per_kwh (AT grid intensity at
+    trip time). Returns total kg, g/km and a petrol-car comparison (a typical
+    ICE emits ~150 g CO₂/km tank-to-wheel)."""
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        rows = list(
+            s.exec(
+                select(JourneyImport)
+                .where(JourneyImport.started_at >= since)
+                .where(JourneyImport.co2_g_per_kwh.is_not(None))
+                .where(JourneyImport.consumption_kwh.is_not(None))
+            ).all()
+        )
+    total_g = 0.0
+    total_km = 0.0
+    n = 0
+    for r in rows:
+        if not r.consumption_kwh:
+            continue
+        total_g += r.consumption_kwh * r.co2_g_per_kwh
+        total_km += r.distance_km or 0
+        n += 1
+    ICE_G_PER_KM = 150.0  # typical petrol car, tank-to-wheel
+    return {
+        "window_days": days,
+        "trips": n,
+        "total_kg": round(total_g / 1000, 1),
+        "total_km": round(total_km, 1),
+        "g_per_km": round(total_g / total_km, 1) if total_km > 0 else None,
+        "ice_kg": round(total_km * ICE_G_PER_KM / 1000, 1),
+        "saved_kg": round((total_km * ICE_G_PER_KM - total_g) / 1000, 1),
+    }
+
+
+def compute_trip_cost(days: int = 365) -> dict:
+    """Real energy cost of imported trips: consumption_kwh × blended price."""
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        rows = list(
+            s.exec(
+                select(JourneyImport)
+                .where(JourneyImport.started_at >= since)
+                .where(JourneyImport.consumption_kwh.is_not(None))
+            ).all()
+        )
+    price_ct, price_source = blended_price_ct(days=max(days, 90))
+    total_kwh = sum((r.consumption_kwh or 0) for r in rows)
+    total_km = sum((r.distance_km or 0) for r in rows)
+    total_eur = total_kwh * price_ct / 100.0
+    return {
+        "window_days": days,
+        "trips": len(rows),
+        "total_kwh": round(total_kwh, 1),
+        "total_km": round(total_km, 1),
+        "total_eur": round(total_eur, 2),
+        "price_ct_per_kwh": price_ct,
+        "price_source": price_source,
+        "eur_per_100km": round(total_eur / total_km * 100, 2) if total_km > 0 else None,
+        "ct_per_km": round(total_eur * 100 / total_km, 1) if total_km > 0 else None,
+    }
+
+
+def compute_battery_trend(min_soc_drop: int = 4, min_bucket_drop: int = 30) -> dict:
+    """Implied usable battery capacity per month, to surface degradation.
+
+    Same estimator as ``calibrate_battery_kwh`` (energy-weighted kWh-per-%×100)
+    but bucketed per calendar month. A bucket is only emitted once its summed
+    SoC drop reaches ``min_bucket_drop`` %, so a sparse month doesn't produce a
+    noisy outlier. Needs many months of data to be meaningful — the caller
+    shows a 'collecting data' hint until then."""
+    with Session(get_engine()) as s:
+        rows = list(s.exec(select(JourneyImport)).all())
+    buckets: dict[str, list[tuple[float, int]]] = {}
+    for j in rows:
+        if not j.consumption_kwh or j.consumption_kwh <= 0:
+            continue
+        if j.soc_start is None or j.soc_end is None:
+            continue
+        drop = j.soc_start - j.soc_end
+        if drop < min_soc_drop:
+            continue
+        buckets.setdefault(j.started_at.strftime("%Y-%m"), []).append((j.consumption_kwh, drop))
+    points: list[dict] = []
+    for month, pairs in sorted(buckets.items()):
+        total_e = sum(e for e, _ in pairs)
+        total_drop = sum(d for _, d in pairs)
+        if total_drop < min_bucket_drop:
+            continue
+        points.append({
+            "month": month,
+            "kwh": round(total_e / total_drop * 100, 1),
+            "samples": len(pairs),
+        })
+    return {"points": points, "enough_data": len(points) >= 3}
+
+
 def compute_temp_scatter(days: int = 365) -> list[dict]:
     """Wh/km vs outside temperature per imported trip with weather data."""
     since = utcnow() - timedelta(days=days)

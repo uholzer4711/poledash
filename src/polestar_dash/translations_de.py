@@ -449,4 +449,38 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Smart Charging": "Smart-Laden",
     "To target": "Bis Ziel",
     "To full": "Bis voll",
+    # --- Geofence labels + broad-pattern guard (settings.html) ---
+    "Too-broad patterns": "Zu unspezifische Muster",
+    "Pattern <code class=\"accent\">{pattern}</code> under <code>{label}</code> matches {n} different addresses — it collapses distinct places into one label.":
+        "Muster <code class=\"accent\">{pattern}</code> unter <code>{label}</code> passt auf {n} verschiedene Adressen — es fasst verschiedene Orte zu einem Label zusammen.",
+    "Geofence labels (radius)": "Geofence-Labels (Radius)",
+    "Radius-based labels — more robust than text patterns when geocoding varies street by street. Any trip endpoint within the radius gets the label. One per line, format: <code class=\"accent\">Label: lat, lng, radius_m</code>. Checked after text patterns.":
+        "Radius-basierte Labels — robuster als Textmuster, wenn die Geocodierung von Straße zu Straße schwankt. Jeder Fahrt-Endpunkt im Radius bekommt das Label. Eine Zeile pro Label, Format: <code class=\"accent\">Label: lat, lng, radius_m</code>. Wird nach den Textmustern geprüft.",
+    " — need \"Label: lat, lng, radius_m\"": " — braucht „Label: lat, lng, radius_m“",
+    # --- Trip-flow map (settings.html) ---
+    "Trip flow": "Fahrtenfluss",
+    "every imported drive": "jede importierte Fahrt",
+    "Each arc is one trip (start → end as the crow flies), coloured by the selected metric and thickened by how often you drive it. Orange rings are your geofence labels. Hit play to replay your trips in time.":
+        "Jeder Bogen ist eine Fahrt (Start → Ziel Luftlinie), eingefärbt nach der gewählten Kennzahl und dicker, je öfter du sie fährst. Orange Ringe sind deine Geofence-Labels. Mit Play spielst du deine Fahrten zeitlich ab.",
+    "Play": "Abspielen",
+    "Pause": "Pause",
+    "only labeled trips": "nur gelabelte Fahrten",
+    "no geocoded trips yet — import a Polestar journey CSV above first.":
+        "noch keine geokodierten Fahrten — importiere zuerst oben eine Polestar-Journey-CSV.",
+    # --- Insights cards: cost, CO2, battery (insights.html) ---
+    "Real trip cost (window)": "Echte Fahrtkosten (Zeitraum)",
+    "Cost per km": "Kosten pro km",
+    "CO₂ footprint (window)": "CO₂-Fußabdruck (Zeitraum)",
+    "CO₂ vs petrol car": "CO₂ vs Benziner",
+    "trips": "Fahrten",
+    "vs ICE @ 150 g/km · ": "vs Verbrenner @ 150 g/km · ",
+    "usable kWh": "nutzbare kWh",
+    "Usable battery capacity · monthly": "Nutzbare Batteriekapazität · monatlich",
+    "Implied usable kWh = energy ÷ SoC-drop, per month. A downward slope over many months hints at degradation.":
+        "Implizierte nutzbare kWh = Energie ÷ SoC-Abfall, pro Monat. Ein Abwärtstrend über viele Monate deutet auf Degradation hin.",
+    "Collecting data — a capacity trend needs several months of trips with a noticeable SoC drop.":
+        "Sammle Daten — ein Kapazitätstrend braucht mehrere Monate Fahrten mit spürbarem SoC-Abfall.",
+    # --- Route leaderboard (routes.html) ---
+    "Most efficient routes": "Effizienteste Routen",
+    "Least efficient routes": "Ineffizienteste Routen",
 }

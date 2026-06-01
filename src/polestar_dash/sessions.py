@@ -131,7 +131,7 @@ def _integrate_power_kwh(
         return None
 
     wh = 0.0
-    for (t0, p0), (t1, p1) in zip(rows, rows[1:]):
+    for (t0, p0), (t1, p1) in zip(rows, rows[1:], strict=False):
         dt_h = (t1 - t0).total_seconds() / 3600.0
         wh += (p0 + p1) / 2.0 * dt_h  # trapezoid, W·h
 

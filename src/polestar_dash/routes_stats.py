@@ -17,7 +17,6 @@ The aggregator returns ordered tuples of (start, end), so
 
 from __future__ import annotations
 
-import math
 from collections import Counter
 from datetime import timedelta
 from statistics import mean
@@ -26,23 +25,14 @@ from sqlmodel import Session, select
 
 from .db.models import JourneyImport
 from .db.session import get_engine
-from .journey_import import get_address_labels, label_for
-from .util import utcnow
+from .journey_import import geo_label_for, get_address_geofences, get_address_labels, label_for
+from .util import haversine_km, utcnow
 
 
 def _short(addr: str | None) -> str:
     if not addr:
         return "—"
     return addr.split(",")[0].strip() or "—"
-
-
-def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    r = 6371.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1)
-    dl = math.radians(lng2 - lng1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
 
 
 def _cluster_places(
@@ -59,7 +49,7 @@ def _cluster_places(
     for lat, lng, name in points:
         placed = False
         for i, (clat, clng, names, members) in enumerate(clusters):
-            if _haversine_km(lat, lng, clat, clng) <= radius_km:
+            if haversine_km(lat, lng, clat, clng) <= radius_km:
                 names.append(name)
                 members.append((lat, lng))
                 # recompute centroid so the cluster doesn't drift with insertion order
@@ -92,18 +82,23 @@ def _build_key_resolver(
     place and starting *from* the same place yield the same key).
     """
     labels = get_address_labels()
+    geofences = get_address_geofences()
+
+    def _label(addr: str | None, lat: float | None, lng: float | None) -> str | None:
+        # String patterns first (cheap, exact intent), then radius geofences.
+        return label_for(addr, labels) or geo_label_for(lat, lng, geofences)
 
     geo_points: list[tuple[float, float, str]] = []
     for t in trips:
-        if not label_for(t.start_address, labels) and t.start_lat is not None and t.start_lng is not None:
+        if not _label(t.start_address, t.start_lat, t.start_lng) and t.start_lat is not None and t.start_lng is not None:
             geo_points.append((t.start_lat, t.start_lng, _short(t.start_address)))
-        if not label_for(t.end_address, labels) and t.end_lat is not None and t.end_lng is not None:
+        if not _label(t.end_address, t.end_lat, t.end_lng) and t.end_lat is not None and t.end_lng is not None:
             geo_points.append((t.end_lat, t.end_lng, _short(t.end_address)))
 
     cluster_lookup = _cluster_places(geo_points, radius_km)
 
     def resolve(addr: str | None, lat: float | None, lng: float | None) -> str:
-        lbl = label_for(addr, labels)
+        lbl = _label(addr, lat, lng)
         if lbl:
             return lbl
         if lat is not None and lng is not None and (lat, lng) in cluster_lookup:

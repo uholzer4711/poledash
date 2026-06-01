@@ -287,10 +287,41 @@ def routes_page(
     )
 
 
+BROAD_PATTERN_THRESHOLD = 5  # a label pattern matching more distinct addresses is "too broad"
+
+
+def _broad_label_warnings(labels: dict[str, list[str]]) -> dict[str, dict[str, int]]:
+    """For each label pattern, count how many distinct imported addresses it
+    matches (case-insensitive substring, same rule as ``label_for``). Patterns
+    above the threshold collapse genuinely-different places into one label
+    (e.g. a city/postcode pattern) — surfaced so the user can narrow them."""
+    with Session(get_engine()) as s:
+        rows = s.exec(
+            select(JourneyImport.start_address, JourneyImport.end_address)
+        ).all()
+    addrs: set[str] = set()
+    for start, end in rows:
+        if start:
+            addrs.add(start.lower())
+        if end:
+            addrs.add(end.lower())
+
+    warnings: dict[str, dict[str, int]] = {}
+    for label, patterns in labels.items():
+        for pat in patterns:
+            needle = pat.lower()
+            if not needle:
+                continue
+            n = sum(1 for a in addrs if needle in a)
+            if n > BROAD_PATTERN_THRESHOLD:
+                warnings.setdefault(label, {})[pat] = n
+    return warnings
+
+
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
     from ..app_settings import get_charging_loss_factor, get_default_price_ct
-    from ..journey_import import get_address_labels
+    from ..journey_import import get_address_geofences, get_address_labels
 
     s = get_settings()
     ntfy_note = f"topic: {s.ntfy_topic}" if s.ntfy_topic else "set NTFY_TOPIC to enable"
@@ -316,6 +347,8 @@ def settings_page(request: Request):
         "settings.html",
         {
             "address_labels": address_labels,
+            "address_geofences": get_address_geofences(),
+            "label_warnings": _broad_label_warnings(address_labels),
             "s": s,
             "integrations": integrations,
             "default_price_ct": get_default_price_ct(),

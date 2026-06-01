@@ -3,6 +3,45 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.11.0] — 2026-06-01
+
+### Added — Geofence labels, journey-import analytics, and a Trip-flow map
+
+- **Geofence labels.** Places can now be defined by a centre point + radius
+  (AppSetting `address_geofences` = `{label: {lat, lng, radius_m}}`,
+  `geo_label_for()`), not just address substrings. Far more robust where
+  geocoding varies street by street — e.g. *Arbeit* = everything within 150 m
+  of the office. The route resolver checks string patterns first, then
+  geofences, then GPS clustering. New `/settings` card + `PUT
+  /api/address-geofences`.
+- **Broad-pattern guard.** `/settings` now warns when an address-label pattern
+  matches more than 5 distinct imported addresses (a city/postcode token that
+  would collapse "Arbeit → Arbeit"-style routes), so the long-standing
+  substring footgun surfaces before it bites.
+- **CO₂ footprint** on `/insights`: per-trip grid CO₂ (`consumption_kwh ×
+  co2_g_per_kwh`) summed to total kg, g/km, and a savings figure vs a 150 g/km
+  petrol car.
+- **Real trip cost** on `/insights`: imported real kWh × blended price → € and
+  €/100 km / ct/km for the window.
+- **Usable-battery-capacity trend** on `/insights`: monthly implied capacity
+  (energy ÷ SoC-drop) to surface degradation over time (needs several months of
+  data before it's meaningful).
+- **Route efficiency leaderboard** on `/routes`: most- and least-efficient
+  repeated routes.
+- **Trip-flow map** on `/settings` (under the address map): every imported
+  drive drawn as an animated, fanned-out arc, coloured by a switchable lens
+  (kWh/100 km · CO₂ · °C · €), thickened by frequency, with geofence rings and a
+  time-scrubber that replays trips with a moving car marker. Theme-aware tiles;
+  no new JS bundle (Leaflet + CSS-keyframe flow). New `GET /api/trip-paths`.
+
+### Fixed — Duplicate imported trips and a VIN-sensitive dedup
+
+- Importing the same journey CSV once *with* a VIN and once *without* used to
+  slip past the `(started_at, ended_at, vin)` dedup (SQL never matches `'VIN' =
+  NULL`) and accumulated duplicate rows. `upsert()` is now **VIN-agnostic**
+  (a trip is keyed on its exact start+end timestamps; `vin` stays as metadata),
+  and a forward-only startup migration collapses any existing duplicates.
+
 ## [1.10.8] — 2026-06-01
 
 ### Changed — "History" page renamed to "Battery & Charging"

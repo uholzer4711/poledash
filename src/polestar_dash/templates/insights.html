@@ -31,6 +31,29 @@
     </div>
   </div>
 
+  <div class="grid grid-4 mb-6">
+    <div class="card">
+      <div class="card-label">{{ t("Real trip cost (window)") }}</div>
+      <div class="stat num">€ <em class="accent" id="tc_eur">—</em></div>
+      <div class="stat-sub" id="tc_sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("Cost per km") }}</div>
+      <div class="stat num" id="tc_perkm">—</div>
+      <div class="stat-sub" id="tc_perkm_sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("CO₂ footprint (window)") }}</div>
+      <div class="stat num" id="co2_total">—</div>
+      <div class="stat-sub" id="co2_sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("CO₂ vs petrol car") }}</div>
+      <div class="stat num"><em class="accent" id="co2_saved">—</em></div>
+      <div class="stat-sub" id="co2_saved_sub">—</div>
+    </div>
+  </div>
+
   <div class="grid grid-2 mb-6">
     <div class="card">
       <div class="card-label">{{ t("Range factor · implied 100% pack") }}</div>
@@ -42,6 +65,12 @@
       <div style="position:relative;height:260px;margin-top:12px"><canvas id="temp_chart"></canvas></div>
       <div class="mono-xs muted mt-2">{{ t("Each point = one imported trip with weather data. Cold = heater overhead.") }}</div>
     </div>
+  </div>
+
+  <div class="card mb-6">
+    <div class="card-label">{{ t("Usable battery capacity · monthly") }}</div>
+    <div style="position:relative;height:260px;margin-top:12px"><canvas id="battery_chart"></canvas></div>
+    <div class="mono-xs muted mt-2">{{ t("Implied usable kWh = energy ÷ SoC-drop, per month. A downward slope over many months hints at degradation.") }}</div>
   </div>
 
   <div class="card mb-6">
@@ -275,6 +304,50 @@
             } },
         });
       } else { noData('temp_chart', {{ t("Import a journey log and run /api/journey-imports/enrich to fetch outside temperatures.") | tojson }}); }
+
+      // ---- Real trip cost (window)
+      const tc = j.trip_cost || {};
+      if (tc.total_eur != null && tc.trips) {
+        document.getElementById('tc_eur').textContent = tc.total_eur.toFixed(2);
+        document.getElementById('tc_sub').textContent =
+          `${tc.total_kwh} kWh · ${tc.trips} ` + {{ t("trips") | tojson }} + ` @ ${tc.price_ct_per_kwh} ct/kWh`;
+        document.getElementById('tc_perkm').innerHTML =
+          tc.ct_per_km != null ? `${tc.ct_per_km}<span class="unit">ct/km</span>` : '—';
+        document.getElementById('tc_perkm_sub').textContent =
+          tc.eur_per_100km != null ? `€ ${tc.eur_per_100km}/100km` : '—';
+      }
+
+      // ---- CO₂ footprint (window)
+      const co2 = j.co2 || {};
+      if (co2.total_kg != null && co2.trips) {
+        document.getElementById('co2_total').innerHTML = `${co2.total_kg}<span class="unit">kg</span>`;
+        document.getElementById('co2_sub').textContent =
+          co2.g_per_km != null ? `${co2.g_per_km} g/km · ${co2.total_km} km` : `${co2.total_km} km`;
+        document.getElementById('co2_saved').textContent =
+          co2.saved_kg != null ? `${co2.saved_kg > 0 ? '−' : '+'}${Math.abs(co2.saved_kg)} kg` : '—';
+        document.getElementById('co2_saved_sub').textContent =
+          {{ t("vs ICE @ 150 g/km · ") | tojson }} + `${co2.ice_kg} kg`;
+      }
+
+      // ---- Usable battery capacity per month
+      const bt = (j.battery_trend && j.battery_trend.points) || [];
+      if (bt.length >= 2) {
+        new Chart(document.getElementById('battery_chart'), {
+          type: 'line',
+          data: { labels: bt.map(d => d.month), datasets: [{
+            label: {{ t("usable kWh") | tojson }},
+            data: bt.map(d => d.kwh),
+            borderColor: p.orange, backgroundColor: p.orange + '30',
+            pointRadius: 4, tension: 0.25, fill: true, spanGaps: true,
+          }]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: baseAxis,
+              y: { ...baseAxis, title: { display: true, text: 'kWh', color: p.ink3 } },
+            } },
+        });
+      } else { noData('battery_chart', {{ t("Collecting data — a capacity trend needs several months of trips with a noticeable SoC drop.") | tojson }}); }
 
       // ---- Charging calendar heatmap
       const hm = j.charge_heatmap || {};

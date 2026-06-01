@@ -10,6 +10,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..app_settings import (
+    blended_price_ct,
     get_charging_loss_factor,
     get_default_price_ct,
     set_charging_loss_factor,
@@ -20,17 +21,23 @@ from ..db.session import get_engine
 from ..i18n import SUPPORTED_LANGS, get_language, set_language
 from ..idle_drain import detect_idle_drains
 from ..insights_extras import (
+    compute_battery_trend,
     compute_charge_heatmap,
+    compute_co2,
     compute_forecast,
     compute_range_factor,
     compute_temp_scatter,
+    compute_trip_cost,
 )
 from ..journey_import import (
     calibrate_battery_kwh,
+    geo_label_for,
+    get_address_geofences,
     get_address_labels,
     label_for,
     list_imports,
     parse_csv,
+    set_address_geofences,
     set_address_labels,
     tag_co2_for_imports,
     upsert,
@@ -488,6 +495,9 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
         "range_factor": compute_range_factor(days=days),
         "charge_heatmap": compute_charge_heatmap(days=365),
         "temp_scatter": compute_temp_scatter(days=days),
+        "co2": compute_co2(days=days),
+        "trip_cost": compute_trip_cost(days=days),
+        "battery_trend": compute_battery_trend(),
     }
 
 
@@ -695,6 +705,18 @@ def address_labels_put(payload: dict[str, list[str]]) -> dict[str, list[str]]:
     return get_address_labels()
 
 
+@router.get("/address-geofences")
+def address_geofences_get() -> dict[str, dict]:
+    return get_address_geofences()
+
+
+@router.put("/address-geofences")
+def address_geofences_put(payload: dict[str, dict]) -> dict[str, dict]:
+    """Radius-based labels: {label: {lat, lng, radius_m}}. Replaces the set."""
+    set_address_geofences(payload)
+    return get_address_geofences()
+
+
 @router.post("/address-labels/assign")
 def address_labels_assign(payload: dict) -> dict[str, list[str]]:
     """Assign a pattern (address string) to a label, removing it from any other.
@@ -756,6 +778,59 @@ def address_points(
     for e in out:
         e["last_seen"] = e["last_seen"].isoformat()
     out.sort(key=lambda x: x["count"], reverse=True)
+    return out
+
+
+@router.get("/trip-paths")
+def trip_paths(
+    days: int = Query(365, ge=1, le=3650),
+    vin: str | None = None,
+) -> list[dict]:
+    """Per-trip start→end legs with metrics, for the Trip-Flow map.
+
+    Only trips with both endpoints geocoded are returned. Labels resolve via
+    the same string-pattern + geofence logic the route aggregator uses."""
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        stmt = (
+            select(JourneyImport)
+            .where(JourneyImport.started_at >= since)
+            .order_by(JourneyImport.started_at)
+        )
+        if vin is not None:
+            stmt = stmt.where(JourneyImport.vin == vin)
+        rows = s.exec(stmt).all()
+    labels = get_address_labels()
+    geofences = get_address_geofences()
+    price_ct, _ = blended_price_ct(days=max(days, 90))
+
+    def _resolve(addr, lat, lng):
+        return label_for(addr, labels) or geo_label_for(lat, lng, geofences)
+
+    out: list[dict] = []
+    for r in rows:
+        if r.start_lat is None or r.start_lng is None or r.end_lat is None or r.end_lng is None:
+            continue
+        km = r.distance_km or 0
+        kwh = r.consumption_kwh
+        per100 = round(kwh * 100 / km, 1) if kwh and km > 0.5 else None
+        co2_g = round(kwh * r.co2_g_per_kwh) if kwh and r.co2_g_per_kwh is not None else None
+        out.append({
+            "s": [r.start_lat, r.start_lng],
+            "e": [r.end_lat, r.end_lng],
+            "km": round(km, 1),
+            "kwh": round(kwh, 2) if kwh is not None else None,
+            "per100": per100,
+            "co2_g": co2_g,
+            "temp": r.outside_temp_c,
+            "cost_eur": round(kwh * price_ct / 100, 2) if kwh is not None else None,
+            "started_at": r.started_at.isoformat(),
+            "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+            "start_label": _resolve(r.start_address, r.start_lat, r.start_lng),
+            "end_label": _resolve(r.end_address, r.end_lat, r.end_lng),
+            "start_addr": (r.start_address or "").split(",")[0],
+            "end_addr": (r.end_address or "").split(",")[0],
+        })
     return out
 
 

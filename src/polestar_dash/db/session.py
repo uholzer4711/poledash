@@ -119,6 +119,27 @@ def _relax_chargingstation_gps(engine) -> None:
         conn.execute(text("ALTER TABLE chargingstation_new RENAME TO chargingstation"))
 
 
+def _dedupe_journeyimport(engine) -> None:
+    """Collapse duplicate imported trips on (started_at, ended_at) — forward-only.
+
+    A journey is uniquely identified by its exact start+end timestamps. Early
+    imports that ran *with* a VIN and were later re-imported *without* one
+    slipped past the VIN-sensitive dedup in ``journey_import.upsert`` and
+    produced exact duplicate rows. Keep the lowest id per timestamp pair and
+    drop the rest. Idempotent: a no-op once the table is unique.
+    """
+    insp = inspect(engine)
+    if "journeyimport" not in insp.get_table_names():
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "DELETE FROM journeyimport WHERE id NOT IN "
+                "(SELECT MIN(id) FROM journeyimport GROUP BY started_at, ended_at)"
+            )
+        )
+
+
 def init_engine(db_path: Path):
     global _engine
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -130,6 +151,7 @@ def init_engine(db_path: Path):
     SQLModel.metadata.create_all(_engine)
     _ensure_columns(_engine)
     _relax_chargingstation_gps(_engine)
+    _dedupe_journeyimport(_engine)
     return _engine
 
 

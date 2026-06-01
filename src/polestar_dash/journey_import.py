@@ -22,7 +22,7 @@ from sqlmodel import Session, select
 
 from .db.models import JourneyImport
 from .db.session import get_engine
-from .util import utcnow
+from .util import haversine_km, utcnow
 
 _DATE_FMT = "%Y-%m-%d, %H:%M"
 
@@ -86,6 +86,75 @@ def label_for(
     return None
 
 
+# Geofence labels: a label defined by a centre point + radius instead of an
+# address substring. More robust than string patterns (geocoding varies street
+# by street) — e.g. "Arbeit" = everything within 150 m of the office. Stored in
+# the `address_geofences` AppSetting as JSON {label: {lat, lng, radius_m}}.
+def get_address_geofences() -> dict[str, dict]:
+    import json
+
+    from .app_settings import get_setting
+
+    raw = get_setting("address_geofences", None)
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError
+        out: dict[str, dict] = {}
+        for label, geo in parsed.items():
+            if not isinstance(geo, dict):
+                continue
+            lat, lng, radius = geo.get("lat"), geo.get("lng"), geo.get("radius_m")
+            if lat is None or lng is None or radius is None:
+                continue
+            out[str(label)] = {
+                "lat": float(lat),
+                "lng": float(lng),
+                "radius_m": float(radius),
+            }
+        return out
+    except (ValueError, TypeError):
+        return {}
+
+
+def set_address_geofences(geofences: dict[str, dict]) -> None:
+    import json
+
+    from .app_settings import set_setting
+
+    clean: dict[str, dict] = {}
+    for label, geo in geofences.items():
+        lbl = str(label).strip()
+        if not lbl or not isinstance(geo, dict):
+            continue
+        try:
+            clean[lbl] = {
+                "lat": float(geo["lat"]),
+                "lng": float(geo["lng"]),
+                "radius_m": float(geo["radius_m"]),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+    set_setting("address_geofences", json.dumps(clean, ensure_ascii=False))
+
+
+def geo_label_for(
+    lat: float | None,
+    lng: float | None,
+    geofences: dict[str, dict] | None = None,
+) -> str | None:
+    """Return the label whose geofence centre is within radius of (lat, lng)."""
+    if lat is None or lng is None:
+        return None
+    table = geofences if geofences is not None else get_address_geofences()
+    for label, geo in table.items():
+        if haversine_km(lat, lng, geo["lat"], geo["lng"]) * 1000 <= geo["radius_m"]:
+            return label
+    return None
+
+
 def _to_float(s: str | None) -> float | None:
     if s is None or s == "":
         return None
@@ -139,7 +208,13 @@ def parse_csv(content: bytes, tz_offset_hours: float = 0.0) -> list[dict]:
 
 
 def upsert(records: list[dict], vin: str | None = None) -> tuple[int, int]:
-    """Insert records, skipping duplicates on (started_at, ended_at, vin).
+    """Insert records, skipping duplicates on (started_at, ended_at).
+
+    Dedup is intentionally VIN-agnostic: a trip is uniquely identified by its
+    exact start+end timestamps for this single-car app. Keying on VIN too was a
+    footgun — importing the same CSV once *with* a VIN and once *without* (SQL's
+    three-valued logic never matches ``'VIN' = NULL``) accumulated duplicates.
+    ``vin`` is still stored as informational metadata.
 
     Returns (inserted, skipped)."""
     inserted = 0
@@ -150,14 +225,6 @@ def upsert(records: list[dict], vin: str | None = None) -> tuple[int, int]:
                 JourneyImport.started_at == rec["started_at"],
                 JourneyImport.ended_at == rec["ended_at"],
             )
-            if vin is not None:
-                stmt = stmt.where(JourneyImport.vin == vin)
-            else:
-                # Without an explicit IS NULL, SQL's three-valued logic lets
-                # rows with vin=NULL slip past the equality filter, so a
-                # re-import of the same CSV with no VIN selected would
-                # accumulate duplicates.
-                stmt = stmt.where(JourneyImport.vin.is_(None))
             if s.exec(stmt).first() is not None:
                 skipped += 1
                 continue

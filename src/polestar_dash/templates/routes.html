@@ -24,6 +24,37 @@
     </div>
   </div>
 
+  {% set rated = routes|selectattr('avg_kwh_per_100km')|list %}
+  {% if rated|length >= 3 %}
+    {% set ranked = rated|sort(attribute='avg_kwh_per_100km') %}
+    <div class="grid grid-2 mb-6">
+      <div class="card">
+        <div class="card-label">{{ t("Most efficient routes") }}</div>
+        <table class="mono-xs mt-2" style="width:100%;border-collapse:collapse">
+          {% for r in ranked[:3] %}
+            <tr style="border-top:1px solid var(--ujh-line)">
+              <td style="padding:6px 8px">{{ r.start }} <span class="muted">→</span> {{ r.end }}</td>
+              <td class="right tnum"><span class="accent">{{ r.avg_kwh_per_100km }}</span> kWh/100km</td>
+              <td class="right tnum muted">{{ r.trips }}×</td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-label">{{ t("Least efficient routes") }}</div>
+        <table class="mono-xs mt-2" style="width:100%;border-collapse:collapse">
+          {% for r in ranked[-3:]|reverse %}
+            <tr style="border-top:1px solid var(--ujh-line)">
+              <td style="padding:6px 8px">{{ r.start }} <span class="muted">→</span> {{ r.end }}</td>
+              <td class="right tnum"><span class="accent">{{ r.avg_kwh_per_100km }}</span> kWh/100km</td>
+              <td class="right tnum muted">{{ r.trips }}×</td>
+            </tr>
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
   {% if not routes %}
     <p class="muted">{{ t("No repeated routes yet. Import a journey-log CSV with at least 2 matching trips.") }}</p>
   {% else %}

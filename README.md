@@ -53,11 +53,11 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/history` | **Battery & Charging** — telemetry time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
-| `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector |
+| `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector, real trip cost, **CO₂ footprint**, **usable-battery-capacity trend** |
 | `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
-| `/routes` | Repeated routes aggregated from imported trips |
+| `/routes` | Repeated routes aggregated from imported trips, with a most/least-efficient leaderboard |
 | `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
-| `/settings` `/errors` `/raw` | Settings (incl. **language** switch), recent errors, raw API dump |
+| `/settings` `/errors` `/raw` | Settings (incl. **language** switch, address labels + **geofence labels**, and a **Trip-flow map**), recent errors, raw API dump |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |
 
@@ -139,7 +139,16 @@ Manage them visually on `/settings` → *Address map* (Leaflet + OSM): every
 unique start/end point from imported trips appears as a dot, click to assign.
 Patterns are matched as **case-insensitive substrings**, so keep them specific
 — a pattern like `Austria` would match every address and collapse all routes
-into one.
+into one. `/settings` now **warns** when a pattern matches more than five
+distinct imported addresses, to catch exactly that. For places where the
+geocoded street wanders, prefer a **geofence label** instead: a centre point
+plus radius (e.g. *Work* = within 150 m of the office), edited in the *Geofence
+labels (radius)* card and resolved after the text patterns.
+
+Trip-flow map: `/settings` (under the address map) draws every imported drive
+as an animated arc — coloured by a switchable lens (kWh/100 km · CO₂ · outside
+°C · €), thickened by how often you drive it, with your geofence rings overlaid
+and a play/scrubber that replays your trips over time with a moving car marker.
 
 Software updates: `/software` shows the installed version, since when, the
 version history, and the manual's release-notes changelog. Twice a day the
