@@ -365,7 +365,7 @@ def app_settings_set_price(value: float = Query(..., ge=0, le=500)) -> dict:
 @router.post("/app-settings/charging-loss-factor")
 def app_settings_set_loss_factor(value: float = Query(..., ge=1.0, le=1.5)) -> dict:
     set_charging_loss_factor(value)
-    _recalc_session_energy(value)
+    _recalc_session_energy()
     return {"charging_loss_factor": get_charging_loss_factor()}
 
 
@@ -382,30 +382,26 @@ def app_settings_set_language(value: str = Query(...)) -> dict:
     return {"language": get_language()}
 
 
-def _recalc_session_energy(loss_factor: float | None = None) -> None:
-    """Recompute stored energy for every complete session from its SoC delta.
+def _recalc_session_energy() -> None:
+    """Recompute stored energy for every complete session.
 
-    Mirrors the close-time formula in ``sessions.py`` (ΔSoC × usable capacity ×
-    loss factor) so History stays consistent after the calibrated battery
-    capacity or the loss factor changes. Previously this hardcoded
-    ``DEFAULT_BATTERY_KWH``, so sessions recalculated here drifted from sessions
-    closed with the calibrated capacity. Uses the calibrated capacity (the same
-    value the close path falls back to when a snapshot carries no capacity).
+    Mirrors the close-time path in ``sessions.py``: integrated charging power
+    when the session has power samples (cadence- and SoC-quantization-free,
+    matches the operator's billed AC kWh), else the ΔSoC × capacity × loss
+    estimate. Keeps History consistent after the calibrated capacity or loss
+    factor changes.
     """
     from ..app_settings import get_calibrated_battery_kwh
-    from ..sessions import DEFAULT_BATTERY_KWH
-    if loss_factor is None:
-        loss_factor = get_charging_loss_factor()
+    from ..sessions import DEFAULT_BATTERY_KWH, compute_session_energy_kwh
     capacity = get_calibrated_battery_kwh(fallback=DEFAULT_BATTERY_KWH)
     with Session(get_engine()) as s:
         rows = list(s.exec(
             select(ChargeSession).where(ChargeSession.is_complete.is_(True))
         ).all())
         for cs in rows:
-            if cs.soc_start is not None and cs.soc_end is not None:
-                delta = max(0, cs.soc_end - cs.soc_start)
-                net_kwh = delta / 100 * capacity
-                cs.energy_kwh = round(net_kwh * loss_factor, 1)
+            energy = compute_session_energy_kwh(s, cs, capacity)
+            if energy is not None:
+                cs.energy_kwh = energy
                 s.add(cs)
         s.commit()
 

@@ -93,13 +93,22 @@ Electricity prices: set a default `ct/kWh` on `/settings` (defaults to 50);
 per-session overrides on the Sessions page get energy-weighted into the
 tripbook cost columns.
 
-Session energy & cost: a charge session's kWh is `ΔSoC × usable capacity ×
-charging-loss factor`. The usable capacity is auto-**calibrated** from imported
-journey consumption (energy out of the battery per SoC %), and the loss factor
-(`/settings`, default ×1.12 ≈ 12 % AC losses) is applied on top to reflect grid
-draw — so it is *not* double-counted. Cost is that grid energy × the effective
-price. Changing the loss factor, or a CSV import re-calibrating the pack,
-recomputes every complete session so History stays consistent.
+Session energy & cost: a charge session's kWh is measured by **integrating the
+reported charging power** over the session — trapezoidal `∫ charging_power_w dt`
+across the persisted snapshots, plus a head/tail correction that bridges the
+poll-cadence blind spots at plug-in and unplug (it extends the first/last
+observed power across half the gap to the adjacent snapshot, capped at the idle
+poll interval). This is the AC-side energy the charge-point operator bills, and
+it sidesteps the integer-percent SoC quantization that made short top-ups read
+~30 % low (`±1 %` ≈ `±0.8 kWh`). When a session carries no power samples (older
+*inferred* charges) it falls back to `ΔSoC × calibrated usable capacity ×
+charging-loss factor` — the capacity auto-**calibrated** from imported journey
+consumption, the loss factor (`/settings`, default ×1.12 ≈ 12 % AC losses)
+grossing net battery energy up to grid draw. Cost is that energy × the effective
+price. A CSV import re-calibrating the pack, or changing the loss factor (now
+only affecting the SoC fallback), recomputes every complete session so History
+stays consistent. The trade-off: very long charges read marginally lower than
+the old SoC method, while short charges are dramatically more accurate.
 
 Charging locations: each session has a **Location** field — a dropdown of
 known places where picking one fills the **Price (ct/kWh)** field with that

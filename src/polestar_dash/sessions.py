@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from .app_settings import get_calibrated_battery_kwh, get_charging_loss_factor
+from .config import get_settings
 from .db.models import ChargeSession, VehicleSnapshot
 from .db.session import get_engine
 from .polestar.fetcher import Snapshot
@@ -87,6 +88,100 @@ def _battery_capacity_kwh(snap: Snapshot) -> float:
     if snap.battery_capacity_kwh:
         return float(snap.battery_capacity_kwh)
     return get_calibrated_battery_kwh(fallback=DEFAULT_BATTERY_KWH)
+
+
+def _integrate_power_kwh(
+    s: Session, vin: str, start: datetime, end: datetime
+) -> float | None:
+    """Trapezoidal integration of charging_power_w over [start, end] → kWh.
+
+    This is the AC-side energy actually drawn — exactly what a charge-point
+    operator bills — and is far more accurate than ΔSoC × capacity for short
+    charges, where the integer-percent SoC quantization dominates the error
+    (±1 % ≈ ±0.8 kWh, i.e. ±20 % on a 4 % top-up). Long charges are fine
+    either way because the large SoC span swamps the rounding. Returns None
+    when no power samples exist (older inferred sessions carry none) so the
+    caller can fall back to the SoC estimate.
+
+    Head/tail correction: the adaptive cadence (idle poll vs. faster charging
+    poll) means we usually start sampling power a few minutes *after* plug-in
+    and stop a few minutes *before* unplug, so the raw integral truncates both
+    ends. We bridge each boundary by extending the first/last observed power
+    across *half* the gap to the adjacent snapshot — the maximum-entropy guess
+    that plug-in/unplug happened mid-gap — capping that gap at the idle poll
+    interval so an unusually long quiet stretch can't inflate the estimate.
+    This is a heuristic: when plug-in lands early in the gap we under-count,
+    when it lands late we over-count, but it is unbiased on average and removes
+    the systematic low bias of the truncated integral.
+    """
+    rows: list[tuple[datetime, int]] = list(
+        s.exec(
+            select(VehicleSnapshot.fetched_at, VehicleSnapshot.charging_power_w)
+            .where(
+                VehicleSnapshot.vin == vin,
+                VehicleSnapshot.fetched_at >= start,
+                VehicleSnapshot.fetched_at <= end,
+                VehicleSnapshot.charging_power_w.is_not(None),
+                VehicleSnapshot.charging_power_w > 0,
+            )
+            .order_by(VehicleSnapshot.fetched_at)
+        ).all()
+    )
+    if not rows:
+        return None
+
+    wh = 0.0
+    for (t0, p0), (t1, p1) in zip(rows, rows[1:]):
+        dt_h = (t1 - t0).total_seconds() / 3600.0
+        wh += (p0 + p1) / 2.0 * dt_h  # trapezoid, W·h
+
+    cap_s = get_settings().poll_interval_min * 60
+
+    # Head: bridge from the last snapshot before the first power sample.
+    first_t, first_p = rows[0]
+    prev = previous_snapshot(s, vin, first_t)
+    if prev is not None:
+        gap = min((first_t - prev.fetched_at).total_seconds(), cap_s)
+        wh += first_p * (gap / 2.0) / 3600.0
+
+    # Tail: bridge to the first snapshot after the last power sample (the
+    # terminal-state poll that carries no power, hence excluded above).
+    last_t, last_p = rows[-1]
+    nxt = s.exec(
+        select(VehicleSnapshot.fetched_at)
+        .where(VehicleSnapshot.vin == vin, VehicleSnapshot.fetched_at > last_t)
+        .order_by(VehicleSnapshot.fetched_at)
+        .limit(1)
+    ).first()
+    if nxt is not None:
+        gap = min((nxt - last_t).total_seconds(), cap_s)
+        wh += last_p * (gap / 2.0) / 3600.0
+
+    return wh / 1000.0
+
+
+def _soc_estimate_kwh(cs: ChargeSession, capacity_kwh: float) -> float | None:
+    """Legacy energy estimate: ΔSoC × usable capacity × charging-loss factor.
+
+    The loss factor grosses net DC-into-battery up to AC-at-the-meter; power
+    integration already measures the AC side, so it does *not* apply there."""
+    if cs.soc_start is None or cs.soc_end is None:
+        return None
+    delta = max(0, cs.soc_end - cs.soc_start)
+    net_kwh = delta / 100 * capacity_kwh
+    return round(net_kwh * get_charging_loss_factor(), 1)
+
+
+def compute_session_energy_kwh(
+    s: Session, cs: ChargeSession, capacity_kwh: float
+) -> float | None:
+    """Best available energy for a session: integrated charging power when we
+    have samples, else the ΔSoC estimate. Shared by the live close path and the
+    History recalc so both stay consistent."""
+    measured = _integrate_power_kwh(s, cs.vin, cs.started_at, cs.ended_at)
+    if measured is not None:
+        return round(measured, 1)
+    return _soc_estimate_kwh(cs, capacity_kwh)
 
 
 def _odo_stationary(a: float | None, b: float | None) -> bool:
@@ -265,10 +360,9 @@ def update_session(
                 cs.avg_power_w = avg_w
             if peak_w is not None:
                 cs.peak_power_w = peak_w
-            if cs.soc_start is not None and cs.soc_end is not None:
-                delta = max(0, cs.soc_end - cs.soc_start)
-                net_kwh = delta / 100 * _battery_capacity_kwh(snap)
-                cs.energy_kwh = round(net_kwh * get_charging_loss_factor(), 1)
+            energy = compute_session_energy_kwh(s, cs, _battery_capacity_kwh(snap))
+            if energy is not None:
+                cs.energy_kwh = energy
             cs.is_complete = True
             _auto_tag_station(cs, s)
             s.add(cs)

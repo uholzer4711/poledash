@@ -3,6 +3,22 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.10.6] — 2026-06-01
+
+### Changed — Session energy from integrated charging power
+
+- A session's `energy_kwh` is now measured by trapezoidal integration of
+  `charging_power_w` over the session window (with a head/tail correction for
+  the poll-cadence blind spot at plug-in/unplug), falling back to the old
+  `ΔSoC × capacity × loss` estimate only when a session has no power samples.
+  Power integration measures the AC-side energy the operator bills and avoids
+  the integer-percent SoC quantization that made short charges read far too
+  low — two billed top-ups went from −36 %/−8 % off to −5 %/+11 %. Shared by
+  the live close path and the History recalc. Trade-off: very long charges read
+  marginally lower than the SoC method; short charges are dramatically better.
+- All existing complete sessions were recalculated in place (DB backed up to
+  `data/polestar.pre-power-integration.*.bak` first).
+
 ## [1.10.5] — 2026-05-30
 
 ### Docs — README
