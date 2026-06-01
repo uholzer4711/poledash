@@ -48,9 +48,11 @@
         {% if demo_mode %}
         <span class="nav-disabled" title="{{ t('Disabled in demo') }}">{{ t("Raw") }}</span>
         <span class="nav-disabled" title="{{ t('Disabled in demo') }}">{{ t("Lab") }}</span>
+        <span class="nav-disabled" title="{{ t('Disabled in demo') }}">{{ t("Test") }}</span>
         {% else %}
         <a href="/raw" class="{% if path == '/raw' %}active{% endif %}">{{ t("Raw") }}</a>
         <a href="/lab" class="{% if path == '/lab' %}active{% endif %}">{{ t("Lab") }}</a>
+        <a href="/test" class="{% if path == '/test' %}active{% endif %}">{{ t("Test") }}</a>
         {% endif %}
       </div>
       <div class="mono-xs">v{{ app_version }}</div>

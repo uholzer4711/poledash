@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Test") }} · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">{{ t("10 / TEST") }}</div>
+    <h1>{{ t("Experimental") }} <em class="accent">{{ t("C3 data") }}</em></h1>
+    <p class="muted">{{ t("Live, read-only data from the C3 (Volvo Cloud Connectivity) backend — the same one the Polestar app uses. Not persisted, isolated from the normal poll loop. Fields pypolestar doesn't give us: GPS, doors/locks, climate, cabin air, on-car weather.") }}</p>
+  </div>
+
+  <div class="flex gap-4 mb-6 no-print" style="align-items:center;flex-wrap:wrap">
+    <button class="btn accent" type="button" onclick="tstLoad(true)">{{ t("Refresh now") }} <span class="arrow">→</span></button>
+    <span id="tst_meta" class="mono-xs muted">{{ t("loading…") }}</span>
+  </div>
+
+  <div id="tst_err" class="card alert" style="display:none;margin-bottom:24px"></div>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <div class="card mb-6">
+    <div class="card-label">{{ t("Location") }} <span class="muted">· {{ t("GPS — net-new vs pypolestar") }}</span></div>
+    <div id="tst_map" style="width:100%;height:420px;background:var(--ujh-bg-elev);margin-top:12px"></div>
+    <div id="tst_loc" class="mono-xs muted mt-2">—</div>
+  </div>
+
+  <div class="grid grid-4 mb-6">
+    <div class="card"><div class="card-label">{{ t("Locked") }}</div><div class="stat num" id="tst_locked">—</div><div class="stat-sub" id="tst_locked_sub">—</div></div>
+    <div class="card"><div class="card-label">{{ t("Climate") }}</div><div class="stat num" id="tst_clim">—</div><div class="stat-sub" id="tst_clim_sub">—</div></div>
+    <div class="card"><div class="card-label">{{ t("Cabin air (PM2.5 / AQI)") }}</div><div class="stat num" id="tst_air">—</div><div class="stat-sub" id="tst_air_sub">—</div></div>
+    <div class="card"><div class="card-label">{{ t("Weather at car") }}</div><div class="stat num" id="tst_wx">—</div><div class="stat-sub" id="tst_wx_sub">—</div></div>
+  </div>
+
+  <div class="grid grid-2 mb-6">
+    <div class="card">
+      <div class="card-label">{{ t("Doors, windows & openings") }}</div>
+      <div id="tst_doors" class="mt-2" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("Health & warnings") }}</div>
+      <div id="tst_health" class="mt-2" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+  </div>
+
+  <div class="card mb-6">
+    <div class="card-label">{{ t("Battery, charging & more") }}</div>
+    <div id="tst_extra" class="mono-xs mt-2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 24px"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Capture Leaflet immediately (date-fns on other pages reassigns window.L).
+    const TLeaflet = window.L;
+    (function () {
+      let tstMap = null, tstMarker = null, tstParked = null;
+      // Labels used inside JS template literals — kept as consts so we never
+      // put a Jinja expression right after a dollar-brace (parser collision,
+      // see the project conventions note on the date-fns/${ interpolation footgun).
+      const LBL = {
+        heading: {{ t("heading") | tojson }},
+        speed: {{ t("speed") | tojson }},
+        central: {{ t("central") | tojson }},
+        locked: {{ t("Locked") | tojson }},
+      };
+
+      function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+      function esc(s) { return String(s ?? '—'); }
+
+      // badge: green when value is in `good`, orange (warn) otherwise.
+      function badge(label, value, good) {
+        const ok = good.includes(String(value));
+        const cls = ok ? '' : 'warn';
+        return `<span class="badge ${cls}">${label}: ${esc(value)}</span>`;
+      }
+
+      function fmtTs(sec) {
+        if (!sec) return '—';
+        return new Date(sec * 1000).toLocaleString();
+      }
+
+      function drawMap(loc, parked) {
+        if (!loc || typeof TLeaflet === 'undefined') return;
+        const here = [loc.lat, loc.lng];
+        if (!tstMap) {
+          tstMap = TLeaflet.map('tst_map').setView(here, 14);
+          TLeaflet.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19,
+          }).addTo(tstMap);
+        }
+        const orange = cssVar('--ujh-orange') || '#ff5b14';
+        if (tstMarker) tstMarker.remove();
+        tstMarker = TLeaflet.circleMarker(here, {
+          radius: 9, color: orange, fillColor: orange, fillOpacity: 1, weight: 2,
+        }).addTo(tstMap).bindPopup({{ t("Current position") | tojson }});
+        if (parked && (parked.lat !== loc.lat || parked.lng !== loc.lng)) {
+          if (tstParked) tstParked.remove();
+          tstParked = TLeaflet.circleMarker([parked.lat, parked.lng], {
+            radius: 7, color: cssVar('--ujh-ink-3') || '#888', fillOpacity: 0.4, weight: 1,
+          }).addTo(tstMap).bindPopup({{ t("Last parked") | tojson }});
+        }
+        tstMap.setView(here);
+      }
+
+      window.tstLoad = async function (force) {
+        const meta = document.getElementById('tst_meta');
+        meta.textContent = {{ t("loading…") | tojson }};
+        let j;
+        try {
+          const r = await fetch('/api/test/c3' + (force ? '?force=true' : ''));
+          j = await r.json();
+        } catch (e) {
+          meta.textContent = {{ t("network error: ") | tojson }} + e;
+          return;
+        }
+        const errBox = document.getElementById('tst_err');
+        if (!j.ok) {
+          errBox.style.display = 'block';
+          errBox.textContent = {{ t("C3 backend error: ") | tojson }} + (j.error || '?');
+          meta.textContent = {{ t("failed") | tojson }};
+          return;
+        }
+        errBox.style.display = 'none';
+        const v = j.vehicle || {};
+        meta.textContent = `${esc(v.model)} ${esc(v.model_year)} · ${esc(v.registration_no)} · ` +
+          {{ t("age") | tojson }} + ` ${j.age_s}s`;
+
+        // Location
+        const loc = j.location, parked = j.parked;
+        if (loc) {
+          document.getElementById('tst_loc').innerHTML =
+            `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)} · ${LBL.heading} ${esc(loc.heading)}° · ` +
+            `${LBL.speed} ${esc(loc.speed)} · ${fmtTs(loc.ts)} · ` +
+            `<a href="https://www.openstreetmap.org/?mlat=${loc.lat}&mlon=${loc.lng}#map=16/${loc.lat}/${loc.lng}" target="_blank">OSM →</a>`;
+          drawMap(loc, parked);
+        } else {
+          document.getElementById('tst_loc').textContent = {{ t("no GPS in this response") | tojson }};
+        }
+
+        // Locked stat
+        const ext = j.exterior || {};
+        const locked = ext.is_locked;
+        document.getElementById('tst_locked').innerHTML = locked
+          ? `<span class="accent">${LBL.locked}</span>` : {{ t("Unlocked") | tojson }};
+        document.getElementById('tst_locked_sub').textContent =
+          (ext.any_door_open ? {{ t("a door is open!") | tojson }} : {{ t("all closed") | tojson }}) +
+          ` · ${LBL.central}: ${esc(ext.central_lock)}`;
+
+        // Climate
+        const cl = j.climate || {};
+        document.getElementById('tst_clim').textContent = cl.is_active ? {{ t("ON") | tojson }} : {{ t("off") | tojson }};
+        document.getElementById('tst_clim_sub').textContent =
+          `${esc(cl.action)} · ${esc(cl.running)}` + (cl.time_remaining ? ` · ${cl.time_remaining} min` : '');
+
+        // Air
+        const air = j.air || {};
+        document.getElementById('tst_air').innerHTML = `${esc(air.pm25)}<span class="unit">µg · AQI ${esc(air.aqi)}</span>`;
+        document.getElementById('tst_air_sub').textContent = air.is_running ? {{ t("pre-cleaning running") | tojson }} : {{ t("idle") | tojson }};
+
+        // Weather
+        const wx = j.weather || {};
+        document.getElementById('tst_wx').innerHTML = wx.temp_c != null ? `${wx.temp_c}<span class="unit">°C</span>` : '—';
+        document.getElementById('tst_wx_sub').textContent = wx.ts_ms ? new Date(wx.ts_ms).toLocaleTimeString() : '—';
+
+        // Doors/windows/openings
+        const openGood = ['closed'];
+        let dh = '';
+        if (ext.doors) {
+          const dn = {front_left: {{ t("Door FL") | tojson }}, front_right: {{ t("Door FR") | tojson }},
+                      rear_left: {{ t("Door RL") | tojson }}, rear_right: {{ t("Door RR") | tojson }}};
+          for (const k in dn) dh += badge(dn[k], ext.doors[k]?.open, openGood);
+        }
+        if (ext.windows) {
+          const wn = {front_left: {{ t("Win FL") | tojson }}, front_right: {{ t("Win FR") | tojson }},
+                      rear_left: {{ t("Win RL") | tojson }}, rear_right: {{ t("Win RR") | tojson }}};
+          for (const k in wn) dh += badge(wn[k], ext.windows[k], openGood);
+        }
+        dh += badge({{ t("Sunroof") | tojson }}, ext.sunroof, openGood);
+        dh += badge({{ t("Hood") | tojson }}, ext.hood, openGood);
+        dh += badge({{ t("Tailgate") | tojson }}, ext.tailgate, openGood);
+        document.getElementById('tst_doors').innerHTML = dh || '—';
+
+        // Health
+        const h = j.health || {};
+        let hh = '';
+        hh += badge({{ t("Lights") | tojson }}, h.any_light_failure ? {{ t("failure") | tojson }} : {{ t("ok") | tojson }}, [{{ t("ok") | tojson }}]);
+        hh += badge({{ t("Tyres") | tojson }}, h.any_tyre_warning ? {{ t("warning") | tojson }} : {{ t("ok") | tojson }}, [{{ t("ok") | tojson }}]);
+        hh += badge({{ t("Brake fluid") | tojson }}, h.brake_fluid, ['ok']);
+        hh += badge({{ t("Oil") | tojson }}, h.oil, ['ok']);
+        hh += badge({{ t("Coolant") | tojson }}, h.coolant, ['ok']);
+        hh += badge({{ t("Service") | tojson }}, h.service_warning, ['no warning']);
+        document.getElementById('tst_health').innerHTML = hh;
+
+        // Extra grid
+        const b = j.battery || {};
+        const rows = [
+          [{{ t("SoC") | tojson }}, b.charge_level != null ? b.charge_level + ' %' : '—'],
+          [{{ t("Range") | tojson }}, b.range_km != null ? b.range_km + ' km' : '—'],
+          [{{ t("Plugged in") | tojson }}, b.is_plugged_in ? {{ t("yes") | tojson }} : {{ t("no") | tojson }}],
+          [{{ t("Charging") | tojson }}, `${esc(b.charging_status)} (${esc(b.charging_type)})`],
+          [{{ t("Connector") | tojson }}, esc(b.connection)],
+          [{{ t("Amp limit") | tojson }}, j.amp_limit != null ? j.amp_limit + ' A' : '—'],
+          [{{ t("Odometer") | tojson }}, j.odometer_km != null ? j.odometer_km + ' km' : '—'],
+          [{{ t("Days to service") | tojson }}, h.days_to_service != null ? h.days_to_service : '—'],
+          [{{ t("Distance to service") | tojson }}, h.distance_to_service_km != null ? h.distance_to_service_km + ' km' : '—'],
+          [{{ t("Available") | tojson }}, (j.availability && j.availability.status) || '—'],
+        ];
+        document.getElementById('tst_extra').innerHTML = rows.map(
+          ([k, val]) => `<div><span class="muted">${k}:</span> ${esc(val)}</div>`).join('');
+      };
+
+      function init() { tstLoad(false); setInterval(() => tstLoad(false), 30000); }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+      else init();
+    })();
+  </script>
+{% endblock %}

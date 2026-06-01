@@ -13,6 +13,7 @@ from .db.session import init_engine
 from .polestar.client import PolestarClient
 from .routes import api as api_routes
 from .routes import dashboard, health, lab, pages, raw
+from .routes import test as test_routes
 from .scheduler import build_scheduler
 
 logging.basicConfig(
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
     app.include_router(raw.router)
     app.include_router(pages.router)
     app.include_router(lab.router)
+    app.include_router(test_routes.router)
 
     app.mount("/static", StaticFiles(directory=str(PKG_DIR / "static")), name="static")
     return app

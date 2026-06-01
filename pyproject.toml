@@ -17,6 +17,11 @@ dependencies = [
     "python-multipart>=0.0.12",
     "prometheus-client>=0.21",
     "aiomqtt>=2.3",
+    # Experimental C3 (Volvo Cloud Connectivity) client — powers the /test page
+    # only (live GPS, exterior/lock, climate, air-quality). Isolated from the
+    # pypolestar-based poll loop; imported lazily so a missing/broken build
+    # never affects the rest of the app.
+    "unofficial-polestar-api>=0.3,<1.0",
 ]
 
 [project.optional-dependencies]
