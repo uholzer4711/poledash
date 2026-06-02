@@ -222,11 +222,15 @@
         {% if s.days_to_service is not none %}{{ t("in {n} days", n=s.days_to_service) }}{% endif %}
         {% if s.distance_to_service_km is not none %} · {{ "{:,}".format(s.distance_to_service_km).replace(",", " ") }} km{% endif %}
       </div>
+      {# Oil/Brake/Coolant live in the C3 "Health & warnings" block when C3 is
+         on (superset, live). Only show them here as a fallback when C3 is off. #}
+      {% if not c3_enabled %}
       <div class="mt-4 chips">
         <span class="badge {% if s.oil_level_warning not in ok %}warn{% endif %}">{{ t("Oil") }}</span>
         <span class="badge {% if s.brake_fluid_level_warning not in ok %}warn{% endif %}">{{ t("Brake") }}</span>
         <span class="badge {% if s.engine_coolant_level_warning not in ok %}warn{% endif %}">{{ t("Coolant") }}</span>
       </div>
+      {% endif %}
     </div>
   </div>
 
@@ -234,9 +238,6 @@
   <div class="card mt-4">
     <div class="card-label">{{ t("Vehicle") }}</div>
     <div class="flex gap-4" style="align-items:center">
-      {% if s.image_url %}
-        <img src="{{ s.image_url }}" alt="" class="veh-image" loading="lazy"/>
-      {% endif %}
       <div style="flex:1">
         <div class="veh-title">{{ s.model_name or "Polestar" }} <span class="muted">{{ s.model_year or "" }}</span></div>
         <div class="kv-row">

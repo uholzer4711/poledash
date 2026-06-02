@@ -457,7 +457,7 @@
           <td style="text-align:right">${fmtDur(d.duration_min)}</td>
           <td style="text-align:right">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
           <td style="text-align:right">${d.kwh.toFixed(2)}</td>
-        </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">No idle drains detected.</td></tr>';
+        </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
 
       tbody.innerHTML = j.cost_by_week.map(c => `
         <tr style="border-top:1px solid var(--ujh-line)">
@@ -473,7 +473,7 @@
       catch (e) {
         const box = document.getElementById('errbox');
         box.style.display = 'block';
-        box.innerHTML = `<div class="card-label">Insights failed to load</div>
+        box.innerHTML = `<div class="card-label">{{ t("Insights failed to load") }}</div>
           <div class="mono-xs muted" style="white-space:pre-wrap">${(e.stack || e.message || e).toString()}</div>`;
         console.error(e);
       }

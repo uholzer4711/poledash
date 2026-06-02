@@ -897,19 +897,37 @@ def journey_imports(days: int = Query(30, ge=1, le=3650), vin: str | None = None
 
 
 @router.get("/c3/latest")
-async def c3_latest(vin: str | None = None) -> dict:
+async def c3_latest(vin: str | None = None, live: bool = False) -> dict:
     """Latest C3 state (doors/locks/climate/GPS) for the dashboard.
 
-    Prefers the persisted C3Snapshot (the scheduler's c3_poll_once keeps it
-    fresh, no backend hit). Falls back to the live cache when nothing has been
-    polled yet — e.g. before the first staggered C3 poll — so the dashboard
-    isn't blank while /test already shows live data. Always carries the poll
-    interval + source so the UI can show "last poll / interval"."""
+    With ``live=true`` the dashboard fetches fresh from the C3 backend (30 s
+    cache, shared with /test) so it stays consistent with the Test page — a
+    throttled/failed live read degrades gracefully to the persisted row. Without
+    it, returns the persisted C3Snapshot (scheduler-kept, no backend hit) and
+    only live-fetches when nothing has been polled yet, so the dashboard isn't
+    blank before the first poll. Always carries the poll interval + source so
+    the UI can show "last poll / interval"."""
     cfg = get_settings()
     meta = {
         "interval_min": cfg.c3_poll_interval_min,
         "fast_interval_min": cfg.c3_fast_poll_interval_min,
     }
+
+    async def _live() -> dict | None:
+        if not cfg.c3_enabled:
+            return None
+        data = await get_c3_snapshot()  # cached ~30 s; warm if /test was opened
+        flat = c3_dict_to_row(data)
+        if not flat:
+            return None
+        return {**flat, "fetched_at": utcnow().isoformat(), "source": "live", **meta}
+
+    # Live path (dashboard opt-in): prefer fresh data, fall back to the DB row.
+    if live:
+        fresh = await _live()
+        if fresh is not None:
+            return fresh
+
     with Session(get_engine()) as s:
         stmt = select(C3Snapshot).order_by(C3Snapshot.fetched_at.desc())
         if vin:
@@ -917,12 +935,9 @@ async def c3_latest(vin: str | None = None) -> dict:
         row = s.exec(stmt.limit(1)).first()
     if row is not None:
         return {**row.model_dump(mode="json"), "source": "db", **meta}
-    if cfg.c3_enabled:
-        data = await get_c3_snapshot()  # cached ~30 s; warm if /test was opened
-        flat = c3_dict_to_row(data)
-        if flat:
-            return {**flat, "fetched_at": utcnow().isoformat(), "source": "live", **meta}
-    return dict(meta)
+    # No persisted row yet — live-fetch so the dashboard isn't blank.
+    fresh = await _live()
+    return fresh if fresh is not None else dict(meta)
 
 
 @router.get("/weather/current")

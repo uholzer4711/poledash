@@ -480,6 +480,8 @@ TRANSLATIONS_DE: dict[str, str] = {
         "Implizierte nutzbare kWh = Energie ÷ SoC-Abfall, pro Monat. Ein Abwärtstrend über viele Monate deutet auf Degradation hin.",
     "Collecting data — a capacity trend needs several months of trips with a noticeable SoC drop.":
         "Sammle Daten — ein Kapazitätstrend braucht mehrere Monate Fahrten mit spürbarem SoC-Abfall.",
+    "No idle drains detected.": "Keine Ruhe-Entladungen erkannt.",
+    "Insights failed to load": "Auswertung konnte nicht geladen werden",
     # --- Route leaderboard (routes.html) ---
     "Most efficient routes": "Effizienteste Routen",
     "Least efficient routes": "Ineffizienteste Routen",
@@ -511,6 +513,9 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Unlocked": "Entriegelt",
     "a door is open!": "eine Tür ist offen!",
     "all closed": "alles geschlossen",
+    "open": "offen",
+    "closed": "geschlossen",
+    "ajar": "angelehnt",
     "central": "zentral",
     "ON": "AN",
     "off": "aus",
@@ -551,6 +556,13 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Frunk": "Frunk",
     "Boot": "Kofferraum",
     "Charge port": "Ladeklappe",
+    "Front left": "Vorne links",
+    "Front right": "Vorne rechts",
+    "Rear left": "Hinten links",
+    "Rear right": "Hinten rechts",
+    "Window": "Fenster",
+    "Door": "Tür",
+    "Charge": "Laden",
     "Satellite": "Satellit",
     "Dark": "Dunkel",
     "No C3 data polled yet — check the Test page / settings.":

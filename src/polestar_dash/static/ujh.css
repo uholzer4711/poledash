@@ -228,7 +228,6 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 
   /* Vehicle card */
   .veh-title { font-size: 20px; }
-  .veh-image { width: 120px; height: 72px; }
   .kv-row { gap: var(--ujh-s-3) var(--ujh-s-4); margin-top: var(--ujh-s-2); }
   .kv span:first-child { font-size: 9px; letter-spacing: 0.12em; }
   .card-row { gap: var(--ujh-s-3); flex-wrap: wrap; }
@@ -353,7 +352,6 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .kv span:first-child { font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ujh-ink-4); }
 .kv-row { display: flex; flex-wrap: wrap; gap: var(--ujh-s-5) var(--ujh-s-6); margin-top: var(--ujh-s-3); }
 .veh-title { font: 500 28px/1.1 var(--ujh-sans); letter-spacing: -0.02em; }
-.veh-image { width: 180px; height: 110px; object-fit: cover; background: var(--ujh-bg-3); }
 
 .meta-row { display: flex; gap: var(--ujh-s-3); align-items: baseline; color: var(--ujh-ink-3); }
 .meta-row .mono-xs { color: var(--ujh-ink-4); }
@@ -385,13 +383,81 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .car-body.is-locked { stroke: var(--ujh-ok); }
 .car-wheel { fill: var(--ujh-ink-4); }
 .car-mirror { fill: var(--ujh-bg-3); stroke: var(--ujh-line-2); stroke-width: 1.5; }
-/* Optional real-photo variant (CAR_IMAGE_URL). The lock state shows as a thin
-   frame; per-opening state is read from the badges below (a flat photo can't
-   be recoloured per door). */
-.car-photo-wrap { padding: var(--ujh-s-4) 0; border: 1px solid transparent; transition: border-color var(--ujh-t-base); }
-.car-photo-wrap.is-locked { border-color: var(--ujh-ok); }
-.car-photo-wrap.is-unlocked { border-color: var(--ujh-alert); }
-.car-photo { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 auto; }
+/* Real-photo variant (uploaded image / CAR_IMAGE_URL). The lock state shows as
+   a thin frame around the photo; open parts light up via the orange overlay
+   (.car-photo-overlay), whose zones are calibrated to the stock top-view. */
+.car-photo-wrap { padding: var(--ujh-s-4) 0; }
+.car-photo-stage {
+  position: relative; display: block; width: 100%; max-width: 440px;
+  margin: 0 auto; border: 1px solid transparent; transition: border-color var(--ujh-t-base);
+}
+.car-photo-stage.is-locked { border-color: var(--ujh-ok); }
+.car-photo-stage.is-unlocked { border-color: var(--ujh-alert); }
+.car-photo { display: block; width: 100%; height: auto; }
+.car-photo-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* Only OPEN parts paint — flat orange fill (no shadow/gradient), closed = invisible. */
+.car-photo-overlay .ov-part { fill: var(--ujh-orange); opacity: 0; transition: opacity var(--ujh-t-base); }
+.car-photo-overlay .ov-part.is-open { opacity: 0.62; }
+
+/* Openings panel (summary + grid). Open = orange accent, closed = muted. */
+.openings { margin-top: var(--ujh-s-4); }
+.openings-summary {
+  font: 500 11px/1 var(--ujh-mono); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ujh-ink-3); margin-bottom: var(--ujh-s-3);
+}
+.openings-summary.is-ok { color: var(--ujh-ok); }
+.openings-summary.is-open { color: var(--ujh-orange); }
+.openings-summary .n { font: 600 15px/1 var(--ujh-sans); }
+.openings-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 1px; background: var(--ujh-line); border: 1px solid var(--ujh-line);
+}
+.opening { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; background: var(--ujh-bg-2); }
+.opening-name { font: 500 9px/1.2 var(--ujh-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ujh-ink-4); }
+.opening-state { font: 500 13px/1 var(--ujh-sans); color: var(--ujh-ink-2); }
+.opening.is-open { background: color-mix(in srgb, var(--ujh-orange) 14%, var(--ujh-bg-2)); }
+.opening.is-open .opening-name,
+.opening.is-open .opening-state { color: var(--ujh-orange); }
+
+/* ---------- Status chips placed around the car photo ---------- */
+.car-chips { position: absolute; inset: 0; pointer-events: none; }
+.car-chip {
+  position: absolute; min-width: 72px; max-width: 28%;
+  padding: 4px 7px;
+  background: color-mix(in srgb, var(--ujh-bg) 86%, transparent);
+  border: 1px solid var(--ujh-line-2);
+}
+.car-chip.is-open { border-color: var(--ujh-orange); }
+.car-chip .chip-title {
+  font: 500 7.5px/1.4 var(--ujh-mono); letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ujh-ink-4); margin-bottom: 2px;
+}
+.car-chip .chip-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.car-chip .chip-row .rk {
+  font: 500 7.5px/1.7 var(--ujh-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ujh-ink-3);
+}
+.car-chip .chip-row .rv { font: 500 11px/1.5 var(--ujh-sans); color: var(--ujh-ink-2); }
+.car-chip .chip-row.is-open .rk, .car-chip .chip-row.is-open .rv { color: var(--ujh-orange); }
+/* Anchors around the photo (front = top, rear = bottom). */
+.car-chip.chip-frunk { left: 24%; top: 8%; }
+.car-chip.chip-fl    { left: 0.5%; top: 38.5%; }
+.car-chip.chip-fr    { right: 0.5%; top: 38.5%; }
+.car-chip.chip-rl    { left: 0.5%; top: 57%; }
+.car-chip.chip-rr    { right: 0.5%; top: 57%; }
+.car-chip.chip-boot  { left: 39%; top: 88%; }
+
+/* Leader stubs + part dots in the overlay SVG. */
+.car-photo-overlay .ov-leader { stroke: var(--ujh-line-2); transition: stroke var(--ujh-t-base); }
+.car-photo-overlay .ov-dot { fill: var(--ujh-line-2); transition: fill var(--ujh-t-base); }
+.car-photo-overlay .ov-leader.is-open { stroke: var(--ujh-orange); }
+.car-photo-overlay .ov-dot.is-open { fill: var(--ujh-orange); }
+
+/* Chips are the wide-view presentation; the grid is the narrow-view fallback. */
+.openings.is-fallback { display: none; }
+@media (max-width: 559px) {
+  .car-chips { display: none; }
+  .openings.is-fallback { display: block; }
+}
 .car-glass { fill: var(--ujh-bg); stroke: var(--ujh-line-2); stroke-width: 1.5; }
 .car-label { fill: var(--ujh-ink-4); font: 500 9px/1 var(--ujh-mono); letter-spacing: 0.1em; text-transform: uppercase; }
 /* Toggleable openings: green outline when closed, red when open. */

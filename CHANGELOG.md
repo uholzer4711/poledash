@@ -3,6 +3,42 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.14.0] — 2026-06-02
+
+### Changed — Dashboard vehicle state goes live
+
+- **Live vehicle state**: the dashboard's vehicle-state section now fetches
+  **fresh** from the C3 backend via `GET /api/c3/latest?live=1` (30 s cache,
+  shared with `/test`) so it stays consistent with the Test page; a
+  throttled/failed live read degrades gracefully to the persisted `C3Snapshot`.
+  The GPS trail (`/api/c3/track`) and all other readers stay DB-only.
+- **Faster C3 cadence**: idle `C3_POLL_INTERVAL_MIN` 10 → **5** min and drive
+  `C3_DRIVE_POLL_INTERVAL_MIN` 3 → **2** min. The car often reports `speed: 0`
+  mid-drive, so drive detection leans on the movement heuristic — the idle base
+  must stay short enough to sample a drive at all.
+- **Car overlay recalibrated**: the open door/window orange overlay (plus the
+  status chips and leader lines) now targets an uploaded **straight, symmetric
+  top-view render** (479×759, `viewBox="0 0 479 759"` mapping 1:1 to image
+  pixels) instead of the old angled stock photo. The built-in green/red SVG
+  diagram remains the fallback when no image is uploaded.
+
+### Removed — dashboard de-duplication
+
+- Dropped the redundant Polestar studio image from the Vehicle card — the
+  functional top-view is now the only car image on the page.
+- Oil / Brake / Coolant warnings render **only** in the C3 *Health & warnings*
+  block when C3 is enabled (it's a live superset that also covers tyres +
+  lights); the Service card keeps just the service interval (days / km).
+- Removed the duplicate "· Locked" eyebrow — the photo frame colour and the
+  Locked stat card already convey lock state.
+
+### Fixed
+
+- **i18n**: wrapped two untranslated Insights strings (*No idle drains
+  detected.*, *Insights failed to load*) and added German entries.
+- **Refactor**: extracted the duplicated nearest-by-timestamp lookup in
+  `stations.py` into a single module-level `_nearest_by_time` helper.
+
 ## [1.13.0] — 2026-06-01
 
 ### Added — C3 data feeds Tripbook / Routes / Charging, plus a rain alert

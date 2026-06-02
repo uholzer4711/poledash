@@ -21,12 +21,16 @@ class Settings(BaseSettings):
     # the cadence is deliberately slower than the main poll and staggered
     # against it (see scheduler._reschedule_c3) to spare the shared rate limit.
     c3_enabled: bool = True
-    c3_poll_interval_min: int = Field(default=10, ge=2, le=1440)
+    # Base (idle) cadence. Kept short enough that a typical drive spans at least
+    # one poll, so the movement heuristic in scheduler.c3_poll_once can flip into
+    # the faster drive cadence below. Going lower raises throttle risk on the
+    # shared account ("not authorized") — tune via C3_POLL_INTERVAL_MIN.
+    c3_poll_interval_min: int = Field(default=5, ge=2, le=1440)
     c3_fast_poll_interval_min: int = Field(default=5, ge=2, le=60)
     # Faster cadence while the car is *driving* so the GPS trail is dense enough
     # to draw a real route line. Raises API load on the shared account — set
     # high (≈ c3_poll_interval_min) to effectively disable.
-    c3_drive_poll_interval_min: int = Field(default=3, ge=2, le=60)
+    c3_drive_poll_interval_min: int = Field(default=2, ge=2, le=60)
     notify_door_open: bool = True
     notify_unlocked: bool = True
     # Optional URL to a real Polestar 2 image shown on the dashboard vehicle

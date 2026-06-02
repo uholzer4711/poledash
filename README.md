@@ -49,7 +49,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 
 | Path | Purpose |
 |---|---|
-| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info, plus a **C3 vehicle-state** section: top-view car diagram (green = closed / red = open per door/window/frunk/boot/sunroof), lock/climate/cabin-air/weather cards, and a satellite mini-map with the live GPS pin + trail |
+| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info, plus a **C3 vehicle-state** section: a top-view of the car with each open door/window/frunk/boot/sunroof highlighted (uses your uploaded vehicle image with an orange open-overlay + status chips, or a built-in green/red SVG diagram as fallback), lock/climate/cabin-air/weather cards, and a satellite mini-map with the live GPS pin + trail. The vehicle-state section reads **live** from the C3 backend so it matches the Test page |
 | `/history` | **Battery & Charging** — telemetry time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
@@ -82,9 +82,9 @@ See [`.env.example`](.env.example). Most useful:
 | `POLL_INTERVAL_MIN` | `10` | Idle (floor: 5) |
 | `FAST_POLL_INTERVAL_MIN` | `2` | Charging (floor: 1) |
 | `C3_ENABLED` | `true` | Poll the C3 backend (GPS, doors, climate, air, weather) |
-| `C3_POLL_INTERVAL_MIN` | `10` | C3 idle cadence (staggered vs the main poll) |
+| `C3_POLL_INTERVAL_MIN` | `5` | C3 idle cadence (staggered vs the main poll); kept short so a drive spans at least one poll |
 | `C3_FAST_POLL_INTERVAL_MIN` | `5` | C3 cadence while charging |
-| `C3_DRIVE_POLL_INTERVAL_MIN` | `3` | C3 cadence while driving (dense GPS trail); set high to disable |
+| `C3_DRIVE_POLL_INTERVAL_MIN` | `2` | C3 cadence while driving (dense GPS trail); set high to disable |
 | `NOTIFY_DOOR_OPEN` / `NOTIFY_UNLOCKED` | `true` | C3 door-open / unlocked alerts |
 | `CAR_IMAGE_URL` | — | Optional vehicle image (an upload on `/settings` overrides it) |
 | `SMTP_HOST` | — | SMTP server (e.g. `smtp.gmail.com`) |

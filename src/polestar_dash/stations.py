@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_left
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlmodel import Session, select
 
@@ -28,6 +28,24 @@ def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def _nearest_by_time(keys, rows, target, window: timedelta = timedelta(hours=4)):
+    """Row whose key timestamp is closest to `target`, within `window`.
+
+    `keys` must be sorted ascending and parallel to `rows`; returns None when
+    nothing falls inside the window."""
+    if not keys:
+        return None
+    i = bisect_left(keys, target)
+    best, best_diff = None, window
+    for ci in (i - 1, i):
+        if 0 <= ci < len(rows):
+            diff = abs(keys[ci] - target)
+            if diff <= best_diff:
+                best_diff = diff
+                best = rows[ci]
+    return best
+
+
 def _c3_location(session: ChargeSession, s: Session) -> tuple[float, float] | None:
     """Direct GPS for a charge session from C3Snapshot — the car reports its own
     position, so when we have a C3 fix during (or just around) the session this
@@ -48,7 +66,6 @@ def locate_session(
     Persisted session GPS first (stamped at close), then a live C3Snapshot
     lookup, then the JourneyImport trip-endpoint heuristic as a fallback for
     sessions older than C3 polling."""
-    window = timedelta(hours=4)
 
     def _query(s: Session):
         if session.lat is not None and session.lng is not None:
@@ -73,24 +90,11 @@ def locate_session(
         )
         start_keys = [j.started_at for j in starts]
 
-        def _nearest(keys: list[datetime], rows: list, target: datetime):
-            if not keys:
-                return None
-            i = bisect_left(keys, target)
-            best, best_diff = None, window
-            for ci in (i - 1, i):
-                if 0 <= ci < len(rows):
-                    diff = abs(keys[ci] - target)
-                    if diff <= best_diff:
-                        best_diff = diff
-                        best = rows[ci]
-            return best
-
-        j = _nearest(end_keys, ends, session.started_at)
+        j = _nearest_by_time(end_keys, ends, session.started_at)
         if j is not None:
             return (j.end_lat, j.end_lng)
         ref = session.ended_at or session.started_at
-        j = _nearest(start_keys, starts, ref)
+        j = _nearest_by_time(start_keys, starts, ref)
         if j is not None:
             return (j.start_lat, j.start_lng)
         return None
@@ -241,30 +245,16 @@ def batch_suggest(sessions: list[ChargeSession]) -> dict[int, dict]:
         key=lambda j: j.started_at,
     )
     start_keys = [j.started_at for j in starts_sorted]
-    window = timedelta(hours=4)
-
-    def _nearest(keys, rows, target):
-        if not keys:
-            return None
-        i = bisect_left(keys, target)
-        best, best_diff = None, window
-        for ci in (i - 1, i):
-            if 0 <= ci < len(rows):
-                diff = abs(keys[ci] - target)
-                if diff <= best_diff:
-                    best_diff = diff
-                    best = rows[ci]
-        return best
 
     result = {}
     for cs in unfilled:
-        j = _nearest(end_keys, ends_sorted, cs.started_at)
+        j = _nearest_by_time(end_keys, ends_sorted, cs.started_at)
         coords = None
         if j is not None:
             coords = (j.end_lat, j.end_lng)
         else:
             ref = cs.ended_at or cs.started_at
-            j = _nearest(start_keys, starts_sorted, ref)
+            j = _nearest_by_time(start_keys, starts_sorted, ref)
             if j is not None:
                 coords = (j.start_lat, j.start_lng)
         if coords is None:
