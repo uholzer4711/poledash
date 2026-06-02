@@ -7,22 +7,6 @@
   </div>
 
   <div class="card mb-6">
-    <div class="card-label">{{ t("Language") }}</div>
-    <div class="flex gap-4" style="align-items:center;flex-wrap:wrap">
-      <button class="btn{% if ui_lang() == 'de' %} accent{% endif %}" onclick="setLang('de')">Deutsch</button>
-      <button class="btn{% if ui_lang() == 'en' %} accent{% endif %}" onclick="setLang('en')">English</button>
-    </div>
-    <div class="stat-sub mt-4">{{ t("Applies to the whole UI and notification messages.") }}</div>
-  </div>
-  <script>
-    async function setLang(v) {
-      const r = await fetch('/api/app-settings/language?value=' + encodeURIComponent(v), {method:'POST'});
-      if (!r.ok) return alert({{ t("save failed: ") | tojson }} + r.status);
-      location.reload();
-    }
-  </script>
-
-  <div class="card mb-6">
     <div class="card-label">{{ t("Electricity price (your tariff)") }}</div>
     <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
       <div class="field" style="flex:1;min-width:160px">
@@ -798,8 +782,9 @@
 
   {% if not demo_mode %}
   <div class="card mb-6">
-    <div class="card-label">{{ t("Grafana dashboards") }}</div>
-    <p>{{ t("Drop-in dashboards for the Prometheus <code>/metrics</code> scrape. In Grafana <em>Dashboards → New → Import</em> → paste JSON URL or upload file. Each has its own UID, import as many as you like.") }}</p>
+    <details>
+    <summary class="card-label" style="cursor:pointer;list-style:none">{{ t("Grafana dashboards") }} <span class="muted">· 7 →</span></summary>
+    <p class="mt-4">{{ t("Drop-in dashboards for the Prometheus <code>/metrics</code> scrape. In Grafana <em>Dashboards → New → Import</em> → paste JSON URL or upload file. Each has its own UID, import as many as you like.") }}</p>
 
     <div class="grid grid-2 mt-4" style="gap:16px">
       <div class="card" style="background:#1a1c20">
@@ -876,6 +861,7 @@
     <div class="stat-sub mt-4">
       {{ t("All boards use orange (<code>#ff5b14</code>) only for live charging signals — matches poledash design tokens. Import one or pick favorites; UIDs are distinct (<code>poledash-main</code>, <code>poledash-cockpit</code>, <code>poledash-charging-lab</code>, <code>poledash-fleet-pulse</code>, <code>poledash-eco-impact</code>, <code>poledash-mission-control</code>).") }}
     </div>
+    </details>
   </div>
   {% endif %}
 

@@ -565,6 +565,8 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Charge": "Laden",
     "Satellite": "Satellit",
     "Dark": "Dunkel",
+    "Light": "Hell",
+    "details": "Details",
     "No C3 data polled yet — check the Test page / settings.":
         "Noch keine C3-Daten abgerufen — siehe Test-Seite / Einstellungen.",
     "Car left unlocked": "Auto unverschlossen",
@@ -617,6 +619,12 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Cabin air quality · PM2.5 monthly": "Kabinenluft · PM2.5 monatlich",
     "Monthly average cabin PM2.5 (µg/m³) from C3-enriched trips. Lower is cleaner.":
         "Monatsmittel der Kabinen-PM2.5 (µg/m³) aus C3-angereicherten Trips. Niedriger = sauberer.",
+    "Cabin air & on-car temperature · daily": "Kabinenluft & Außentemperatur · täglich",
+    "Daily mean cabin PM2.5 (µg/m³) and on-car outside temperature, straight from C3 polls. Lower PM2.5 is cleaner.":
+        "Tagesmittel der Kabinen-PM2.5 (µg/m³) und der am Auto gemessenen Außentemperatur, direkt aus den C3-Abfragen. Niedrigere PM2.5 = sauberer.",
+    "on-car °C": "Auto-°C",
+    "No C3 environment data yet — appears once C3 polling has run.":
+        "Noch keine C3-Umweltdaten — erscheint, sobald die C3-Abfrage gelaufen ist.",
     "No charge sessions with a C3 temperature yet.":
         "Noch keine Ladungen mit C3-Temperatur.",
     "No cabin PM2.5 data yet — import a journey log after C3 polling has run.":

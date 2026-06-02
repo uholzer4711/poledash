@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from .db.models import C3Snapshot, JourneyImport
+from .db.models import C3Snapshot, ChargeSession, JourneyImport
 from .db.session import get_engine
 
 log = logging.getLogger(__name__)
@@ -149,6 +149,47 @@ def enrich_journey_imports_from_c3(limit: int = 200) -> dict:
                 changed = True
             if changed:
                 s.add(r)
+                updated += 1
+        s.commit()
+    return {"checked": checked, "updated": updated}
+
+
+def backfill_session_c3_env(limit: int = 500) -> dict:
+    """Stamp complete charge sessions that still lack on-car temp/PM2.5/GPS from
+    the nearest C3 snapshot. Only fills empty fields, so a re-run never clobbers
+    a value already captured. Mirrors sessions._stamp_c3_env for the close-time
+    path; this is the catch-up for sessions that closed before C3 had the
+    window (or before C3 was enabled)."""
+    updated = 0
+    checked = 0
+    with Session(get_engine()) as s:
+        rows = list(
+            s.exec(
+                select(ChargeSession)
+                .where(ChargeSession.is_complete.is_(True))  # noqa: E712
+                .where(ChargeSession.outside_temp_c.is_(None))
+                .order_by(ChargeSession.started_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        for cs in rows:
+            checked += 1
+            env = nearest_c3_env(cs.started_at, cs.ended_at, db=s)
+            if not env:
+                continue
+            changed = False
+            if cs.lat is None and env.get("lat") is not None:
+                cs.lat = env["lat"]
+                cs.lng = env["lng"]
+                changed = True
+            if cs.outside_temp_c is None and env.get("temp_c") is not None:
+                cs.outside_temp_c = env["temp_c"]
+                changed = True
+            if cs.air_pm25 is None and env.get("pm25") is not None:
+                cs.air_pm25 = env["pm25"]
+                changed = True
+            if changed:
+                s.add(cs)
                 updated += 1
         s.commit()
     return {"checked": checked, "updated": updated}

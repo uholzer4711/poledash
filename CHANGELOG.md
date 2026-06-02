@@ -3,6 +3,36 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.15.0] — 2026-06-02
+
+### Changed — UI cleanup: topbar, settings, dashboard, insights
+
+- **Topbar**: removed the "Design" (v2) toggle and its now-unreachable
+  `ujh-v2.css` link (the design is a single line again). The "Theme" button now
+  shows the mode it switches **to** — `Light`/`Dark` (EN) / `Hell`/`Dunkel`
+  (DE). Added a **DE/EN language switch** in the topbar (active language in
+  orange); dropped the redundant Language card from `/settings`.
+- **Settings**: the seven Grafana boards are folded into a collapsible
+  `<details>` to shorten the page.
+- **Dashboard streamlined**: the vehicle spec sheet is collapsed into a
+  `<details>` (model + year stay visible). Service status is no longer doubled —
+  the day/km countdown lives only in the Service card; the C3 health strip is
+  now tyres/lights/fluids only.
+- **Insights pruned**: dropped the noisy *Wh/km by weekday*, *by hour of day*
+  and *Wh/km vs speed* charts plus the weekly cost table (the cost chart stays).
+  Range-factor kept.
+
+### Added
+
+- **Insights · cabin air & on-car temperature (daily)**: a new chart plots the
+  daily mean cabin PM2.5 and on-car outside temperature straight from
+  `C3Snapshot` (`compute_c3_env_timeline`), so it carries data as soon as C3
+  polling runs — independent of trip/session enrichment.
+- **Hourly C3 enrichment catch-up** (`c3-enrich` scheduler job): re-flows on-car
+  temperature + cabin PM2.5 into imported trips and charge sessions as the C3
+  history grows, via `enrich_journey_imports_from_c3` and the new
+  `backfill_session_c3_env`. Only fills empty fields; never clobbers.
+
 ## [1.14.0] — 2026-06-02
 
 ### Changed — Dashboard vehicle state goes live

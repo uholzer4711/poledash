@@ -234,13 +234,13 @@
     </div>
   </div>
 
-  <!-- Vehicle (full width) -->
+  <!-- Vehicle (full width) — static spec sheet, collapsed by default to keep
+       the dashboard focused on live state. Model + year stay visible. -->
   <div class="card mt-4">
     <div class="card-label">{{ t("Vehicle") }}</div>
-    <div class="flex gap-4" style="align-items:center">
-      <div style="flex:1">
-        <div class="veh-title">{{ s.model_name or "Polestar" }} <span class="muted">{{ s.model_year or "" }}</span></div>
-        <div class="kv-row">
+    <details class="veh-details">
+      <summary class="veh-title">{{ s.model_name or "Polestar" }} <span class="muted">{{ s.model_year or "" }}</span><span class="veh-more mono-xs">{{ t("details") }} →</span></summary>
+        <div class="kv-row mt-3">
           <div class="kv"><span class="mono-xs">{{ t("VIN") }}</span><code>{{ s.vin }}</code></div>
           {% if s.registration_no %}<div class="kv"><span class="mono-xs">{{ t("Reg") }}</span><span class="num">{{ s.registration_no }}</span></div>{% endif %}
           {% if s.software_version %}<div class="kv"><span class="mono-xs">{{ t("SW") }}</span><span class="num">{{ s.software_version }}</span></div>{% endif %}
@@ -257,8 +257,7 @@
           {% if s.factory_complete_date %}<div class="kv"><span class="mono-xs">{{ t("Built") }}</span><span class="num">{{ s.factory_complete_date }}</span></div>{% endif %}
           {% if s.software_version_ts %}<div class="kv"><span class="mono-xs">{{ t("SW updated") }}</span><span class="num">{{ s.software_version_ts|localtime('%Y-%m-%d') }}</span></div>{% endif %}
         </div>
-      </div>
-    </div>
+    </details>
   </div>
 
   <div class="meta-row mt-6">

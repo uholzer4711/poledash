@@ -30,6 +30,7 @@ from ..idle_drain import detect_idle_drains
 from ..insights_extras import (
     compute_air_exposure,
     compute_battery_trend,
+    compute_c3_env_timeline,
     compute_charge_heatmap,
     compute_charge_temp_scatter,
     compute_co2,
@@ -519,6 +520,7 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
         "battery_trend": compute_battery_trend(),
         "charge_temp_scatter": compute_charge_temp_scatter(days=days),
         "air_exposure": compute_air_exposure(days=days),
+        "c3_env_timeline": compute_c3_env_timeline(days=min(days, 60)),
     }
 
 

@@ -94,7 +94,17 @@ h3 { font-size: 16px; line-height: 1.2; font-weight: 500; }
   text-transform: uppercase; color: var(--ujh-ink-3);
 }
 .topbar .center { text-align: center; }
-.topbar .right { text-align: right; }
+.topbar .right { display: flex; align-items: center; justify-content: flex-end; gap: var(--ujh-s-4); }
+
+/* Language switch (DE / EN) in the topbar */
+.lang-switch {
+  display: inline-flex; align-items: center; gap: 4px;
+  font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.14em;
+}
+.lang-switch a { color: var(--ujh-ink-3); cursor: pointer; padding: 2px 1px; }
+.lang-switch a:hover { color: var(--ujh-ink); }
+.lang-switch a.active { color: var(--ujh-orange); }
+.lang-switch .sep { color: var(--ujh-line-2); }
 .live-dot {
   display: inline-block; width: 6px; height: 6px;
   background: var(--ujh-ink-3); margin-right: 8px;
@@ -170,9 +180,12 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
   .mono { font-size: 10px; letter-spacing: 0.08em; }
   .mono-xs { font-size: 9px; letter-spacing: 0.12em; }
 
-  /* Topbar: hide the wordmark in the middle, keep live status + theme */
+  /* Topbar: hide the wordmark in the middle, keep live status + lang + theme */
   .topbar .center { display: none; }
   .topbar { padding: 5px 0; font-size: 9px; gap: var(--ujh-s-2); letter-spacing: 0.06em; }
+  .topbar .right { gap: var(--ujh-s-3); }
+  .lang-switch { font-size: 9px; letter-spacing: 0.08em; gap: 3px; }
+  .theme-toggle { padding: 5px 8px; font-size: 9px; letter-spacing: 0.08em; }
 
   /* Navbar: 2-row layout — logo+theme on top, full nav row below */
   .navbar {
@@ -352,6 +365,19 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .kv span:first-child { font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ujh-ink-4); }
 .kv-row { display: flex; flex-wrap: wrap; gap: var(--ujh-s-5) var(--ujh-s-6); margin-top: var(--ujh-s-3); }
 .veh-title { font: 500 28px/1.1 var(--ujh-sans); letter-spacing: -0.02em; }
+
+/* Collapsible vehicle spec sheet on the dashboard */
+.veh-details > summary {
+  cursor: pointer; list-style: none; display: flex;
+  align-items: baseline; gap: var(--ujh-s-4); flex-wrap: wrap;
+}
+.veh-details > summary::-webkit-details-marker { display: none; }
+.veh-more {
+  color: var(--ujh-ink-3); letter-spacing: 0.12em;
+  transition: color var(--ujh-t-base);
+}
+.veh-details > summary:hover .veh-more { color: var(--ujh-orange); }
+.veh-details[open] > summary .veh-more { color: var(--ujh-ink-4); }
 
 .meta-row { display: flex; gap: var(--ujh-s-3); align-items: baseline; color: var(--ujh-ink-3); }
 .meta-row .mono-xs { color: var(--ujh-ink-4); }

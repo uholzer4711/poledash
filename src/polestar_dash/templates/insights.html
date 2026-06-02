@@ -74,9 +74,9 @@
       <div class="mono-xs muted mt-2">{{ t("Each point = one charge session (on-car temperature from C3). A cold pack throttles peak power.") }}</div>
     </div>
     <div class="card">
-      <div class="card-label">{{ t("Cabin air quality · PM2.5 monthly") }}</div>
+      <div class="card-label">{{ t("Cabin air & on-car temperature · daily") }}</div>
       <div style="position:relative;height:260px;margin-top:12px"><canvas id="air_chart"></canvas></div>
-      <div class="mono-xs muted mt-2">{{ t("Monthly average cabin PM2.5 (µg/m³) from C3-enriched trips. Lower is cleaner.") }}</div>
+      <div class="mono-xs muted mt-2">{{ t("Daily mean cabin PM2.5 (µg/m³) and on-car outside temperature, straight from C3 polls. Lower PM2.5 is cleaner.") }}</div>
     </div>
   </div>
 
@@ -94,30 +94,9 @@
     <div id="heatmap" style="margin-top:16px;overflow-x:auto"></div>
   </div>
 
-  <div class="grid grid-2 mb-6">
-    <div class="card">
-      <div class="card-label">{{ t("Wh/km vs speed") }}</div>
-      <div style="position:relative;height:300px;margin-top:12px"><canvas id="scatter"></canvas></div>
-      <div class="mono-xs muted mt-2">{{ t("Each point = one trip. Speed = trip-km / trip-duration.") }}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("Avg Wh/km by weekday") }}</div>
-      <div style="position:relative;height:300px;margin-top:12px"><canvas id="weekday"></canvas></div>
-    </div>
-  </div>
-
-  <div class="card mb-6">
-    <div class="card-label">{{ t("Avg Wh/km by hour of day") }}</div>
-    <div style="position:relative;height:240px;margin-top:12px"><canvas id="hour"></canvas></div>
-  </div>
-
   <div class="card">
     <div class="card-label">{{ t("Cost per 100 km · weekly") }}</div>
     <div style="position:relative;height:280px;margin-top:12px"><canvas id="cost"></canvas></div>
-    <table class="mono-xs mt-4" style="width:100%;border-collapse:collapse" id="cost_tbl">
-      <thead><tr><th style="text-align:left;padding:4px 8px">{{ t("Week") }}</th><th>kWh</th><th>km</th><th>€</th><th>€/100km</th></tr></thead>
-      <tbody></tbody>
-    </table>
   </div>
 
   <div class="card mt-6">
@@ -153,7 +132,6 @@
         line2: cssVar('--ujh-line-2') || '#36393e',
       };
     }
-    const WD = [{{ t("Mon") | tojson }},{{ t("Tue") | tojson }},{{ t("Wed") | tojson }},{{ t("Thu") | tojson }},{{ t("Fri") | tojson }},{{ t("Sat") | tojson }},{{ t("Sun") | tojson }}];
 
     function noData(canvasId, msg) {
       const c = document.getElementById(canvasId);
@@ -201,62 +179,8 @@
         ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } },
       };
 
-      const scatterData = j.scatter.filter(s => s.avg_kmh != null);
-      const weekdayHas = j.weekday.some(w => w.avg_wh_per_km != null);
-      const hourHas    = j.by_hour.some(h => h.avg_wh_per_km != null);
       const costHas    = j.cost_by_week.length > 0;
-      if (!scatterData.length) { noData('scatter', {{ t("No trips with efficiency data yet — drive a bit, the values appear after a few polls.") | tojson }}); }
-      if (!weekdayHas)         { noData('weekday', {{ t("No weekday efficiency data yet.") | tojson }}); }
-      if (!hourHas)            { noData('hour',    {{ t("No hour-of-day data yet.") | tojson }}); }
       if (!costHas)            { noData('cost',    {{ t("No completed charging sessions in the period — costs appear once a session finishes.") | tojson }}); }
-
-      // Scatter: Wh/km vs speed
-      if (scatterData.length) new Chart(document.getElementById('scatter'), {
-        type: 'scatter',
-        data: {
-          datasets: [{
-            label: {{ t("Trips") | tojson }},
-            data: scatterData.map(s => ({x: s.avg_kmh, y: s.wh_per_km})),
-            backgroundColor: p.orange + 'b0',
-            borderColor: p.orange,
-            pointRadius: 4,
-          }],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ...baseAxis, title: { display: true, text: {{ t("avg km/h") | tojson }}, color: p.ink3 } },
-            y: { ...baseAxis, title: { display: true, text: 'Wh/km',    color: p.ink3 }, beginAtZero: true },
-          },
-        },
-      });
-
-      // Weekday bar
-      if (weekdayHas) new Chart(document.getElementById('weekday'), {
-        type: 'bar',
-        data: {
-          labels: j.weekday.map(w => `${WD[w.day]} (${w.n})`),
-          datasets: [{ label: {{ t("Avg Wh/km") | tojson }}, data: j.weekday.map(w => w.avg_wh_per_km),
-                       backgroundColor: p.ink2, borderColor: p.ink, borderWidth: 1 }],
-        },
-        options: { responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { x: baseAxis, y: { ...baseAxis, beginAtZero: true } } },
-      });
-
-      // Hour bar
-      if (hourHas) new Chart(document.getElementById('hour'), {
-        type: 'bar',
-        data: {
-          labels: j.by_hour.map(h => `${h.hour.toString().padStart(2,'0')}h`),
-          datasets: [{ label: {{ t("Avg Wh/km") | tojson }}, data: j.by_hour.map(h => h.avg_wh_per_km),
-                       backgroundColor: p.ink2, borderColor: p.ink, borderWidth: 1 }],
-        },
-        options: { responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { x: baseAxis, y: { ...baseAxis, beginAtZero: true } } },
-      });
 
       // Cost per 100 km weekly — bars with €/100km line overlay
       if (costHas) new Chart(document.getElementById('cost'), {
@@ -337,25 +261,28 @@
         });
       } else { noData('charge_temp_chart', {{ t("No charge sessions with a C3 temperature yet.") | tojson }}); }
 
-      // ---- Cabin air quality: monthly PM2.5
-      const air = (j.air_exposure && j.air_exposure.points) || [];
-      if (air.length) {
+      // ---- Cabin air + on-car temperature: daily means, straight from C3 polls
+      const env = (j.c3_env_timeline && j.c3_env_timeline.points) || [];
+      if (env.length) {
         new Chart(document.getElementById('air_chart'), {
           type: 'line',
-          data: { labels: air.map(d => d.month), datasets: [{
-            label: 'PM2.5',
-            data: air.map(d => d.pm25),
-            borderColor: p.orange, backgroundColor: p.orange + '30',
-            pointRadius: 4, tension: 0.25, fill: true, spanGaps: true,
-          }]},
+          data: { labels: env.map(d => d.date), datasets: [
+            { label: 'PM2.5', data: env.map(d => d.pm25), yAxisID: 'yPm',
+              borderColor: p.orange, backgroundColor: p.orange + '30',
+              pointRadius: 3, tension: 0.25, fill: true, spanGaps: true },
+            { label: {{ t("on-car °C") | tojson }}, data: env.map(d => d.temp_c), yAxisID: 'yTemp',
+              borderColor: p.ink2, backgroundColor: p.ink2,
+              pointRadius: 2, tension: 0.25, fill: false, spanGaps: true },
+          ]},
           options: { responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            plugins: { legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } } },
             scales: {
               x: baseAxis,
-              y: { ...baseAxis, title: { display: true, text: 'µg/m³', color: p.ink3 }, beginAtZero: true },
+              yPm:   { ...baseAxis, position: 'left',  title: { display: true, text: 'µg/m³', color: p.ink3 }, beginAtZero: true },
+              yTemp: { ...baseAxis, position: 'right', title: { display: true, text: '°C', color: p.ink3 }, grid: { display: false } },
             } },
         });
-      } else { noData('air_chart', {{ t("No cabin PM2.5 data yet — import a journey log after C3 polling has run.") | tojson }}); }
+      } else { noData('air_chart', {{ t("No C3 environment data yet — appears once C3 polling has run.") | tojson }}); }
 
       // ---- Real trip cost (window)
       const tc = j.trip_cost || {};
@@ -446,7 +373,6 @@
           ? `peak ${maxKwh.toFixed(1)} kWh/day · ${Object.keys(byDay).length} charging days`
           : 'no charging sessions yet';
 
-      const tbody = document.querySelector('#cost_tbl tbody');
       // Idle drains table
       const dr = await (await fetch('/api/idle-drain?days=180')).json();
       document.getElementById('drain_total').textContent =
@@ -458,15 +384,6 @@
           <td style="text-align:right">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
           <td style="text-align:right">${d.kwh.toFixed(2)}</td>
         </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
-
-      tbody.innerHTML = j.cost_by_week.map(c => `
-        <tr style="border-top:1px solid var(--ujh-line)">
-          <td style="padding:6px 8px">${c.week}</td>
-          <td style="text-align:right">${c.kwh.toFixed(1)}</td>
-          <td style="text-align:right">${c.km.toFixed(1)}</td>
-          <td style="text-align:right">${c.cost_eur.toFixed(2)}</td>
-          <td style="text-align:right">${c.eur_per_100km != null ? c.eur_per_100km.toFixed(2) : '—'}</td>
-        </tr>`).join('');
     }
     async function safeLoad() {
       try { await load(); }

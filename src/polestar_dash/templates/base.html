@@ -13,8 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/ujh.css?v=20260602b">
-  <link rel="stylesheet" href="/static/ujh-v2.css?v=20260602b">
+  <link rel="stylesheet" href="/static/ujh.css?v=20260602c">
   <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js" defer></script>
@@ -30,8 +29,10 @@
       <div><span class="live-dot" id="live-dot"></span><span id="live-text">{{ t("LIVE") }}</span></div>
       <div class="center">POLEDASH · POLESTAR TELEMETRY</div>
       <div class="right">
-        <button class="theme-toggle" onclick="(()=>{const r=document.documentElement;const d=r.dataset.design==='v2'?'':'v2';if(d){r.dataset.design=d;localStorage.setItem('design',d);}else{delete r.dataset.design;localStorage.removeItem('design');}})()" title="{{ t('Toggle the readability-focused v2 design') }}">{{ t("Design") }}</button>
-        <button class="theme-toggle" onclick="(()=>{const r=document.documentElement;const t=r.dataset.theme==='light'?'dark':'light';r.dataset.theme=t;localStorage.setItem('theme',t);window.dispatchEvent(new Event('themechange'));})()">{{ t("Theme") }}</button>
+        <span class="lang-switch">
+          <a class="{% if ui_lang() == 'de' %}active{% endif %}" onclick="setLang('de')">DE</a><span class="sep">/</span><a class="{% if ui_lang() == 'en' %}active{% endif %}" onclick="setLang('en')">EN</a>
+        </span>
+        <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()">{{ t("Light") }}</button>
       </div>
     </div>
     <nav class="navbar">
@@ -69,9 +70,29 @@
     (function(){
       const savedTheme = localStorage.getItem('theme');
       if (savedTheme) document.documentElement.dataset.theme = savedTheme;
-      const savedDesign = localStorage.getItem('design');
-      if (savedDesign) document.documentElement.dataset.design = savedDesign;
     })();
+    // Theme button shows the mode it will switch TO (current dark → "Light"/"Hell").
+    const THEME_LABELS = { light: {{ t("Light") | tojson }}, dark: {{ t("Dark") | tojson }} };
+    function applyThemeLabel(){
+      const btn = document.getElementById('theme-btn');
+      if (!btn) return;
+      const isDark = document.documentElement.dataset.theme !== 'light';
+      btn.textContent = isDark ? THEME_LABELS.light : THEME_LABELS.dark;
+    }
+    function toggleTheme(){
+      const r = document.documentElement;
+      const next = r.dataset.theme === 'light' ? 'dark' : 'light';
+      r.dataset.theme = next;
+      localStorage.setItem('theme', next);
+      window.dispatchEvent(new Event('themechange'));
+      applyThemeLabel();
+    }
+    async function setLang(v){
+      try { await fetch('/api/app-settings/language?value=' + encodeURIComponent(v), { method: 'POST' }); }
+      catch(e) {}
+      location.reload();
+    }
+    applyThemeLabel();
     const LIVE_LABELS = {{ {"idle": t("IDLE"), "charging": t("CHARGING"), "plugged": t("PLUGGED"), "km": t("KM")} | tojson }};
     async function pollLive() {
       try {

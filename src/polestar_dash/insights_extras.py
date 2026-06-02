@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from sqlmodel import Session, select
 
 from .app_settings import blended_price_ct
-from .db.models import ChargeSession, JourneyImport, VehicleSnapshot
+from .db.models import C3Snapshot, ChargeSession, JourneyImport, VehicleSnapshot
 from .db.session import get_engine
 from .util import utcnow
 
@@ -266,6 +266,54 @@ def compute_air_exposure(days: int = 365) -> dict:
         for m, v in sorted(buckets.items())
     ]
     return {"points": points, "enough_data": len(points) >= 1}
+
+
+def compute_c3_env_timeline(days: int = 30) -> dict:
+    """Daily mean cabin PM2.5 + AQI and on-car outside temperature, straight
+    from C3 snapshots.
+
+    Independent of trip/session enrichment, so it carries data as soon as C3
+    polling runs (the trip-level air/temp views need a drive *and* a matching
+    C3 window first). Returns {points:[{date, pm25, aqi, temp_c, n}]}."""
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        rows = list(
+            s.exec(
+                select(
+                    C3Snapshot.fetched_at,
+                    C3Snapshot.air_pm25,
+                    C3Snapshot.air_aqi,
+                    C3Snapshot.weather_temp_c,
+                ).where(C3Snapshot.fetched_at >= since)
+            ).all()
+        )
+
+    buckets: dict[str, dict[str, list[float]]] = {}
+    for fetched_at, pm25, aqi, temp in rows:
+        b = buckets.setdefault(
+            fetched_at.strftime("%Y-%m-%d"), {"pm": [], "aqi": [], "temp": []}
+        )
+        if pm25 is not None:
+            b["pm"].append(pm25)
+        if aqi is not None:
+            b["aqi"].append(aqi)
+        if temp is not None:
+            b["temp"].append(temp)
+
+    def _avg(xs: list[float], nd: int = 1) -> float | None:
+        return round(sum(xs) / len(xs), nd) if xs else None
+
+    points = [
+        {
+            "date": d,
+            "pm25": _avg(b["pm"]),
+            "aqi": _avg(b["aqi"], 0),
+            "temp_c": _avg(b["temp"]),
+            "n": max(len(b["pm"]), len(b["aqi"]), len(b["temp"])),
+        }
+        for d, b in sorted(buckets.items())
+    ]
+    return {"points": points}
 
 
 def compute_temp_scatter(days: int = 365) -> list[dict]:

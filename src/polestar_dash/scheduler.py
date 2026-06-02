@@ -342,6 +342,29 @@ def _prune_raw_snapshots() -> None:
              RAW_RETENTION_DAYS)
 
 
+def _enrich_c3_env() -> None:
+    """Periodic catch-up: pull on-car temperature + cabin PM2.5 (and GPS) from
+    the C3 history into imported trips and charge sessions as that history
+    grows. Trips/sessions are normally enriched on import / at session close,
+    but only against the C3 data available *then* — this fills rows whose C3
+    window only materialised later. Each piece isolated so one failure doesn't
+    skip the rest."""
+    from .c3_enrich import backfill_session_c3_env, enrich_journey_imports_from_c3
+
+    try:
+        r = enrich_journey_imports_from_c3(limit=1000)
+        if r.get("updated"):
+            log.info("C3 trip enrichment filled %s/%s trips", r["updated"], r["checked"])
+    except Exception:  # noqa: BLE001
+        log.exception("C3 trip enrichment failed")
+    try:
+        r = backfill_session_c3_env(limit=1000)
+        if r.get("updated"):
+            log.info("C3 session enrichment filled %s/%s sessions", r["updated"], r["checked"])
+    except Exception:  # noqa: BLE001
+        log.exception("C3 session enrichment failed")
+
+
 def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOScheduler:
     global _SCHEDULER
     s = get_settings()
@@ -400,6 +423,16 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
             c3_poll_once,
             DateTrigger(run_date=utcnow() + timedelta(minutes=s.c3_poll_interval_min / 2)),
             id=C3_JOB_ID,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+        # Hourly catch-up that flows freshly-polled C3 temp/PM2.5 into trips +
+        # sessions whose enrichment window only became available after import.
+        sched.add_job(
+            _enrich_c3_env,
+            CronTrigger(minute=25),
+            id="c3-enrich",
             max_instances=1,
             coalesce=True,
             replace_existing=True,

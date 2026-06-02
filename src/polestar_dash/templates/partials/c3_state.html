@@ -379,7 +379,8 @@
       hh += hb({{ t("Brake fluid") | tojson }}, j.brake_fluid, ['ok']);
       hh += hb({{ t("Oil") | tojson }}, j.oil, ['ok']);
       hh += hb({{ t("Coolant") | tojson }}, j.coolant, ['ok']);
-      hh += hb({{ t("Service") | tojson }}, j.service_warning, ['no warning']);
+      // Service (warning + day/km countdown) lives in the Service card above —
+      // not duplicated here; this strip is tyres/lights/fluids only.
       document.getElementById('c3_health').innerHTML = hh;
       document.getElementById('c3_state_meta').textContent = '· ' + fmtTs(j.fetched_at);
 

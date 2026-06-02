@@ -53,11 +53,11 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/history` | **Battery & Charging** — telemetry time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
-| `/insights` | Wh/km vs speed, weekly €/100 km, idle-drain detector, real trip cost, **CO₂ footprint**, **usable-battery-capacity trend** |
+| `/insights` | Wh/km vs outside temperature, weekly €/100 km, **cabin air & on-car temperature (daily, from C3)**, range factor, idle-drain detector, real trip cost, **CO₂ footprint**, **usable-battery-capacity trend** |
 | `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
 | `/routes` | Repeated routes aggregated from imported trips, with a most/least-efficient leaderboard |
 | `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
-| `/settings` `/errors` `/raw` | Settings (incl. **language** switch, address labels + **geofence labels**, and a **Trip-flow map**), recent errors, raw API dump |
+| `/settings` `/errors` `/raw` | Settings (address labels + **geofence labels**, and a **Trip-flow map**), recent errors, raw API dump. Language (DE/EN) and the light/dark theme toggle live in the topbar |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |
 
@@ -99,7 +99,8 @@ See [`.env.example`](.env.example). Most useful:
 | `SOFTWARE_MANUAL_URL` | *(Polestar 2 MY2027 manual)* | Page scraped 2×/day for the latest software version |
 
 Language: the UI and all notification/alert messages are available in
-**German (default)** and **English**, switchable on `/settings` → *Language*.
+**German (default)** and **English**, switchable via the **DE/EN toggle in the
+topbar** (next to the light/dark theme button).
 The choice is stored in the database (app-wide, no restart needed) and also
 governs the wording of push/email alerts. The weekly email digest is German.
 
