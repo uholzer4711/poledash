@@ -147,6 +147,8 @@ def list_routes(days: int = 365, min_trips: int = 2, radius_km: float = 1.0) -> 
             for t in trips
             if t.consumption_kwh and t.distance_km and t.distance_km > 0.5
         ]
+        temps = [t.outside_temp_c for t in trips if t.outside_temp_c is not None]
+        pms = [t.air_pm25 for t in trips if t.air_pm25 is not None]
         out.append({
             "start": start,
             "end": end,
@@ -160,6 +162,8 @@ def list_routes(days: int = 365, min_trips: int = 2, radius_km: float = 1.0) -> 
             "avg_minutes": round(mean(durations)) if durations else None,
             "min_minutes": round(min(durations)) if durations else None,
             "max_minutes": round(max(durations)) if durations else None,
+            "avg_temp_c": round(mean(temps), 1) if temps else None,
+            "avg_pm25": round(mean(pms), 1) if pms else None,
             "last_at": max((t.started_at for t in trips), default=None),
         })
     out.sort(key=lambda r: r["trips"], reverse=True)

@@ -51,12 +51,18 @@ def _ensure_columns(engine) -> None:
             ("chargesession", "note", "VARCHAR"),
             ("chargesession", "co2_g_per_kwh", "INTEGER"),
             ("chargesession", "inferred", "BOOLEAN"),
+            # C3 environment stamped at close
+            ("chargesession", "lat", "FLOAT"),
+            ("chargesession", "lng", "FLOAT"),
+            ("chargesession", "outside_temp_c", "FLOAT"),
+            ("chargesession", "air_pm25", "FLOAT"),
         ]
     if "journeyimport" in tables:
         plan += [
             ("journeyimport", "outside_temp_c", "FLOAT"),
             ("journeyimport", "weather_code", "INTEGER"),
             ("journeyimport", "co2_g_per_kwh", "INTEGER"),
+            ("journeyimport", "air_pm25", "FLOAT"),
         ]
     if "chargingstation" in tables:
         plan += [

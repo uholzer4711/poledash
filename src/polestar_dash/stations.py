@@ -28,13 +28,34 @@ def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def _c3_location(session: ChargeSession, s: Session) -> tuple[float, float] | None:
+    """Direct GPS for a charge session from C3Snapshot — the car reports its own
+    position, so when we have a C3 fix during (or just around) the session this
+    beats the JourneyImport trip-endpoint heuristic."""
+    from .c3_enrich import nearest_c3_env
+
+    env = nearest_c3_env(session.started_at, session.ended_at, db=s)
+    if env and env.get("lat") is not None:
+        return (env["lat"], env["lng"])
+    return None
+
+
 def locate_session(
     session: ChargeSession, *, db: Session | None = None
 ) -> tuple[float, float] | None:
-    """Infer GPS for a charge session from nearby JourneyImport trip endpoints."""
+    """Infer GPS for a charge session.
+
+    Persisted session GPS first (stamped at close), then a live C3Snapshot
+    lookup, then the JourneyImport trip-endpoint heuristic as a fallback for
+    sessions older than C3 polling."""
     window = timedelta(hours=4)
 
     def _query(s: Session):
+        if session.lat is not None and session.lng is not None:
+            return (session.lat, session.lng)
+        c3 = _c3_location(session, s)
+        if c3 is not None:
+            return c3
         imp_stmt = select(JourneyImport).where(
             JourneyImport.started_at >= session.started_at - timedelta(days=2),
             JourneyImport.started_at <= (session.ended_at or session.started_at) + timedelta(days=2),

@@ -67,6 +67,19 @@
     </div>
   </div>
 
+  <div class="grid grid-2 mb-6">
+    <div class="card">
+      <div class="card-label">{{ t("Cold charging · peak kW vs temperature") }}</div>
+      <div style="position:relative;height:260px;margin-top:12px"><canvas id="charge_temp_chart"></canvas></div>
+      <div class="mono-xs muted mt-2">{{ t("Each point = one charge session (on-car temperature from C3). A cold pack throttles peak power.") }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("Cabin air quality · PM2.5 monthly") }}</div>
+      <div style="position:relative;height:260px;margin-top:12px"><canvas id="air_chart"></canvas></div>
+      <div class="mono-xs muted mt-2">{{ t("Monthly average cabin PM2.5 (µg/m³) from C3-enriched trips. Lower is cleaner.") }}</div>
+    </div>
+  </div>
+
   <div class="card mb-6">
     <div class="card-label">{{ t("Usable battery capacity · monthly") }}</div>
     <div style="position:relative;height:260px;margin-top:12px"><canvas id="battery_chart"></canvas></div>
@@ -304,6 +317,45 @@
             } },
         });
       } else { noData('temp_chart', {{ t("Import a journey log and run /api/journey-imports/enrich to fetch outside temperatures.") | tojson }}); }
+
+      // ---- Cold charging: peak kW vs on-car temperature
+      const cts = j.charge_temp_scatter || [];
+      if (cts.length) {
+        new Chart(document.getElementById('charge_temp_chart'), {
+          type: 'scatter',
+          data: { datasets: [{
+            label: {{ t("Charging sessions") | tojson }},
+            data: cts.map(d => ({x: d.temp_c, y: d.peak_kw})),
+            backgroundColor: p.orange + 'b0', borderColor: p.orange, pointRadius: 4,
+          }]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ...baseAxis, title: { display: true, text: '°C',  color: p.ink3 } },
+              y: { ...baseAxis, title: { display: true, text: 'kW',  color: p.ink3 }, beginAtZero: true },
+            } },
+        });
+      } else { noData('charge_temp_chart', {{ t("No charge sessions with a C3 temperature yet.") | tojson }}); }
+
+      // ---- Cabin air quality: monthly PM2.5
+      const air = (j.air_exposure && j.air_exposure.points) || [];
+      if (air.length) {
+        new Chart(document.getElementById('air_chart'), {
+          type: 'line',
+          data: { labels: air.map(d => d.month), datasets: [{
+            label: 'PM2.5',
+            data: air.map(d => d.pm25),
+            borderColor: p.orange, backgroundColor: p.orange + '30',
+            pointRadius: 4, tension: 0.25, fill: true, spanGaps: true,
+          }]},
+          options: { responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: baseAxis,
+              y: { ...baseAxis, title: { display: true, text: 'µg/m³', color: p.ink3 }, beginAtZero: true },
+            } },
+        });
+      } else { noData('air_chart', {{ t("No cabin PM2.5 data yet — import a journey log after C3 polling has run.") | tojson }}); }
 
       // ---- Real trip cost (window)
       const tc = j.trip_cost || {};

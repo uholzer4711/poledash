@@ -10,4 +10,6 @@
        hx-swap="innerHTML">
     {% include "partials/cards.html" %}
   </div>
+
+  {% if c3_enabled %}{% include "partials/c3_state.html" %}{% endif %}
 {% endblock %}

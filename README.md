@@ -49,7 +49,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 
 | Path | Purpose |
 |---|---|
-| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info |
+| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info, plus a **C3 vehicle-state** section: top-view car diagram (green = closed / red = open per door/window/frunk/boot/sunroof), lock/climate/cabin-air/weather cards, and a satellite mini-map with the live GPS pin + trail |
 | `/history` | **Battery & Charging** — telemetry time-series + charging sessions |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
@@ -61,7 +61,15 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |
 
-The consumer API does **not** expose live GPS, TPMS or door/window state.
+The pypolestar consumer API does **not** expose live GPS, TPMS or door/window
+state. poledash fills that gap with a separate, isolated **C3 (Volvo Cloud
+Connectivity)** poll (via `unofficial-polestar-api`) that adds live GPS,
+door/window/lock state, climate, cabin PM2.5 and on-car weather — persisted to
+`C3Snapshot`, surfaced on the dashboard, fed into trips/routes/charging
+(real GPS trails, on-car temperature, air-quality), exported to Prometheus, and
+published over MQTT (incl. a Home Assistant `device_tracker`). It also drives a
+**rain + windows-open alert** and a one-day-dedup *door/boot left open* /
+*unlocked* notification. Disable with `C3_ENABLED=false`.
 
 ## Configuration
 
@@ -73,6 +81,12 @@ See [`.env.example`](.env.example). Most useful:
 | `POLESTAR_VINS` | *(auto-discover)* | Comma-separated |
 | `POLL_INTERVAL_MIN` | `10` | Idle (floor: 5) |
 | `FAST_POLL_INTERVAL_MIN` | `2` | Charging (floor: 1) |
+| `C3_ENABLED` | `true` | Poll the C3 backend (GPS, doors, climate, air, weather) |
+| `C3_POLL_INTERVAL_MIN` | `10` | C3 idle cadence (staggered vs the main poll) |
+| `C3_FAST_POLL_INTERVAL_MIN` | `5` | C3 cadence while charging |
+| `C3_DRIVE_POLL_INTERVAL_MIN` | `3` | C3 cadence while driving (dense GPS trail); set high to disable |
+| `NOTIFY_DOOR_OPEN` / `NOTIFY_UNLOCKED` | `true` | C3 door-open / unlocked alerts |
+| `CAR_IMAGE_URL` | — | Optional vehicle image (an upload on `/settings` overrides it) |
 | `SMTP_HOST` | — | SMTP server (e.g. `smtp.gmail.com`) |
 | `SMTP_PORT` | `587` | STARTTLS port |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | — | SMTP credentials (Gmail: App Password) |

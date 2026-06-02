@@ -5,6 +5,7 @@
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin defer></script>
+  <script src="/static/map.js" defer></script>
 {% endblock %}
 {% block content %}
   <div class="section-head">
@@ -214,11 +215,9 @@
             const t = Math.min(1, Math.max(0, (per100 - 10) / 15));
             return t < 0.5 ? ink2 : accent;
           }
-          const map = L.map('trip-map', { scrollWheelZoom: false });
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap',
-            maxZoom: 19,
-          }).addTo(map);
+          const map = window.poleMap.make('trip-map', {
+            labels: { satellite: {{ t("Satellite") | tojson }}, dark: {{ t("Dark") | tojson }} },
+          });
           const all = [];
           for (const t of trips) {
             const line = L.polyline([t.start, t.end], {
@@ -284,6 +283,20 @@
             all.push([c.lat, c.lng]);
           }
           if (all.length) map.fitBounds(L.latLngBounds(all).pad(0.2));
+
+          // C3-derived real trip trails (no CSV needed): the car's own GPS
+          // breadcrumb per detected trip. Dashed + dim so they read as distinct
+          // from the journey-log straight lines above.
+          fetch('/api/trips?days={{ days }}').then(r => r.ok ? r.json() : []).then(trips2 => {
+            for (const tp of trips2) {
+              if (!tp.path || tp.path.length < 2) continue;
+              const line = L.polyline(tp.path, {
+                color: ink2, weight: 3, opacity: 0.7, dashArray: '4 5',
+              }).addTo(map);
+              const temp = tp.avg_temp_c != null ? ` · ${tp.avg_temp_c}°C` : '';
+              line.bindPopup(`<b>${fmtTs(tp.started_at)}</b><br>${tp.km.toFixed(1)} km · ${tp.duration_min} min${temp}`);
+            }
+          }).catch(() => {});
         });
       </script>
     {% endif %}

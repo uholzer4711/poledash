@@ -27,6 +27,63 @@ log = logging.getLogger(__name__)
 
 _FORECAST_CUTOFF_DAYS = 6  # archive endpoint lags ~5 days behind real-time
 
+# WMO weather codes that mean liquid precipitation (drizzle/rain/showers/storm).
+# Snow (71–77, 85–86) is deliberately excluded — the alert is about rain getting
+# into an open cabin. See https://open-meteo.com/en/docs (weather_code table).
+RAIN_CODES = {51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99}
+
+
+def wmo_bucket(code: int | None) -> str:
+    """Coarse English label for a WMO weather code (translated at the edge)."""
+    if code is None:
+        return "unknown"
+    if code == 0:
+        return "clear"
+    if code in (1, 2, 3):
+        return "cloudy"
+    if code in (45, 48):
+        return "fog"
+    if code in (51, 53, 55, 56, 57):
+        return "drizzle"
+    if code in (61, 63, 65, 66, 67, 80, 81, 82):
+        return "rain"
+    if code in (71, 73, 75, 77, 85, 86):
+        return "snow"
+    if code in (95, 96, 99):
+        return "thunderstorm"
+    return "unknown"
+
+
+async def current_at(lat: float, lng: float) -> dict | None:
+    """Current weather at a coordinate via Open-Meteo (key-less).
+
+    Returns {temp_c, code, precip_mm, is_rain, bucket} or None on failure."""
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": f"{lat:.4f}",
+        "longitude": f"{lng:.4f}",
+        "current": "temperature_2m,weather_code,precipitation",
+        "timezone": "UTC",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(url, params=params)
+            r.raise_for_status()
+            cur = (r.json() or {}).get("current") or {}
+    except Exception:  # noqa: BLE001
+        log.warning("current weather lookup failed at %s,%s", lat, lng, exc_info=True)
+        return None
+    code = cur.get("weather_code")
+    precip = cur.get("precipitation")
+    code_i = int(code) if code is not None else None
+    return {
+        "temp_c": cur.get("temperature_2m"),
+        "code": code_i,
+        "precip_mm": precip,
+        "is_rain": (code_i in RAIN_CODES) or (isinstance(precip, (int, float)) and precip > 0.1),
+        "bucket": wmo_bucket(code_i),
+    }
+
 
 def _endpoint_for(d: date) -> str:
     age = (date.today() - d).days

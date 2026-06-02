@@ -114,6 +114,13 @@ class ChargeSession(SQLModel, table=True):
     price_ct_per_kwh: float | None = None  # user override; None ⇒ use app default
     note: str | None = None  # free text (location, operator, …)
     co2_g_per_kwh: int | None = None  # AT grid mix at session start
+    # Stamped at close from the nearest C3Snapshot in the session window
+    # (the car's own GPS + on-car environment). lat/lng also short-circuits
+    # the JourneyImport location heuristic in stations.locate_session.
+    lat: float | None = None
+    lng: float | None = None
+    outside_temp_c: float | None = None  # on-car temperature while charging
+    air_pm25: float | None = None  # cabin PM2.5 while charging
 
     is_complete: bool = Field(default=False, index=True)  # set True when charging_status transitions to Done/Idle
     # True for sessions opened heuristically from a SoC rise (the API never
@@ -173,6 +180,7 @@ class JourneyImport(SQLModel, table=True):
     outside_temp_c: float | None = None
     weather_code: int | None = None  # Open-Meteo WMO weather code
     co2_g_per_kwh: int | None = None  # grid CO2 intensity at trip start
+    air_pm25: float | None = None  # cabin PM2.5 from nearest C3 snapshot
 
 
 class ChargingStation(SQLModel, table=True):
@@ -237,3 +245,98 @@ class NotificationLog(SQLModel, table=True):
     vin: str | None = None
     kind: str = Field(index=True)  # e.g. charge_complete, low_soc, service_due
     key: str = Field(index=True)  # idempotency key (e.g. session id, date)
+
+
+class C3Snapshot(SQLModel, table=True):
+    """Structured snapshot from the C3 (Volvo Cloud Connectivity) backend.
+
+    One row per successful C3 poll. Surfaces fields pypolestar does not expose:
+    live GPS, exterior door/window/lock state, climate, cabin air, on-car
+    weather. Persisted on its own (slower, staggered) poll cadence — kept
+    separate from VehicleSnapshot because it comes from a different library and
+    a different cadence, and we never want a C3 outage to touch the main loop.
+    Enum-typed fields store the decoded string ("open"/"closed"/"locked"/…),
+    matching the live /test payload so the same render code works for both.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    fetched_at: datetime = Field(index=True)
+    vin: str = Field(index=True)
+
+    # Location (net-new vs pypolestar)
+    lat: float | None = None
+    lng: float | None = None
+    altitude: float | None = None
+    heading: float | None = None
+    speed: float | None = None
+    gps_ts: int | None = None  # car-reported Unix seconds
+    parked_lat: float | None = None
+    parked_lng: float | None = None
+    parked_ts: int | None = None
+
+    # On-car weather
+    weather_temp_c: float | None = None
+    weather_ts: int | None = None  # Unix millis
+
+    # Exterior — lock + openings (decoded strings: open/closed/ajar, locked/…)
+    is_locked: bool | None = None
+    any_door_open: bool | None = None
+    central_lock: str | None = None
+    door_fl: str | None = None
+    door_fr: str | None = None
+    door_rl: str | None = None
+    door_rr: str | None = None
+    win_fl: str | None = None
+    win_fr: str | None = None
+    win_rl: str | None = None
+    win_rr: str | None = None
+    sunroof: str | None = None
+    hood: str | None = None  # frunk
+    tailgate: str | None = None  # boot / trunk
+    tank_lid: str | None = None  # charge-port flap
+
+    # Climate
+    climate_active: bool | None = None
+    climate_action: str | None = None
+    climate_running: str | None = None
+    climate_time_remaining: int | None = None
+
+    # Cabin air quality
+    air_running: bool | None = None
+    air_aqi: float | None = None
+    air_pm25: float | None = None
+
+    # Extended health (light/tyre net-new; rest mirrors VehicleSnapshot)
+    any_light_failure: bool | None = None
+    any_tyre_warning: bool | None = None
+    service_warning: str | None = None
+    days_to_service: int | None = None
+    distance_to_service_km: int | None = None
+    brake_fluid: str | None = None
+    oil: str | None = None
+    coolant: str | None = None
+
+    # Battery / charging (C3 view — often fresher than pypolestar)
+    charge_level: int | None = None
+    range_km: int | None = None
+    is_plugged_in: bool | None = None
+    is_charging: bool | None = None
+    charging_status: str | None = None
+    charging_type: str | None = None
+    connection: str | None = None
+    amp_limit: float | None = None
+    odometer_km: float | None = None
+    availability_status: str | None = None
+
+    __table_args__ = (
+        Index("ix_c3snapshot_vin_fetched", "vin", "fetched_at"),
+    )
+
+
+class RawC3Snapshot(SQLModel, table=True):
+    """Full JSON dump of every C3 fetch — safety net, mirrors RawSnapshot."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    fetched_at: datetime = Field(index=True)
+    vin: str = Field(index=True)
+    payload: dict[str, Any] = Field(sa_column=Column(JSON))

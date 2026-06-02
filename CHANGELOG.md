@@ -3,6 +3,67 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.13.0] — 2026-06-01
+
+### Added — C3 data feeds Tripbook / Routes / Charging, plus a rain alert
+
+- **C3 enrichment** (`c3_enrich.py`): GPS, on-car temperature and cabin PM2.5
+  from the C3 poll stream are now attached to other objects.
+  - **Charge sessions** are stamped at close with `lat`/`lng`/`outside_temp_c`/
+    `air_pm25` (`sessions._stamp_c3_env`) and backfilled in the History recalc;
+    `stations.locate_session` uses the session's own GPS first.
+  - **Detected trips** get a real GPS breadcrumb + average temp/PM2.5 via the
+    new `GET /api/trips`; the tripbook map draws these trails — works with **no
+    CSV upload**.
+  - **Imported journeys** prefer the on-car C3 temperature over the Open-Meteo
+    lookup and gain an `air_pm25` field
+    (`enrich_journey_imports_from_c3`, run on import / `…/enrich`).
+- **Insights**: *Cold charging* (peak kW vs on-car temperature) and *Cabin air
+  quality* (monthly PM2.5) charts.
+- **Routes**: average temperature and PM2.5 per repeated route.
+- **Drive-aware C3 cadence**: polls every `C3_DRIVE_POLL_INTERVAL_MIN`
+  (default 3 min) while the car is moving so the GPS trail is dense enough to
+  draw a route; idle stays slow. Set high to disable.
+- **Rain + windows-open alert** (`c3_anomalies.check_rain_windows`): one
+  notification/day on the active channels when a window/sunroof is open and
+  Open-Meteo reports rain at the car (`weather.current_at`). Small
+  current-location weather on the dashboard (`GET /api/weather/current`).
+- **Vehicle image**: upload a real Polestar 2 image on `/settings` (stored in
+  the data dir, never committed); falls back to `CAR_IMAGE_URL`, then the
+  built-in SVG top-view. `POST/GET/DELETE /api/car-image`.
+- **Prometheus**: full C3 exposition — per-opening binaries
+  (`poledash_c3_opening_open{part}`), lock, door/tyre/light warnings, climate,
+  cabin PM2.5/AQI, on-car temp, speed/heading, lat/lng, and the C3 battery view.
+- **Grafana**: new *C3 Command Center* dashboard (`grafana-dashboard-c3.json`,
+  UID `poledash-c3`) — 27 panels: openings state-timeline, lock/security,
+  climate, cabin air, on-car weather, live-location geomap, charging, SoC,
+  range & service.
+
+## [1.12.0] — 2026-06-01
+
+### Added — C3 (Volvo Cloud Connectivity) goes live on the dashboard
+
+- **C3 is polled and persisted.** A separate, staggered scheduler job
+  (`c3_poll_once`, default 10 min / 5 min charging) writes `C3Snapshot` +
+  `RawC3Snapshot`: live GPS, door/window/lock/alarm state, climate, cabin air,
+  on-car weather, extended health. Isolated from the main pypolestar loop;
+  disable with `C3_ENABLED=false`.
+- **Dashboard vehicle-state section**: a Polestar 2 top-view diagram with
+  green = closed / red = open per door, window, frunk, boot, sunroof and charge
+  flap; lock state as the body frame. Status cards for lock, climate, cabin air
+  and on-car weather, health badges, last-poll + interval, and a satellite
+  mini-map with the live GPS pin + recent trail. `GET /api/c3/latest`,
+  `/api/c3/track`.
+- **Maps**: shared `static/map.js` with an Esri-satellite / Carto-dark layer
+  toggle; tripbook and the C3 test page now use it.
+- **C3 notifications**: door/window/frunk/boot left open, car left unlocked,
+  tyre/light warnings (deduped via `NotificationLog`).
+- **MQTT**: C3 entities for Home Assistant — `device_tracker` (GPS),
+  binary_sensors (doors/windows/locked) and sensors (PM2.5/AQI/temp/climate).
+- **Design**: functional state colours `--ujh-ok` (green) / `--ujh-alert` (red)
+  — a documented, scoped exception to the orange-only signal rule, used only as
+  thin contours on the car diagram and the matching badges.
+
 ## [1.11.0] — 2026-06-01
 
 ### Added — Geofence labels, journey-import analytics, and a Trip-flow map

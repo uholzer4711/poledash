@@ -12,18 +12,20 @@ from sqlmodel import Session
 
 from .anomalies import run_anomaly_checks
 from .backup import run_backup
+from .c3_anomalies import check_rain_windows, run_c3_anomaly_checks
 from .config import get_settings
-from .db.models import FetchError, RawSnapshot, VehicleSnapshot
+from .db.models import C3Snapshot, FetchError, RawC3Snapshot, RawSnapshot, VehicleSnapshot
 from .db.session import get_engine
 from .digest import weekly_digest
 from .i18n import t
-from .mqtt import schedule_publish
+from .mqtt import schedule_publish, schedule_publish_c3
 from .notify import notify
+from .polestar.c3 import c3_dict_to_row, get_c3_snapshot
 from .polestar.client import PolestarClient
 from .polestar.fetcher import Snapshot, fetch_snapshot
 from .sessions import CHARGING_STATES, previous_snapshot, update_session
 from .software import check_software_updates, record_installed_version
-from .util import utcnow
+from .util import haversine_km, utcnow
 
 # Retention for the raw-JSON safety net. Structured rows in VehicleSnapshot
 # stay forever; the verbatim API payloads we keep just long enough to debug
@@ -33,6 +35,7 @@ RAW_RETENTION_DAYS = 90
 log = logging.getLogger(__name__)
 
 JOB_ID = "polestar-poll"
+C3_JOB_ID = "c3-poll"
 
 
 def _persist(snap: Snapshot) -> None:
@@ -219,21 +222,129 @@ def _reschedule(client: PolestarClient, *, charging: bool) -> None:
 _SCHEDULER: AsyncIOScheduler | None = None
 
 
+def _latest_c3(vin: str) -> C3Snapshot | None:
+    from sqlmodel import select
+
+    with Session(get_engine()) as s:
+        row = s.exec(
+            select(C3Snapshot)
+            .where(C3Snapshot.vin == vin)
+            .order_by(C3Snapshot.fetched_at.desc())
+            .limit(1)
+        ).first()
+        if row is not None:
+            s.expunge(row)
+        return row
+
+
+async def c3_poll_once() -> None:
+    """Single C3 (Volvo Cloud Connectivity) poll. Mirrors poll_once's defensive
+    shape: every post-fetch step is isolated and the reschedule lives in a
+    finally, so a C3 outage never kills its own loop and never touches the main
+    pypolestar poll. Deliberately slower + staggered (shared rate limit)."""
+    charging = False
+    driving = False
+    try:
+        data = await get_c3_snapshot(force=True)
+        if not data.get("ok"):
+            log.warning("C3 poll: backend error — %s", data.get("error"))
+            return
+        row_data = c3_dict_to_row(data)
+        if not row_data or not row_data.get("vin"):
+            log.warning("C3 poll: no usable data (no VIN)")
+            return
+        vin = row_data["vin"]
+        charging = bool((data.get("battery") or {}).get("is_charging"))
+
+        try:
+            prev = _latest_c3(vin)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 previous-row lookup failed for VIN %s", vin)
+            prev = None
+
+        row = C3Snapshot(fetched_at=utcnow(), **row_data)
+
+        # Driving → poll faster so the GPS trail is dense enough to draw a route.
+        # Detected from the car's own speed, or movement since the last fix.
+        speed = row.speed or 0
+        moved = (
+            prev is not None
+            and prev.lat is not None and prev.lng is not None
+            and row.lat is not None and row.lng is not None
+            and haversine_km(prev.lat, prev.lng, row.lat, row.lng) > 0.3
+        )
+        driving = speed >= 3 or moved
+        try:
+            with Session(get_engine()) as s:
+                s.add(row)
+                s.add(RawC3Snapshot(fetched_at=row.fetched_at, vin=vin, payload=data))
+                s.commit()
+                s.refresh(row)
+                s.expunge(row)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 persist failed for VIN %s", vin)
+        try:
+            await asyncio.to_thread(run_c3_anomaly_checks, row, prev=prev)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 anomaly checks failed for VIN %s", vin)
+        try:
+            await check_rain_windows(row)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 rain/windows check failed for VIN %s", vin)
+        try:
+            schedule_publish_c3(row)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 MQTT publish failed for VIN %s", vin)
+        log.info("Stored C3 snapshot for VIN %s (locked=%s, charging=%s)",
+                 vin, row.is_locked, charging)
+    except Exception:  # noqa: BLE001
+        log.exception("c3_poll_once: unexpected error — rescheduling anyway")
+    finally:
+        _reschedule_c3(charging=charging, driving=driving)
+
+
+def _reschedule_c3(*, charging: bool, driving: bool = False) -> None:
+    s = get_settings()
+    sched: AsyncIOScheduler | None = _SCHEDULER
+    if sched is None or not s.c3_enabled:
+        return
+    if charging:
+        interval = s.c3_fast_poll_interval_min
+    elif driving:
+        interval = s.c3_drive_poll_interval_min
+    else:
+        interval = s.c3_poll_interval_min
+    next_run = utcnow() + timedelta(minutes=interval)
+    sched.add_job(
+        c3_poll_once,
+        DateTrigger(run_date=next_run),
+        id=C3_JOB_ID,
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+
+
 def _prune_raw_snapshots() -> None:
-    """Delete RawSnapshot rows older than RAW_RETENTION_DAYS to keep the DB
-    from growing unbounded (~20 KB/poll × every 2–10 min = >1 GB/year)."""
+    """Delete RawSnapshot + RawC3Snapshot rows older than RAW_RETENTION_DAYS to
+    keep the DB from growing unbounded (~20 KB/poll × every 2–10 min = >1 GB/year)."""
     cutoff = utcnow() - timedelta(days=RAW_RETENTION_DAYS)
     with Session(get_engine()) as s:
         result = s.execute(
             RawSnapshot.__table__.delete().where(RawSnapshot.fetched_at < cutoff)
         )
+        result_c3 = s.execute(
+            RawC3Snapshot.__table__.delete().where(RawC3Snapshot.fetched_at < cutoff)
+        )
         s.commit()
-    log.info("Pruned %s RawSnapshot rows older than %s days",
-             getattr(result, "rowcount", "?"), RAW_RETENTION_DAYS)
+    log.info("Pruned %s RawSnapshot + %s RawC3Snapshot rows older than %s days",
+             getattr(result, "rowcount", "?"), getattr(result_c3, "rowcount", "?"),
+             RAW_RETENTION_DAYS)
 
 
 def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOScheduler:
     global _SCHEDULER
+    s = get_settings()
     # Pin to UTC — every timestamp we write uses utcnow(), and APScheduler
     # interprets naive datetimes in *its* timezone. Without this, deploying
     # the image with TZ=Europe/Vienna would offset every reschedule by 2h.
@@ -281,5 +392,17 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
         coalesce=True,
         replace_existing=True,
     )
+    # C3 poll — own loop, started staggered (half a C3 interval after the main
+    # poll) so the two libraries don't hammer the shared account at the same
+    # instant. Reschedules itself adaptively from c3_poll_once's finally block.
+    if s.c3_enabled:
+        sched.add_job(
+            c3_poll_once,
+            DateTrigger(run_date=utcnow() + timedelta(minutes=s.c3_poll_interval_min / 2)),
+            id=C3_JOB_ID,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
     _SCHEDULER = sched
     return sched

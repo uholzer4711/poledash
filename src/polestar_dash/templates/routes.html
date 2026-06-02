@@ -68,6 +68,8 @@
           <th class="right">{{ t("Avg duration") }}</th>
           <th class="right">kWh/100km</th>
           <th class="right">{{ t("Best / Worst") }}</th>
+          <th class="right">{{ t("Ø Temp") }}</th>
+          <th class="right">{{ t("Ø PM2.5") }}</th>
           <th class="right">{{ t("Last") }}</th>
         </tr>
       </thead>
@@ -94,6 +96,8 @@
               <span class="muted">/</span>
               {% if r.worst_kwh_per_100km %}{{ r.worst_kwh_per_100km }}{% else %}—{% endif %}
             </td>
+            <td class="right tnum">{% if r.avg_temp_c is not none %}{{ r.avg_temp_c }}°C{% else %}—{% endif %}</td>
+            <td class="right tnum">{% if r.avg_pm25 is not none %}{{ r.avg_pm25 }}{% else %}—{% endif %}</td>
             <td class="right tnum mono-xs">{{ r.last_at|localtime('%Y-%m-%d') if r.last_at else '—' }}</td>
           </tr>
         {% endfor %}

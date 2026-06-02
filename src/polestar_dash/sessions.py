@@ -191,6 +191,27 @@ def _odo_stationary(a: float | None, b: float | None) -> bool:
     return abs(a - b) <= ODO_STATIONARY_TOL_KM
 
 
+def _stamp_c3_env(cs: ChargeSession, db: Session) -> None:
+    """Persist the car's own GPS + on-car temperature + cabin PM2.5 for the
+    session window, from the nearest C3Snapshot. Only fills empty fields, so a
+    re-run never clobbers a value already captured."""
+    try:
+        from .c3_enrich import nearest_c3_env
+
+        env = nearest_c3_env(cs.started_at, cs.ended_at, db=db)
+        if not env:
+            return
+        if cs.lat is None and env.get("lat") is not None:
+            cs.lat = env["lat"]
+            cs.lng = env["lng"]
+        if cs.outside_temp_c is None and env.get("temp_c") is not None:
+            cs.outside_temp_c = env["temp_c"]
+        if cs.air_pm25 is None and env.get("pm25") is not None:
+            cs.air_pm25 = env["pm25"]
+    except Exception:  # noqa: BLE001
+        log.exception("C3 env stamp failed for session %s", cs.id)
+
+
 def _auto_tag_station(cs: ChargeSession, db: Session) -> None:
     """Auto-fill note + price from a known ChargingStation if GPS matches."""
     if cs.note:
@@ -364,6 +385,7 @@ def update_session(
             if energy is not None:
                 cs.energy_kwh = energy
             cs.is_complete = True
+            _stamp_c3_env(cs, s)
             _auto_tag_station(cs, s)
             s.add(cs)
             s.commit()

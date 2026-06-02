@@ -18,6 +18,12 @@
   --ujh-orange-deep:   #e2460a;
   --ujh-orange-shadow: #3a2318;
 
+  /* Functional vehicle-state signals (closed/locked vs open/unlocked).
+     Deliberate exception to "orange is the only signal" — used ONLY as thin
+     contours on the car diagram + matching badges, never as fills or decor. */
+  --ujh-ok:    #2fbf71;
+  --ujh-alert: #f0524d;
+
   --ujh-sans: 'Inter Tight', -apple-system, BlinkMacSystemFont, sans-serif;
   --ujh-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 
@@ -41,6 +47,8 @@
   --ujh-ink-2:   #2a2c30;
   --ujh-ink-3:   #5a5d63;
   --ujh-ink-4:   #8a8d93;
+  --ujh-ok:      #1d9e57;
+  --ujh-alert:   #d83a35;
 }
 
 /* ---------- Reset ---------- */
@@ -364,6 +372,42 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .badge.solid { background: var(--ujh-ink); color: var(--ujh-bg); border-color: var(--ujh-ink); }
 .badge.warn { color: #f0b070; border-color: #6a4520; }
 .badge.bad { color: #f08585; border-color: #6a2024; }
+.badge.ok { color: var(--ujh-ok); border-color: var(--ujh-ok); }
+.badge.ok .dot { background: var(--ujh-ok); }
+.badge.alert { color: var(--ujh-alert); border-color: var(--ujh-alert); }
+.badge.alert .dot { background: var(--ujh-alert); }
+
+/* ---------- Car state diagram (top-view) ---------- */
+.car-diagram { display: flex; align-items: center; justify-content: center; padding: var(--ujh-s-4) 0; }
+.car-diagram svg { width: 100%; max-width: 260px; height: auto; }
+.car-body { fill: var(--ujh-bg-3); stroke: var(--ujh-line-2); stroke-width: 2; transition: stroke var(--ujh-t-base); }
+.car-body.is-unlocked { stroke: var(--ujh-alert); }
+.car-body.is-locked { stroke: var(--ujh-ok); }
+.car-wheel { fill: var(--ujh-ink-4); }
+.car-mirror { fill: var(--ujh-bg-3); stroke: var(--ujh-line-2); stroke-width: 1.5; }
+/* Optional real-photo variant (CAR_IMAGE_URL). The lock state shows as a thin
+   frame; per-opening state is read from the badges below (a flat photo can't
+   be recoloured per door). */
+.car-photo-wrap { padding: var(--ujh-s-4) 0; border: 1px solid transparent; transition: border-color var(--ujh-t-base); }
+.car-photo-wrap.is-locked { border-color: var(--ujh-ok); }
+.car-photo-wrap.is-unlocked { border-color: var(--ujh-alert); }
+.car-photo { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 auto; }
+.car-glass { fill: var(--ujh-bg); stroke: var(--ujh-line-2); stroke-width: 1.5; }
+.car-label { fill: var(--ujh-ink-4); font: 500 9px/1 var(--ujh-mono); letter-spacing: 0.1em; text-transform: uppercase; }
+/* Toggleable openings: green outline when closed, red when open. */
+.car-part {
+  fill: var(--ujh-bg-3);
+  stroke: var(--ujh-line-2);
+  stroke-width: 2;
+  transition: stroke var(--ujh-t-base), fill var(--ujh-t-base);
+}
+.car-part.is-closed { stroke: var(--ujh-ok); }
+.car-part.is-open {
+  stroke: var(--ujh-alert);
+  fill: color-mix(in srgb, var(--ujh-alert) 18%, var(--ujh-bg-3));
+}
+.car-lock-ring { fill: none; stroke: var(--ujh-line-2); stroke-width: 1.5; }
+.car-lock-ring.is-unlocked { stroke: var(--ujh-alert); }
 
 /* ---------- Button ---------- */
 .btn {

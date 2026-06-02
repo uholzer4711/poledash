@@ -743,6 +743,47 @@
     }
   </script>
 
+  <div class="card mb-6">
+    <div class="card-label">{{ t("Vehicle image") }}</div>
+    <div class="stat-sub mb-4">
+      {{ t("Upload a Polestar 2 image shown on the dashboard vehicle card (PNG/JPG/WebP, max 5 MB). Lock state shows as a frame, open doors/windows as the badges below it.") }}
+    </div>
+    <div class="flex gap-4 mb-4" style="align-items:flex-end;flex-wrap:wrap">
+      {% set car_img = car_image_src() %}
+      {% if car_img %}<img src="{{ car_img }}" alt="" style="max-width:160px;height:auto;border:1px solid var(--ujh-line)">{% endif %}
+    </div>
+    <form id="ci_form" enctype="multipart/form-data" onsubmit="return uploadCarImage(event)">
+      <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="flex:2;min-width:240px">
+          <label>{{ t("Image file") }}</label>
+          <input type="file" name="file" accept="image/*" required>
+        </div>
+        <button class="btn accent" type="submit">{{ t("Upload") }} <span class="arrow">→</span></button>
+        <button class="btn ghost" type="button" onclick="removeCarImage()">{{ t("Remove") }}</button>
+        <span id="ci_result" class="mono-xs muted"></span>
+      </div>
+    </form>
+  </div>
+  <script>
+    async function uploadCarImage(ev) {
+      ev.preventDefault();
+      const fd = new FormData(document.getElementById('ci_form'));
+      const out = document.getElementById('ci_result');
+      out.textContent = {{ t("uploading…") | tojson }};
+      const r = await fetch('/api/car-image', { method: 'POST', body: fd });
+      if (!r.ok) { out.textContent = {{ t("error: ") | tojson }} + r.status + ' ' + (await r.text()); return false; }
+      out.textContent = {{ t("done") | tojson }};
+      setTimeout(() => location.reload(), 600);
+      return false;
+    }
+    async function removeCarImage() {
+      const out = document.getElementById('ci_result');
+      const r = await fetch('/api/car-image', { method: 'DELETE' });
+      out.textContent = r.ok ? {{ t("removed") | tojson }} : {{ t("error: ") | tojson }} + r.status;
+      setTimeout(() => location.reload(), 600);
+    }
+  </script>
+
   <div class="grid grid-2 mb-6">
     {% for name, enabled, note in integrations %}
       <div class="card">
@@ -818,6 +859,16 @@
         <div class="flex gap-4" style="flex-wrap:wrap">
           <a class="btn accent" href="/static/grafana/mission-control.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana/mission-control.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
+        </div>
+      </div>
+
+      <div class="card" style="background:#1a1c20">
+        <div class="card-label">C3 · net-new</div>
+        <h2 style="margin:0 0 4px">C3 Command Center</h2>
+        <div class="stat-sub mb-2">{{ t("Everything the C3 backend adds: doors/windows/openings state-timeline, lock &amp; security, climate, cabin PM2.5, on-car weather, live location geomap, plus charging, SoC, range &amp; service. 27 panels, 30s refresh.") }}</div>
+        <div class="flex gap-4" style="flex-wrap:wrap">
+          <a class="btn accent" href="/static/grafana-dashboard-c3.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana-dashboard-c3.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
     </div>

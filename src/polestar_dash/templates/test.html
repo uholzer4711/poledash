@@ -45,9 +45,11 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/map.js"></script>
   <script>
     // Capture Leaflet immediately (date-fns on other pages reassigns window.L).
     const TLeaflet = window.L;
+    const TMapLabels = { satellite: {{ t("Satellite") | tojson }}, dark: {{ t("Dark") | tojson }} };
     (function () {
       let tstMap = null, tstMarker = null, tstParked = null;
       // Labels used inside JS template literals — kept as consts so we never
@@ -79,10 +81,8 @@
         if (!loc || typeof TLeaflet === 'undefined') return;
         const here = [loc.lat, loc.lng];
         if (!tstMap) {
-          tstMap = TLeaflet.map('tst_map').setView(here, 14);
-          TLeaflet.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19,
-          }).addTo(tstMap);
+          tstMap = window.poleMap.make('tst_map', { center: here, zoom: 14, labels: TMapLabels });
+          if (!tstMap) return;
         }
         const orange = cssVar('--ujh-orange') || '#ff5b14';
         if (tstMarker) tstMarker.remove();

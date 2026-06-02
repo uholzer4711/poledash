@@ -16,6 +16,25 @@ class Settings(BaseSettings):
     poll_interval_min: int = Field(default=10, ge=1, le=1440)
     fast_poll_interval_min: int = Field(default=2, ge=1, le=60)
 
+    # --- C3 (Volvo Cloud Connectivity) polling ---
+    # A second library (unofficial-polestar-api) hitting the same account, so
+    # the cadence is deliberately slower than the main poll and staggered
+    # against it (see scheduler._reschedule_c3) to spare the shared rate limit.
+    c3_enabled: bool = True
+    c3_poll_interval_min: int = Field(default=10, ge=2, le=1440)
+    c3_fast_poll_interval_min: int = Field(default=5, ge=2, le=60)
+    # Faster cadence while the car is *driving* so the GPS trail is dense enough
+    # to draw a real route line. Raises API load on the shared account — set
+    # high (≈ c3_poll_interval_min) to effectively disable.
+    c3_drive_poll_interval_min: int = Field(default=3, ge=2, le=60)
+    notify_door_open: bool = True
+    notify_unlocked: bool = True
+    # Optional URL to a real Polestar 2 image shown on the dashboard vehicle
+    # card (e.g. an official press/gallery render). Empty ⇒ the built-in
+    # recolorable SVG top-view is used. Kept as config (not committed) so we
+    # never bundle third-party copyrighted imagery into the repo.
+    car_image_url: str = ""
+
     # --- HTTP server ---
     host: str = "0.0.0.0"
     port: int = 8000

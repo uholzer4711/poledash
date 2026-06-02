@@ -541,4 +541,74 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Days to service": "Tage bis Service",
     "Distance to service": "Distanz bis Service",
     "Available": "Verfügbar",
+    # Dashboard vehicle-state section + C3 notifications
+    "02 / VEHICLE": "02 / FAHRZEUG",
+    "state": "Zustand",
+    "Last poll": "Letzter Abruf",
+    "Interval": "Intervall",
+    "stored": "gespeichert",
+    "Vehicle top view": "Fahrzeug von oben",
+    "Frunk": "Frunk",
+    "Boot": "Kofferraum",
+    "Charge port": "Ladeklappe",
+    "Satellite": "Satellit",
+    "Dark": "Dunkel",
+    "No C3 data polled yet — check the Test page / settings.":
+        "Noch keine C3-Daten abgerufen — siehe Test-Seite / Einstellungen.",
+    "Car left unlocked": "Auto unverschlossen",
+    "The car is parked and unlocked.": "Das Auto ist geparkt und unverschlossen.",
+    "Tyre warning": "Reifenwarnung",
+    "The car reports a tyre pressure warning.": "Das Auto meldet eine Reifendruck-Warnung.",
+    "Light failure": "Lichtdefekt",
+    "The car reports a bulb/light failure.": "Das Auto meldet einen Lichtdefekt.",
+    "{part} left open": "{part} offen gelassen",
+    "The {part} is open while the car is parked.":
+        "Die/der {part} ist offen, während das Auto geparkt ist.",
+    "front-left door": "Tür vorne links",
+    "front-right door": "Tür vorne rechts",
+    "rear-left door": "Tür hinten links",
+    "rear-right door": "Tür hinten rechts",
+    "front-left window": "Fenster vorne links",
+    "front-right window": "Fenster vorne rechts",
+    "rear-left window": "Fenster hinten links",
+    "rear-right window": "Fenster hinten rechts",
+    "sunroof": "Schiebedach",
+    "frunk": "Frunk",
+    "boot": "Kofferraum",
+    # Current-location weather + rain/windows alert
+    "Clear": "Klar",
+    "Cloudy": "Bewölkt",
+    "Fog": "Nebel",
+    "Drizzle": "Nieselregen",
+    "Rain": "Regen",
+    "Snow": "Schnee",
+    "Thunderstorm": "Gewitter",
+    "Rain & windows open": "Regen & Fenster offen",
+    "It's raining at the car and these are open: {parts}.":
+        "Es regnet am Auto und folgendes ist offen: {parts}.",
+    # Vehicle image upload (settings)
+    "Vehicle image": "Fahrzeugbild",
+    "Image file": "Bilddatei",
+    "Upload": "Hochladen",
+    "Remove": "Entfernen",
+    "removed": "entfernt",
+    "done": "fertig",
+    "Upload a Polestar 2 image shown on the dashboard vehicle card (PNG/JPG/WebP, max 5 MB). Lock state shows as a frame, open doors/windows as the badges below it.":
+        "Lade ein Polestar-2-Bild hoch, das auf der Fahrzeug-Karte des Dashboards gezeigt wird (PNG/JPG/WebP, max. 5 MB). Der Schloss-Zustand erscheint als Rahmen, offene Türen/Fenster als Badges darunter.",
+    # Routes extra columns
+    "Ø Temp": "Ø Temp",
+    "Ø PM2.5": "Ø PM2.5",
+    # Insights: cold charging + air quality
+    "Cold charging · peak kW vs temperature": "Kälte-Laden · Peak-kW vs Temperatur",
+    "Each point = one charge session (on-car temperature from C3). A cold pack throttles peak power.":
+        "Jeder Punkt = eine Ladung (Temperatur am Auto aus C3). Eine kalte Batterie drosselt die Spitzenleistung.",
+    "Cabin air quality · PM2.5 monthly": "Kabinenluft · PM2.5 monatlich",
+    "Monthly average cabin PM2.5 (µg/m³) from C3-enriched trips. Lower is cleaner.":
+        "Monatsmittel der Kabinen-PM2.5 (µg/m³) aus C3-angereicherten Trips. Niedriger = sauberer.",
+    "No charge sessions with a C3 temperature yet.":
+        "Noch keine Ladungen mit C3-Temperatur.",
+    "No cabin PM2.5 data yet — import a journey log after C3 polling has run.":
+        "Noch keine Kabinen-PM2.5-Daten — importiere ein Fahrtenbuch, nachdem C3 gepollt hat.",
+    "Everything the C3 backend adds: doors/windows/openings state-timeline, lock &amp; security, climate, cabin PM2.5, on-car weather, live location geomap, plus charging, SoC, range &amp; service. 27 panels, 30s refresh.":
+        "Alles, was das C3-Backend liefert: Türen/Fenster/Öffnungen als State-Timeline, Schloss &amp; Sicherheit, Klima, Kabinen-PM2.5, Wetter am Auto, Live-Standort-Geomap, plus Laden, SoC, Reichweite &amp; Service. 27 Panels, 30s-Refresh.",
 }

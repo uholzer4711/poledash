@@ -40,6 +40,21 @@ def make_templates() -> Jinja2Templates:
     tpl.env.globals["demo_mode"] = s.demo_mode
     tpl.env.globals["demo_banner_text"] = s.demo_banner_text
     tpl.env.globals["app_version"] = __version__
+    tpl.env.globals["c3_enabled"] = s.c3_enabled
+
+    def car_image_src() -> str:
+        """Vehicle image to show: an uploaded file (data dir) wins, else the
+        configured CAR_IMAGE_URL, else empty (→ built-in SVG). Checked per
+        render so an upload takes effect without a restart."""
+        p = s.data_dir / "car_image"
+        try:
+            if p.exists():
+                return f"/api/car-image?v={int(p.stat().st_mtime)}"
+        except OSError:
+            pass
+        return s.car_image_url or ""
+
+    tpl.env.globals["car_image_src"] = car_image_src
     # i18n: `t()` for strings, `ui_lang` for <html lang> + the settings toggle.
     # Globals are evaluated per render, and t() reads the live language cache,
     # so a language switch takes effect on the next page load without a rebuild.

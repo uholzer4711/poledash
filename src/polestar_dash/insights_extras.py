@@ -218,6 +218,56 @@ def compute_battery_trend(min_soc_drop: int = 4, min_bucket_drop: int = 30) -> d
     return {"points": points, "enough_data": len(points) >= 3}
 
 
+def compute_charge_temp_scatter(days: int = 365) -> list[dict]:
+    """Peak charging power vs on-car temperature per completed session.
+
+    Surfaces cold-charging behaviour (a cold pack throttles DC peak power).
+    Only sessions stamped with a C3 temperature appear."""
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        rows = list(
+            s.exec(
+                select(ChargeSession)
+                .where(ChargeSession.started_at >= since)
+                .where(ChargeSession.is_complete.is_(True))  # noqa: E712
+                .where(ChargeSession.outside_temp_c.is_not(None))
+                .where(ChargeSession.peak_power_w.is_not(None))
+            ).all()
+        )
+    out: list[dict] = []
+    for r in rows:
+        out.append({
+            "temp_c": r.outside_temp_c,
+            "peak_kw": round((r.peak_power_w or 0) / 1000, 1),
+            "kwh": round(r.energy_kwh or 0, 1),
+            "started_at": r.started_at.isoformat(),
+        })
+    return out
+
+
+def compute_air_exposure(days: int = 365) -> dict:
+    """Monthly average cabin PM2.5 from imported trips (C3-enriched).
+
+    Returns {points:[{month, pm25, samples}], enough_data}."""
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        rows = list(
+            s.exec(
+                select(JourneyImport.started_at, JourneyImport.air_pm25)
+                .where(JourneyImport.started_at >= since)
+                .where(JourneyImport.air_pm25.is_not(None))
+            ).all()
+        )
+    buckets: dict[str, list[float]] = {}
+    for started_at, pm25 in rows:
+        buckets.setdefault(started_at.strftime("%Y-%m"), []).append(pm25)
+    points = [
+        {"month": m, "pm25": round(sum(v) / len(v), 1), "samples": len(v)}
+        for m, v in sorted(buckets.items())
+    ]
+    return {"points": points, "enough_data": len(points) >= 1}
+
+
 def compute_temp_scatter(days: int = 365) -> list[dict]:
     """Wh/km vs outside temperature per imported trip with weather data."""
     since = utcnow() - timedelta(days=days)

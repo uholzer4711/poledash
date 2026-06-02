@@ -234,3 +234,85 @@ async def get_c3_snapshot(force: bool = False) -> dict:
         data["age_s"] = 0
         _cache, _cache_at = data, time.monotonic()
         return dict(data)
+
+
+def c3_dict_to_row(data: dict) -> dict | None:
+    """Project a decoded C3 snapshot (the `get_c3_snapshot` shape) onto the
+    flat C3Snapshot columns. Returns None when the fetch failed (no point
+    persisting an error row — those stay in the live cache only).
+
+    Mirrors scheduler._persist: tolerant of the dict missing sections.
+    """
+    if not data.get("ok"):
+        return None
+    veh = data.get("vehicle") or {}
+    loc = data.get("location") or {}
+    parked = data.get("parked") or {}
+    wx = data.get("weather") or {}
+    ext = data.get("exterior") or {}
+    doors = ext.get("doors") or {}
+    wins = ext.get("windows") or {}
+    cl = data.get("climate") or {}
+    air = data.get("air") or {}
+    h = data.get("health") or {}
+    bat = data.get("battery") or {}
+    avail = data.get("availability") or {}
+
+    def _door(name: str) -> str | None:
+        d = doors.get(name)
+        return d.get("open") if isinstance(d, dict) else None
+
+    return {
+        "vin": veh.get("vin") or "",
+        "lat": loc.get("lat"),
+        "lng": loc.get("lng"),
+        "altitude": loc.get("altitude"),
+        "heading": loc.get("heading"),
+        "speed": loc.get("speed"),
+        "gps_ts": loc.get("ts"),
+        "parked_lat": parked.get("lat"),
+        "parked_lng": parked.get("lng"),
+        "parked_ts": parked.get("ts"),
+        "weather_temp_c": wx.get("temp_c"),
+        "weather_ts": wx.get("ts_ms"),
+        "is_locked": ext.get("is_locked"),
+        "any_door_open": ext.get("any_door_open"),
+        "central_lock": ext.get("central_lock"),
+        "door_fl": _door("front_left"),
+        "door_fr": _door("front_right"),
+        "door_rl": _door("rear_left"),
+        "door_rr": _door("rear_right"),
+        "win_fl": wins.get("front_left"),
+        "win_fr": wins.get("front_right"),
+        "win_rl": wins.get("rear_left"),
+        "win_rr": wins.get("rear_right"),
+        "sunroof": ext.get("sunroof"),
+        "hood": ext.get("hood"),
+        "tailgate": ext.get("tailgate"),
+        "tank_lid": ext.get("tank_lid"),
+        "climate_active": cl.get("is_active"),
+        "climate_action": cl.get("action"),
+        "climate_running": cl.get("running"),
+        "climate_time_remaining": cl.get("time_remaining"),
+        "air_running": air.get("is_running"),
+        "air_aqi": air.get("aqi"),
+        "air_pm25": air.get("pm25"),
+        "any_light_failure": h.get("any_light_failure"),
+        "any_tyre_warning": h.get("any_tyre_warning"),
+        "service_warning": h.get("service_warning"),
+        "days_to_service": h.get("days_to_service"),
+        "distance_to_service_km": h.get("distance_to_service_km"),
+        "brake_fluid": h.get("brake_fluid"),
+        "oil": h.get("oil"),
+        "coolant": h.get("coolant"),
+        "charge_level": bat.get("charge_level"),
+        "range_km": bat.get("range_km"),
+        "is_plugged_in": bat.get("is_plugged_in"),
+        "is_charging": bat.get("is_charging"),
+        "charging_status": bat.get("charging_status"),
+        "charging_type": bat.get("charging_type"),
+        "connection": bat.get("connection"),
+        "amp_limit": data.get("amp_limit"),
+        "odometer_km": data.get("odometer_km"),
+        "availability_status": avail.get("status"),
+    }

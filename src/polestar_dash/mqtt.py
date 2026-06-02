@@ -135,3 +135,159 @@ def schedule_publish(snap: Snapshot) -> None:
             pass
 
     task.add_done_callback(_done)
+
+
+# --- C3 (Volvo Cloud Connectivity) entities -------------------------------
+# Published on a separate topic + discovery set so a C3 outage never touches
+# the main snapshot stream. GPS as a device_tracker is the biggest HA win.
+_published_c3_discovery: set[str] = set()
+
+# binary_sensor: (id, name, device_class). ON = the listed problem state.
+_C3_BINARY: list[tuple[str, str, str | None]] = [
+    ("any_door_open", "Any door open", "door"),
+    ("door_fl", "Front-left door", "door"),
+    ("door_fr", "Front-right door", "door"),
+    ("door_rl", "Rear-left door", "door"),
+    ("door_rr", "Rear-right door", "door"),
+    ("win_fl", "Front-left window", "window"),
+    ("win_fr", "Front-right window", "window"),
+    ("win_rl", "Rear-left window", "window"),
+    ("win_rr", "Rear-right window", "window"),
+    ("sunroof", "Sunroof", "window"),
+    ("hood", "Frunk", "door"),
+    ("tailgate", "Boot", "door"),
+    ("any_tyre_warning", "Tyre warning", "problem"),
+    ("any_light_failure", "Light failure", "problem"),
+]
+# sensor: (id, name, unit, device_class)
+_C3_SENSORS: list[tuple[str, str, str | None, str | None]] = [
+    ("air_pm25", "Cabin PM2.5", "µg/m³", "pm25"),
+    ("air_aqi", "Cabin AQI", None, "aqi"),
+    ("weather_temp_c", "Outside temperature", "°C", "temperature"),
+    ("climate_action", "Climate action", None, None),
+    ("charge_level", "C3 state of charge", "%", "battery"),
+    ("range_km", "C3 range", "km", "distance"),
+]
+
+_OPEN_STATES = {"open", "ajar"}
+
+
+def _c3_discovery(vin: str, base: str) -> list[tuple[str, dict]]:
+    device = {
+        "identifiers": [f"poledash_{vin}"],
+        "manufacturer": "Polestar",
+        "name": f"Polestar ({vin[-6:]})",
+        "model": "Polestar 2",
+        "via_device": "poledash",
+    }
+    state_topic = f"{base}/{vin}/c3/state"
+    avail_topic = f"{base}/{vin}/c3/availability"
+    out: list[tuple[str, dict]] = []
+
+    for _id, name, dc in _C3_BINARY:
+        oid = f"poledash_{vin}_c3_{_id}"
+        payload = {
+            "name": name, "unique_id": oid, "object_id": oid,
+            "state_topic": state_topic, "availability_topic": avail_topic,
+            "value_template": "{{ value_json." + _id + " }}",
+            "payload_on": "ON", "payload_off": "OFF", "device": device,
+        }
+        if dc:
+            payload["device_class"] = dc
+        out.append((f"homeassistant/binary_sensor/{oid}/config", payload))
+
+    # locked: HA lock device_class binary_sensor — ON = unlocked (problem)
+    oid = f"poledash_{vin}_c3_unlocked"
+    out.append((f"homeassistant/binary_sensor/{oid}/config", {
+        "name": "Unlocked", "unique_id": oid, "object_id": oid,
+        "state_topic": state_topic, "availability_topic": avail_topic,
+        "value_template": "{{ value_json.unlocked }}",
+        "payload_on": "ON", "payload_off": "OFF",
+        "device_class": "lock", "device": device,
+    }))
+
+    for _id, name, unit, dc in _C3_SENSORS:
+        oid = f"poledash_{vin}_c3_{_id}"
+        payload = {
+            "name": name, "unique_id": oid, "object_id": oid,
+            "state_topic": state_topic, "availability_topic": avail_topic,
+            "value_template": "{{ value_json." + _id + " }}",
+            "device": device,
+        }
+        if unit:
+            payload["unit_of_measurement"] = unit
+        if dc:
+            payload["device_class"] = dc
+        out.append((f"homeassistant/sensor/{oid}/config", payload))
+
+    # device_tracker for GPS
+    oid = f"poledash_{vin}_c3_location"
+    out.append((f"homeassistant/device_tracker/{oid}/config", {
+        "name": "Location", "unique_id": oid, "object_id": oid,
+        "json_attributes_topic": state_topic,
+        "availability_topic": avail_topic,
+        "source_type": "gps", "device": device,
+    }))
+    return out
+
+
+def _c3_state_payload(row) -> dict:  # noqa: ANN001 — C3Snapshot
+    """Flatten a C3Snapshot row into the MQTT state JSON (ON/OFF for binaries,
+    plus latitude/longitude for the device_tracker)."""
+    def onoff(v: bool | None) -> str:
+        return "ON" if v else "OFF"
+
+    def open_onoff(v: str | None) -> str:
+        return "ON" if v in _OPEN_STATES else "OFF"
+
+    data = row.model_dump(mode="json")
+    out: dict = dict(data)
+    out["any_door_open"] = onoff(row.any_door_open)
+    out["any_tyre_warning"] = onoff(row.any_tyre_warning)
+    out["any_light_failure"] = onoff(row.any_light_failure)
+    out["unlocked"] = onoff(row.is_locked is False)
+    for _id, _name, _dc in _C3_BINARY:
+        if _id.startswith(("door_", "win_")) or _id in ("sunroof", "hood", "tailgate"):
+            out[_id] = open_onoff(getattr(row, _id))
+    if row.lat is not None and row.lng is not None:
+        out["latitude"] = row.lat
+        out["longitude"] = row.lng
+    return out
+
+
+async def publish_c3(row) -> None:  # noqa: ANN001 — C3Snapshot
+    """Publish a C3 snapshot + HA discovery (once per VIN per process)."""
+    kw = _client_kwargs()
+    if kw is None:
+        return
+    s = get_settings()
+    base = s.mqtt_base_topic.rstrip("/")
+    vin = row.vin
+    try:
+        import aiomqtt
+
+        async with aiomqtt.Client(**kw) as client:
+            if s.mqtt_ha_discovery and vin not in _published_c3_discovery:
+                for topic, payload in _c3_discovery(vin, base):
+                    await client.publish(topic, json.dumps(payload), retain=True)
+                _published_c3_discovery.add(vin)
+                log.info("Published C3 HA discovery for %s", vin)
+            payload = _c3_state_payload(row)
+            await client.publish(f"{base}/{vin}/c3/state", json.dumps(payload), retain=True)
+            await client.publish(f"{base}/{vin}/c3/availability", "online", retain=True)
+    except Exception:  # noqa: BLE001
+        log.exception("MQTT C3 publish failed for VIN %s", vin)
+
+
+def schedule_publish_c3(row) -> None:  # noqa: ANN001 — C3Snapshot
+    """Fire-and-forget C3 MQTT publish from the scheduler loop."""
+    if _client_kwargs() is None:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        log.warning("schedule_publish_c3 called outside an event loop; dropping")
+        return
+    task = loop.create_task(publish_c3(row))
+    _pending.add(task)
+    task.add_done_callback(lambda t: _pending.discard(t))

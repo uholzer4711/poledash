@@ -16,13 +16,22 @@ from ..app_settings import (
     set_charging_loss_factor,
     set_default_price_ct,
 )
-from ..db.models import ChargeSession, ChargingStation, JourneyImport, VehicleSnapshot
+from ..config import get_settings
+from ..db.models import (
+    C3Snapshot,
+    ChargeSession,
+    ChargingStation,
+    JourneyImport,
+    VehicleSnapshot,
+)
 from ..db.session import get_engine
 from ..i18n import SUPPORTED_LANGS, get_language, set_language
 from ..idle_drain import detect_idle_drains
 from ..insights_extras import (
+    compute_air_exposure,
     compute_battery_trend,
     compute_charge_heatmap,
+    compute_charge_temp_scatter,
     compute_co2,
     compute_forecast,
     compute_range_factor,
@@ -42,6 +51,7 @@ from ..journey_import import (
     tag_co2_for_imports,
     upsert,
 )
+from ..polestar.c3 import c3_dict_to_row, get_c3_snapshot
 from ..routes_stats import list_routes, trips_for_route
 from ..tripbook import detect_trips
 from ..util import utcnow
@@ -399,7 +409,11 @@ def _recalc_session_energy() -> None:
     factor changes.
     """
     from ..app_settings import get_calibrated_battery_kwh
-    from ..sessions import DEFAULT_BATTERY_KWH, compute_session_energy_kwh
+    from ..sessions import (
+        DEFAULT_BATTERY_KWH,
+        _stamp_c3_env,
+        compute_session_energy_kwh,
+    )
     capacity = get_calibrated_battery_kwh(fallback=DEFAULT_BATTERY_KWH)
     with Session(get_engine()) as s:
         rows = list(s.exec(
@@ -409,6 +423,11 @@ def _recalc_session_energy() -> None:
             energy = compute_session_energy_kwh(s, cs, capacity)
             if energy is not None:
                 cs.energy_kwh = energy
+                s.add(cs)
+            # Backfill GPS/temp/PM2.5 for sessions that closed before C3
+            # stamping existed (only fills empties; needs C3 history overlap).
+            if cs.lat is None or cs.outside_temp_c is None or cs.air_pm25 is None:
+                _stamp_c3_env(cs, s)
                 s.add(cs)
         s.commit()
 
@@ -498,6 +517,8 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
         "co2": compute_co2(days=days),
         "trip_cost": compute_trip_cost(days=days),
         "battery_trend": compute_battery_trend(),
+        "charge_temp_scatter": compute_charge_temp_scatter(days=days),
+        "air_exposure": compute_air_exposure(days=days),
     }
 
 
@@ -645,6 +666,10 @@ async def journey_import(
         # Keep existing sessions consistent with the new capacity.
         _recalc_session_energy()
     co2_tagged = tag_co2_for_imports()
+    # On-car C3 measurements first (preferred), Open-Meteo as the fallback for
+    # rows with no nearby C3 data (older trips).
+    from ..c3_enrich import enrich_journey_imports_from_c3
+    c3_enriched = enrich_journey_imports_from_c3(limit=500)
     weather = await enrich_weather_pending(limit=200)
     return {
         "parsed": len(records),
@@ -652,6 +677,7 @@ async def journey_import(
         "skipped": skipped,
         "calibrated_battery_kwh": calibrated,
         "co2_tagged": co2_tagged,
+        "c3_enriched": c3_enriched,
         "weather": weather,
     }
 
@@ -659,16 +685,47 @@ async def journey_import(
 @router.post("/journey-imports/enrich")
 async def journey_imports_enrich() -> dict:
     """Re-run the post-import enrichments (weather, CO2). Safe to spam."""
+    from ..c3_enrich import enrich_journey_imports_from_c3
     from ..co2 import backfill_charge_sessions
 
     co2_tagged_trips = tag_co2_for_imports()
     co2_tagged_sessions = backfill_charge_sessions()
+    c3_enriched = enrich_journey_imports_from_c3(limit=1000)
+    _recalc_session_energy()  # backfills session GPS/temp/PM2.5 too
     weather = await enrich_weather_pending(limit=500)
     return {
         "co2_tagged_trips": co2_tagged_trips,
         "co2_tagged_sessions": co2_tagged_sessions,
+        "c3_enriched": c3_enriched,
         "weather": weather,
     }
+
+
+@router.get("/trips")
+def trips_api(days: int = Query(30, ge=1, le=365), vin: str | None = None) -> list[dict]:
+    """Detected trips (odometer stream) enriched with the C3 GPS breadcrumb and
+    average on-car temperature / cabin PM2.5 for each trip window. Powers the
+    real-route layer on the tripbook map — works without any CSV upload."""
+    from ..c3_enrich import c3_env_aggregate, c3_path_between
+
+    out: list[dict] = []
+    for t in detect_trips(vin=vin, days=days):
+        path = c3_path_between(t.started_at, t.ended_at)
+        env = c3_env_aggregate(t.started_at, t.ended_at)
+        out.append({
+            "started_at": t.started_at.isoformat(),
+            "ended_at": t.ended_at.isoformat(),
+            "km": t.km,
+            "duration_min": t.duration_min,
+            "kwh": t.kwh_used,
+            "kwh_per_100km": t.kwh_per_100km,
+            "start": [path[0]["lat"], path[0]["lng"]] if path else None,
+            "end": [path[-1]["lat"], path[-1]["lng"]] if path else None,
+            "path": [[p["lat"], p["lng"]] for p in path],
+            "avg_temp_c": env["avg_temp_c"],
+            "avg_pm25": env["avg_pm25"],
+        })
+    return out
 
 
 @router.get("/route-stats")
@@ -837,6 +894,142 @@ def trip_paths(
 @router.get("/journey-imports")
 def journey_imports(days: int = Query(30, ge=1, le=3650), vin: str | None = None) -> list[dict]:
     return [j.model_dump(mode="json") for j in list_imports(days=days, vin=vin)]
+
+
+@router.get("/c3/latest")
+async def c3_latest(vin: str | None = None) -> dict:
+    """Latest C3 state (doors/locks/climate/GPS) for the dashboard.
+
+    Prefers the persisted C3Snapshot (the scheduler's c3_poll_once keeps it
+    fresh, no backend hit). Falls back to the live cache when nothing has been
+    polled yet — e.g. before the first staggered C3 poll — so the dashboard
+    isn't blank while /test already shows live data. Always carries the poll
+    interval + source so the UI can show "last poll / interval"."""
+    cfg = get_settings()
+    meta = {
+        "interval_min": cfg.c3_poll_interval_min,
+        "fast_interval_min": cfg.c3_fast_poll_interval_min,
+    }
+    with Session(get_engine()) as s:
+        stmt = select(C3Snapshot).order_by(C3Snapshot.fetched_at.desc())
+        if vin:
+            stmt = stmt.where(C3Snapshot.vin == vin)
+        row = s.exec(stmt.limit(1)).first()
+    if row is not None:
+        return {**row.model_dump(mode="json"), "source": "db", **meta}
+    if cfg.c3_enabled:
+        data = await get_c3_snapshot()  # cached ~30 s; warm if /test was opened
+        flat = c3_dict_to_row(data)
+        if flat:
+            return {**flat, "fetched_at": utcnow().isoformat(), "source": "live", **meta}
+    return dict(meta)
+
+
+@router.get("/weather/current")
+async def weather_current(vin: str | None = None) -> dict:
+    """Current weather at the car's latest known GPS (Open-Meteo, key-less).
+
+    Small dashboard widget + powers the rain/windows alert. Returns {} when no
+    GPS fix is on record yet."""
+    from ..i18n import t
+    from ..weather import current_at
+
+    with Session(get_engine()) as s:
+        stmt = (
+            select(C3Snapshot.lat, C3Snapshot.lng)
+            .where(C3Snapshot.lat.is_not(None))
+            .order_by(C3Snapshot.fetched_at.desc())
+        )
+        if vin:
+            stmt = stmt.where(C3Snapshot.vin == vin)
+        row = s.exec(stmt.limit(1)).first()
+    if not row or row[0] is None:
+        return {}
+    wx = await current_at(row[0], row[1])
+    if wx is None:
+        return {}
+    labels = {
+        "clear": t("Clear"), "cloudy": t("Cloudy"), "fog": t("Fog"),
+        "drizzle": t("Drizzle"), "rain": t("Rain"), "snow": t("Snow"),
+        "thunderstorm": t("Thunderstorm"), "unknown": t("unknown"),
+    }
+    wx["desc"] = labels.get(wx.get("bucket"), wx.get("bucket"))
+    return wx
+
+
+@router.get("/car-image")
+def car_image_get():
+    """Serve the user-uploaded vehicle image (stored in the data dir, never in
+    the repo). 404 when none uploaded — the dashboard then falls back to
+    CAR_IMAGE_URL or the built-in SVG."""
+    from fastapi.responses import FileResponse, Response
+
+    from ..app_settings import get_setting
+
+    p = get_settings().data_dir / "car_image"
+    if not p.exists():
+        return Response(status_code=404)
+    ct = get_setting("car_image_ct", "image/jpeg")
+    return FileResponse(str(p), media_type=ct)
+
+
+@router.post("/car-image")
+async def car_image_upload(file: UploadFile = File(...)) -> dict:
+    """Upload a vehicle image shown on the dashboard. Stored in the data dir."""
+    from ..app_settings import set_setting
+
+    ct = (file.content_type or "").lower()
+    if not ct.startswith("image/"):
+        raise HTTPException(400, "expected an image file")
+    max_size = 5 * 1024 * 1024
+    data = await file.read(max_size + 1)
+    if not data:
+        raise HTTPException(400, "empty file")
+    if len(data) > max_size:
+        raise HTTPException(413, "image too large (>5 MB)")
+    p = get_settings().data_dir / "car_image"
+    p.write_bytes(data)
+    set_setting("car_image_ct", ct)
+    return {"ok": True, "bytes": len(data), "content_type": ct}
+
+
+@router.delete("/car-image")
+def car_image_delete() -> dict:
+    p = get_settings().data_dir / "car_image"
+    existed = p.exists()
+    if existed:
+        p.unlink()
+    return {"deleted": existed}
+
+
+@router.get("/c3/track")
+def c3_track(
+    hours: int = Query(24, ge=1, le=720), vin: str | None = None
+) -> list[dict]:
+    """GPS trail from C3Snapshot history for the dashboard mini-map.
+
+    Returns chronological [{lat, lng, ts, speed}] points that have a fix."""
+    since = utcnow() - timedelta(hours=hours)
+    with Session(get_engine()) as s:
+        stmt = (
+            select(
+                C3Snapshot.lat,
+                C3Snapshot.lng,
+                C3Snapshot.fetched_at,
+                C3Snapshot.speed,
+            )
+            .where(C3Snapshot.fetched_at >= since)
+            .where(C3Snapshot.lat.is_not(None))
+            .where(C3Snapshot.lng.is_not(None))
+            .order_by(C3Snapshot.fetched_at.asc())
+        )
+        if vin:
+            stmt = stmt.where(C3Snapshot.vin == vin)
+        rows = s.exec(stmt).all()
+    return [
+        {"lat": lat, "lng": lng, "ts": ts.isoformat(), "speed": speed}
+        for lat, lng, ts, speed in rows
+    ]
 
 
 @router.delete("/journey-imports")
