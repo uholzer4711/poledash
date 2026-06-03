@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from polestar_dash.db.models import VehicleSnapshot
 from polestar_dash.db.session import get_engine
-from polestar_dash.tripbook import detect_trips
+from polestar_dash.tripbook import _battery_kwh, detect_trips
 from polestar_dash.util import utcnow
 
 
@@ -104,6 +104,35 @@ def test_short_trip_energy_uses_car_consumption_not_soc(tmp_db):
     # car efficiency: 14.8 kWh/100km, not the ~3%*83kWh/7.8km SoC estimate
     assert t.kwh_used == round(14.8 * 7.8 / 100, 2)
     assert abs(t.kwh_per_100km - 14.8) <= 0.2  # rounding through int wh/km
+
+
+def test_long_trip_prefers_soc_over_flat_avg(tmp_db):
+    """On a long-enough trip the SoC drop is the honest per-trip energy. The
+    car's avg-consumption is a slow lifetime average; using it would reprint the
+    same efficiency for every trip and hide real variation."""
+    base = utcnow().replace(microsecond=0) - timedelta(hours=2)
+    rows = [
+        {"fetched_at": base, "odometer_km": 100.0,
+         "odometer_event_ts": base - timedelta(hours=2), "soc_percent": 81,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=10), "odometer_km": 140.0,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 72,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=20), "odometer_km": 140.0,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 72,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=30), "odometer_km": 140.0,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 72,
+         "avg_consumption_kwh_per_100km": 14.8, "charging_status": "Idle"},
+    ]
+    _insert(rows)
+
+    t = detect_trips(vin="V", days=1)[0]
+    assert t.km == 40.0
+    # 9% drop of a real battery, NOT the flat 14.8*40/100 = 5.92 kWh
+    soc_kwh = round(9 / 100.0 * _battery_kwh(), 2)
+    assert t.kwh_used == soc_kwh
+    assert t.kwh_used > 14.8 * 40 / 100  # measurably above the flat-avg figure
 
 
 def test_kwh_falls_back_to_soc_when_no_consumption(tmp_db):

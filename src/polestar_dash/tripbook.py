@@ -67,14 +67,30 @@ class Trip:
     def duration_min(self) -> int:
         return int((self.ended_at - self.started_at).total_seconds() // 60)
 
+    # SoC is quantized to whole percent (~0.8 kWh/step at 82.9 kWh usable), so
+    # the SoC-drop estimate is only trustworthy once the trip is long enough
+    # that one step is a small fraction of the energy. Below that we fall back
+    # to the car's reported avg consumption.
+    _SOC_MIN_KM = 10.0  # SoC method below this is swamped by 1% quantization
+    _SOC_MIN_DROP = 2  # …and needs at least this many whole-percent steps
+
     @property
     def kwh_used(self) -> float | None:
-        # Prefer the car's own reported efficiency. SoC is quantized to whole
-        # percent, so on a short trip a single 1% step (~0.8 kWh) swamps the
-        # real energy and the SoC estimate reads up to ~2x high. The car's
-        # avg-consumption figure is what its trip computer shows.
+        soc_kwh = None
+        if self.soc_start is not None and self.soc_end is not None:
+            drop = self.soc_start - self.soc_end
+            if drop >= self._SOC_MIN_DROP and self.km >= self._SOC_MIN_KM:
+                soc_kwh = round(drop / 100.0 * _battery_kwh(), 2)
+
+        # On a long-enough trip the SoC drop is the honest per-trip energy.
+        # `avg_consumption_kwh_per_100km` from the API is a slow-moving lifetime
+        # average — multiplying it by km just reprints the same efficiency for
+        # every trip and hides real variation (cold starts, climbs, …).
+        if soc_kwh is not None:
+            return soc_kwh
         if self.avg_consumption_kwh_per_100km is not None and self.km > 0.5:
             return round(self.avg_consumption_kwh_per_100km * self.km / 100.0, 2)
+        # Short trip with no avg figure: SoC drop is the last resort.
         if self.soc_start is None or self.soc_end is None:
             return None
         drop = self.soc_start - self.soc_end

@@ -3,6 +3,26 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.16.0] — 2026-06-03
+
+### Changed — honest per-trip energy
+
+- **Per-trip kWh/100km now prefers the SoC drop** on long-enough trips
+  (≥ 10 km and ≥ 2 % drop) instead of always using the car's reported average
+  consumption. The API's `avg_consumption_kwh_per_100km` is a slow-moving
+  lifetime average — multiplying it by distance reprinted the *same* efficiency
+  for every trip (e.g. a flat 14.8 across an entire driving day) and hid real
+  variation. Above the length/drop threshold the whole-percent SoC step
+  (~0.8 kWh at the calibrated capacity) is only a small fraction of the trip
+  energy, so SoC × usable-capacity is the honest figure; short trips still fall
+  back to the average, where SoC quantization would dominate. The day's total
+  is unchanged; the breakdown finally reflects cold starts, climbs, etc.
+  (`tripbook.py` `Trip.kwh_used`).
+- Note: the exact per-trip Wh counter (`total_energy_consumption_wh_since_charge`)
+  is carried in the schema but the Polestar gRPC backend returns it `NULL`, so
+  it is not usable as a source yet; the SoC method is the best live signal short
+  of an imported journey-log CSV.
+
 ## [1.15.0] — 2026-06-02
 
 ### Changed — UI cleanup: topbar, settings, dashboard, insights

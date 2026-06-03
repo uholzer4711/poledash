@@ -136,11 +136,15 @@ live GPS, so without that auto-tag you pick the place from the dropdown.
 
 Trip energy: trips are detected from the odometer plus the car's own
 `odometer_event_ts`, so a drive whose odometer reports in one batch still
-gets its real duration. The per-trip **kWh/100km** is estimated from the
-car's reported average consumption × distance (SoC is only whole-percent,
-which is too coarse for short trips). The **kWh (real)** column shows the
-exact per-trip energy from an imported Polestar-app journey-log CSV, when
-one matches.
+gets its real duration. The per-trip **kWh/100km** prefers the **SoC drop ×
+calibrated usable capacity** once a trip is long enough (≥ 10 km and ≥ 2 %
+drop) that the whole-percent SoC step (~0.8 kWh) is only a small fraction of
+the energy — that's the honest per-trip figure and it varies with cold starts,
+climbs, etc. Shorter trips fall back to the car's reported **average
+consumption × distance**, since the lifetime average is a slow-moving number
+that would otherwise reprint the same efficiency for every drive. The **kWh
+(real)** column shows the exact per-trip energy from an imported Polestar-app
+journey-log CSV, when one matches.
 
 Imported journey log: the Polestar-app CSV carries more than energy and
 addresses. `/tripbook`'s imported-trips table surfaces each trip's **category**
