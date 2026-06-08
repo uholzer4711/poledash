@@ -31,6 +31,28 @@ class Settings(BaseSettings):
     # to draw a real route line. Raises API load on the shared account — set
     # high (≈ c3_poll_interval_min) to effectively disable.
     c3_drive_poll_interval_min: int = Field(default=2, ge=2, le=60)
+
+    # --- Adaptive idle / night throttling ---
+    # Stretch the poll cadence when the car is at rest, to spare the shared
+    # account and the 12V battery. Only ever slows down — never applied while
+    # charging or driving (those keep their fast/drive cadence so we never miss
+    # a charge-complete or a route). Two triggers:
+    #   * hard night window (local time) → strong slowdown, car is parked anyway
+    #   * car locked & parked during the day → moderate slowdown ("not in use")
+    # "Locked" is read from the latest C3 snapshot; with C3 off only the night
+    # rule applies. The dashboard/Test live reads still fetch fresh on demand,
+    # so this only affects background persistence cadence.
+    adaptive_idle_enabled: bool = True
+    # Local hours [from, to) treated as hard night. Wraps midnight when from>to.
+    night_hour_from: int = Field(default=23, ge=0, le=23)
+    night_hour_to: int = Field(default=5, ge=0, le=23)
+    # Slow cadences (minutes). Night is the strongest; idle is the daytime
+    # locked-and-parked rate. Each is a floor — a longer base interval wins.
+    night_poll_interval_min: int = Field(default=30, ge=2, le=1440)
+    c3_night_poll_interval_min: int = Field(default=30, ge=2, le=1440)
+    idle_poll_interval_min: int = Field(default=20, ge=2, le=1440)
+    c3_idle_poll_interval_min: int = Field(default=15, ge=2, le=1440)
+
     notify_door_open: bool = True
     notify_unlocked: bool = True
     # Optional URL to a real Polestar 2 image shown on the dashboard vehicle

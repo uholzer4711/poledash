@@ -315,6 +315,10 @@ class C3Snapshot(SQLModel, table=True):
     brake_fluid: str | None = None
     oil: str | None = None
     coolant: str | None = None
+    washer_fluid: str | None = None
+    low_voltage_battery: str | None = None  # 12V battery warning (ok/warning/…)
+    engine_hours_to_service: int | None = None
+    failed_lights: str | None = None  # comma-joined bulb names reporting a fault
 
     # Battery / charging (C3 view — often fresher than pypolestar)
     charge_level: int | None = None

@@ -20,12 +20,12 @@ from .digest import weekly_digest
 from .i18n import t
 from .mqtt import schedule_publish, schedule_publish_c3
 from .notify import notify
-from .polestar.c3 import c3_dict_to_row, get_c3_snapshot
+from .polestar.c3 import SW_PENDING_STATES, c3_dict_to_row, get_c3_snapshot
 from .polestar.client import PolestarClient
 from .polestar.fetcher import Snapshot, fetch_snapshot
 from .sessions import CHARGING_STATES, previous_snapshot, update_session
 from .software import check_software_updates, record_installed_version
-from .util import haversine_km, utcnow
+from .util import haversine_km, in_hour_window, local_now, utcnow
 
 # Retention for the raw-JSON safety net. Structured rows in VehicleSnapshot
 # stay forever; the verbatim API payloads we keep just long enough to debug
@@ -205,7 +205,12 @@ def _reschedule(client: PolestarClient, *, charging: bool) -> None:
     sched: AsyncIOScheduler | None = _SCHEDULER
     if sched is None:
         return
-    interval = s.fast_poll_interval_min if charging else s.poll_interval_min
+    base = s.fast_poll_interval_min if charging else s.poll_interval_min
+    interval = _adaptive_interval(
+        base, charging=charging, driving=False,
+        night_interval=s.night_poll_interval_min,
+        idle_interval=s.idle_poll_interval_min,
+    )
     next_run = utcnow() + timedelta(minutes=interval)
     sched.add_job(
         poll_once,
@@ -216,7 +221,8 @@ def _reschedule(client: PolestarClient, *, charging: bool) -> None:
         coalesce=True,
         replace_existing=True,
     )
-    log.info("Next poll at %s (%s mode)", next_run.isoformat(), "fast" if charging else "slow")
+    mode = "fast" if charging else ("slow" if interval == base else f"idle/{interval}m")
+    log.info("Next poll at %s (%s mode)", next_run.isoformat(), mode)
 
 
 _SCHEDULER: AsyncIOScheduler | None = None
@@ -235,6 +241,83 @@ def _latest_c3(vin: str) -> C3Snapshot | None:
         if row is not None:
             s.expunge(row)
         return row
+
+
+def _c3_rest_state() -> str:
+    """Best-effort 'is the car in use?' from the two latest C3 snapshots.
+
+    Returns 'in_use' (unlocked, or moved since the last fix — covers cars that
+    auto-lock at speed), 'at_rest' (locked and not moving), or 'unknown' (no C3
+    data, e.g. C3 disabled). Drives the night/idle poll throttling.
+    """
+    from sqlmodel import select
+
+    try:
+        with Session(get_engine()) as s:
+            rows = list(s.exec(
+                select(C3Snapshot).order_by(C3Snapshot.fetched_at.desc()).limit(2)
+            ).all())
+    except Exception:  # noqa: BLE001
+        log.exception("rest-state lookup failed")
+        return "unknown"
+    if not rows:
+        return "unknown"
+    latest = rows[0]
+    if latest.is_locked is False:
+        return "in_use"
+    if len(rows) > 1:
+        prev = rows[1]
+        if (latest.lat is not None and latest.lng is not None
+                and prev.lat is not None and prev.lng is not None
+                and haversine_km(prev.lat, prev.lng, latest.lat, latest.lng) > 0.3):
+            return "in_use"
+    if (latest.speed or 0) >= 3:
+        return "in_use"
+    if latest.is_locked is True:
+        return "at_rest"
+    return "unknown"
+
+
+def _adaptive_interval(
+    base: int, *, charging: bool, driving: bool, night_interval: int, idle_interval: int
+) -> int:
+    """Stretch `base` when the car is at rest. Never slows active use: charging,
+    driving, or an unlocked/recently-moved car keep the base cadence."""
+    s = get_settings()
+    if not s.adaptive_idle_enabled or charging or driving:
+        return base
+    rest = _c3_rest_state()
+    if rest == "in_use":
+        return base
+    hour = local_now().hour
+    if in_hour_window(hour, s.night_hour_from, s.night_hour_to):
+        return max(base, night_interval)  # hard night, parked
+    if rest == "at_rest":
+        return max(base, idle_interval)   # daytime, locked & parked
+    return base
+
+
+def _maybe_notify_c3_software(vin: str, data: dict) -> None:
+    """Notify once when the car itself reports a pending OTA update (a
+    `new_sw_version` in a not-yet-installed state). More reliable than the
+    manual-scrape path, which can't compare when pypolestar reports no version.
+    Deduped per version via the notify() NotificationLog."""
+    sw = data.get("software") or {}
+    version = sw.get("new_version")
+    if not version or sw.get("state_code") not in SW_PENDING_STATES:
+        return
+    notes = (sw.get("notes") or "").strip()
+    notify(
+        kind="c3_software_pending",
+        key=f"{vin}-{version}",
+        title=t("Software update available: {v}", v=version),
+        body=t("Your Polestar reports version {v} ({state}).", v=version,
+               state=sw.get("state") or "?")
+        + (f"\n\n{notes[:600]}" if notes else ""),
+        vin=vin,
+        priority="high",
+        tags=["gear"],
+    )
 
 
 async def c3_poll_once() -> None:
@@ -295,6 +378,10 @@ async def c3_poll_once() -> None:
             schedule_publish_c3(row)
         except Exception:  # noqa: BLE001
             log.exception("C3 MQTT publish failed for VIN %s", vin)
+        try:
+            await asyncio.to_thread(_maybe_notify_c3_software, vin, data)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 software-update notify failed for VIN %s", vin)
         log.info("Stored C3 snapshot for VIN %s (locked=%s, charging=%s)",
                  vin, row.is_locked, charging)
     except Exception:  # noqa: BLE001
@@ -313,7 +400,11 @@ def _reschedule_c3(*, charging: bool, driving: bool = False) -> None:
     elif driving:
         interval = s.c3_drive_poll_interval_min
     else:
-        interval = s.c3_poll_interval_min
+        interval = _adaptive_interval(
+            s.c3_poll_interval_min, charging=False, driving=False,
+            night_interval=s.c3_night_poll_interval_min,
+            idle_interval=s.c3_idle_poll_interval_min,
+        )
     next_run = utcnow() + timedelta(minutes=interval)
     sched.add_job(
         c3_poll_once,

@@ -56,6 +56,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/insights` | Wh/km vs outside temperature, weekly €/100 km, **cabin air & on-car temperature (daily, from C3)**, range factor, idle-drain detector, real trip cost, **CO₂ footprint**, **usable-battery-capacity trend** |
 | `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
 | `/routes` | Repeated routes aggregated from imported trips, with a most/least-efficient leaderboard |
+| `/test` | Experimental C3 detail: live GPS map, doors/locks/climate/air, **extended health** (12V battery, washer fluid, per-bulb light diagnosis), the car's own efficiency + live V/A/W, trip meters, car-reported pending software update — **plus remote control** buttons (climate start/stop incl. seat/wheel heating, lock/unlock/trunk, flash/honk, windows, charge start/stop + amp limit + target SoC). Real commands to the car; confirm-dialogs on the ones that move hardware |
 | `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
 | `/settings` `/errors` `/raw` | Settings (address labels + **geofence labels**, and a **Trip-flow map**), recent errors, raw API dump. Language (DE/EN) and the light/dark theme toggle live in the topbar |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
@@ -69,7 +70,16 @@ door/window/lock state, climate, cabin PM2.5 and on-car weather — persisted to
 (real GPS trails, on-car temperature, air-quality), exported to Prometheus, and
 published over MQTT (incl. a Home Assistant `device_tracker`). It also drives a
 **rain + windows-open alert** and a one-day-dedup *door/boot left open* /
-*unlocked* notification. Disable with `C3_ENABLED=false`.
+*unlocked* notification. It also alerts on **health warnings** — 12V battery,
+washer/brake/oil/coolant levels, and bulb failures (naming the failed lamp) —
+and notifies when the **car itself reports a pending software update** (more
+reliable than the manual-scrape path). Disable with `C3_ENABLED=false`.
+
+To spare the shared account and the 12V battery, polling **throttles when the
+car is at rest** — slower overnight (hard night window) and when the car is
+locked & parked during the day. It never slows while charging or driving, and
+the dashboard/Test live reads still fetch fresh on demand. Tune or disable via
+the `*_IDLE_*` / `*_NIGHT_*` variables below.
 
 ## Configuration
 
@@ -85,6 +95,10 @@ See [`.env.example`](.env.example). Most useful:
 | `C3_POLL_INTERVAL_MIN` | `5` | C3 idle cadence (staggered vs the main poll); kept short so a drive spans at least one poll |
 | `C3_FAST_POLL_INTERVAL_MIN` | `5` | C3 cadence while charging |
 | `C3_DRIVE_POLL_INTERVAL_MIN` | `2` | C3 cadence while driving (dense GPS trail); set high to disable |
+| `ADAPTIVE_IDLE_ENABLED` | `true` | Slow polling when the car is at rest (never while charging/driving) |
+| `NIGHT_HOUR_FROM` / `NIGHT_HOUR_TO` | `23` / `5` | Hard-night window (local time), wraps midnight |
+| `NIGHT_POLL_INTERVAL_MIN` / `C3_NIGHT_POLL_INTERVAL_MIN` | `30` / `30` | Main / C3 cadence during the night window |
+| `IDLE_POLL_INTERVAL_MIN` / `C3_IDLE_POLL_INTERVAL_MIN` | `20` / `15` | Main / C3 cadence when locked & parked during the day |
 | `NOTIFY_DOOR_OPEN` / `NOTIFY_UNLOCKED` | `true` | C3 door-open / unlocked alerts |
 | `CAR_IMAGE_URL` | — | Optional vehicle image (an upload on `/settings` overrides it) |
 | `SMTP_HOST` | — | SMTP server (e.g. `smtp.gmail.com`) |

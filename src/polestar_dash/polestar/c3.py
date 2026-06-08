@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import html as _html
+import re
 import time
 from typing import Any
 
@@ -39,6 +41,64 @@ _AVAIL = {0: "—", 1: "available", 2: "unavailable"}
 _SERVICE = {0: "—", 1: "no warning", 2: "unknown", 3: "maintenance soon",
             4: "engine-hours soon", 5: "distance soon", 6: "maintenance due",
             7: "engine-hours due", 8: "distance due"}
+_SWSTATE = {0: "unknown", 1: "download ready", 2: "downloading",
+            3: "download complete", 4: "download failed", 5: "install initiated",
+            6: "installing", 7: "install aborted", 8: "install failed",
+            9: "installed", 10: "install deferred", 11: "install failed (critical)",
+            12: "install scheduled", 13: "install starting", 14: "unknown"}
+# Software states that mean "a newer version is pending / available" (i.e. the
+# car has a `new_sw_version` it hasn't finished installing). Excludes 0/14
+# (unknown) and 9 (already installed) so we don't nag once it's done.
+SW_PENDING_STATES = {1, 2, 3, 5, 6, 7, 10, 11, 12, 13}
+# Per-bulb light-warning fields on Health, with human labels — for granular
+# "which light is out" instead of the single any_light_failure flag.
+_LIGHT_FIELDS = {
+    "brake_light_left_warning": "brake L",
+    "brake_light_center_warning": "brake C",
+    "brake_light_right_warning": "brake R",
+    "low_beam_left_warning": "low beam L",
+    "low_beam_right_warning": "low beam R",
+    "high_beam_left_warning": "high beam L",
+    "high_beam_right_warning": "high beam R",
+    "daytime_running_light_left_warning": "DRL L",
+    "daytime_running_light_right_warning": "DRL R",
+    "turn_indication_front_left_warning": "indicator FL",
+    "turn_indication_front_right_warning": "indicator FR",
+    "turn_indication_rear_left_warning": "indicator RL",
+    "turn_indication_rear_right_warning": "indicator RR",
+    "fog_light_front_warning": "fog front",
+    "fog_light_rear_warning": "fog rear",
+    "position_light_front_left_warning": "position FL",
+    "position_light_front_right_warning": "position FR",
+    "position_light_rear_left_warning": "position RL",
+    "position_light_rear_right_warning": "position RR",
+    "registration_plate_light_warning": "plate",
+    "side_mark_lights_warning": "side marker",
+}
+
+
+def _clean_sw_notes(raw: Any) -> str | None:
+    """The car's changelog comes as pseudo-HTML (<textblock>, <listelement>,
+    <linefeed/>). Turn it into readable bulleted text."""
+    if not raw:
+        return None
+    txt = str(raw)
+    txt = re.sub(r"<listelement>", "\n• ", txt, flags=re.I)
+    txt = re.sub(r"<linefeed\s*/?>", "\n", txt, flags=re.I)
+    txt = re.sub(r"<[^>]+>", " ", txt)
+    txt = _html.unescape(txt)
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in txt.split("\n")]
+    return "\n".join(ln for ln in lines if ln and ln != "•") or None
+
+
+def _failed_lights(r: Any) -> list[str]:
+    """Names of individual bulbs reporting a fault (warning code 2). Codes:
+    1 = ok, 0/2+ = not-ok; we only flag a concrete fault (==2)."""
+    out = []
+    for field, label in _LIGHT_FIELDS.items():
+        if int(_g(r, field, default=0)) == 2:
+            out.append(label)
+    return out
 
 _TTL_S = 30.0  # cache window — gentle on the C3 rate limiter
 _lock = asyncio.Lock()
@@ -174,9 +234,13 @@ async def _collect() -> dict:
         "service_warning": _SERVICE.get(int(_g(r, "service_warning", default=0)), "?"),
         "days_to_service": _g(r, "days_to_service"),
         "distance_to_service_km": _g(r, "distance_to_service_km"),
+        "engine_hours_to_service": _g(r, "engine_hours_to_service"),
         "brake_fluid": _WARN.get(int(_g(r, "brake_fluid_level_warning", default=0)), "?"),
         "oil": _WARN.get(int(_g(r, "oil_level_warning", default=0)), "?"),
         "coolant": _WARN.get(int(_g(r, "engine_coolant_level_warning", default=0)), "?"),
+        "washer_fluid": _WARN.get(int(_g(r, "washer_fluid_level_warning", default=0)), "?"),
+        "low_voltage_battery": _WARN.get(int(_g(r, "low_voltage_battery_warning", default=0)), "?"),
+        "failed_lights": _failed_lights(r),
     })
     await grab("battery", "get_battery", lambda r: {
         "charge_level": _g(r, "charge_level"),
@@ -186,13 +250,46 @@ async def _collect() -> dict:
         "charging_status": _CHARGING.get(int(_g(r, "charging_status", default=0)), "?"),
         "charging_type": _CTYPE.get(int(_g(r, "charging_type", default=0)), "?"),
         "connection": _CONN.get(int(_g(r, "charger_connection_status", default=0)), "?"),
+        # Net-new from C3: the car's own efficiency + live electricals (the
+        # latter only populate while charging) + three charge-time horizons.
+        "avg_consumption": _g(r, "avg_consumption"),
+        "avg_consumption_since_charge": _g(r, "avg_consumption_since_charge"),
+        "power_w": _g(r, "power_watts"),
+        "current_a": _g(r, "current_amps"),
+        "voltage_v": _g(r, "voltage_volts"),
+        "time_to_full": _g(r, "time_to_full"),
+        "time_to_target": _g(r, "time_to_target"),
+        "time_to_min_soc": _g(r, "time_to_min_soc"),
+        "total_consumption_wh_since_charge": _g(r, "total_consumption_wh_since_charge"),
+    })
+    await grab("software", "get_software_info", lambda r: {
+        "new_version": _g(r, "new_sw_version"),
+        "state_code": int(_g(r, "state", default=0)),
+        "state": _SWSTATE.get(int(_g(r, "state", default=0)), "?"),
+        "name": _g(r, "description", "name"),
+        "notes": _clean_sw_notes(
+            _g(r, "description", "long_desc") or _g(r, "description", "short_desc")
+        ),
     })
     await grab("amp_limit", "get_amp_limit", lambda r: _g(r, "amperage_limit"))
     await grab("availability", "get_availability", lambda r: {
         "is_available": bool(_g(r, "is_available", default=False)),
         "status": _AVAIL.get(int(_g(r, "availability_status", default=0)), "?"),
     })
-    await grab("odometer_km", "get_odometer", lambda r: _g(r, "odometer_meters") and round(_g(r, "odometer_meters") / 1000))
+    # Odometer + the car's own trip meters, from one get_odometer call. Keep
+    # `odometer_km` as a scalar (c3_dict_to_row persists it); trips are net-new.
+    fn = getattr(car, "get_odometer", None)
+    if fn is not None:
+        try:
+            r = await asyncio.wait_for(fn(), timeout=25)
+            om = _g(r, "odometer_meters")
+            out["odometer_km"] = round(om / 1000) if om else None
+            out["trips"] = {
+                "auto_km": _g(r, "trip_meter_automatic_km"),
+                "manual_km": _g(r, "trip_meter_manual_km"),
+            }
+        except Exception as e:
+            out.setdefault("_errors", {})["odometer"] = f"{type(e).__name__}: {e}"[:160]
     return out
 
 
@@ -305,6 +402,10 @@ def c3_dict_to_row(data: dict) -> dict | None:
         "brake_fluid": h.get("brake_fluid"),
         "oil": h.get("oil"),
         "coolant": h.get("coolant"),
+        "washer_fluid": h.get("washer_fluid"),
+        "low_voltage_battery": h.get("low_voltage_battery"),
+        "engine_hours_to_service": h.get("engine_hours_to_service"),
+        "failed_lights": ",".join(h.get("failed_lights") or []) or None,
         "charge_level": bat.get("charge_level"),
         "range_km": bat.get("range_km"),
         "is_plugged_in": bat.get("is_plugged_in"),

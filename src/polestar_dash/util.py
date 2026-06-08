@@ -4,11 +4,28 @@ from __future__ import annotations
 
 import math
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
+
+# App-wide local timezone for human-facing clock decisions (quiet hours, night
+# throttling). Matches the hardcoded zone in c3_anomalies' overnight nags.
+LOCAL_TZ = ZoneInfo("Europe/Vienna")
 
 
 def utcnow() -> datetime:
     """Naive UTC datetime, replacing the deprecated ``datetime.utcnow()``."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def local_now() -> datetime:
+    """Current wall-clock time in the app's local timezone (Europe/Vienna)."""
+    return datetime.now(LOCAL_TZ)
+
+
+def in_hour_window(hour: int, start: int, end: int) -> bool:
+    """True if `hour` is in [start, end), wrapping midnight when start>end."""
+    if start <= end:
+        return start <= hour < end
+    return hour >= start or hour < end
 
 
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:

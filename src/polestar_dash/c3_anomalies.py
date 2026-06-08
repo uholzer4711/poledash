@@ -37,6 +37,22 @@ _OPENINGS: list[tuple[str, str]] = [
 
 _OPEN_STATES = {"open", "ajar"}
 
+# Level / fluid warnings decoded as _WARN strings on the C3 snapshot. A "bad"
+# reading is anything past ok; the 12V battery is the one we most want to catch
+# early. Alerted on transition (ok → bad), deduped per day by notify().
+_WARN_BAD = {"warning", "too low", "too high"}
+_LEVEL_WARNINGS: list[tuple[str, str]] = [
+    ("low_voltage_battery", "12V battery"),
+    ("washer_fluid", "washer fluid"),
+    ("brake_fluid", "brake fluid"),
+    ("oil", "oil level"),
+    ("coolant", "coolant level"),
+]
+
+
+def _is_bad(value) -> bool:  # noqa: ANN001
+    return value in _WARN_BAD
+
 # Quiet hours for the "left open / unlocked" nags: only alert overnight, when
 # the car is parked at home and the owner can actually act on it. During the
 # day a briefly-open door (loading, parking lot) is normal and just noise.
@@ -132,12 +148,33 @@ def _check_health(row: C3Snapshot, prev: C3Snapshot | None) -> None:
             tags=["warning"],
         )
     if row.any_light_failure and not (prev and prev.any_light_failure):
+        body = t("The car reports a bulb/light failure.")
+        if row.failed_lights:
+            body = t("The car reports a light failure: {bulbs}.", bulbs=row.failed_lights)
         notify(
             kind="c3_light",
             key=_day_key(row, "light"),
             title=t("Light failure"),
-            body=t("The car reports a bulb/light failure."),
+            body=body,
             vin=row.vin,
+            tags=["warning"],
+        )
+
+    # Level / fluid warnings — 12V battery especially. Transition ok → bad.
+    for attr, label in _LEVEL_WARNINGS:
+        now = getattr(row, attr, None)
+        if not _is_bad(now):
+            continue
+        if prev is not None and _is_bad(getattr(prev, attr, None)):
+            continue  # already alerted on the transition into the bad state
+        notify(
+            kind="c3_level",
+            key=_day_key(row, attr),
+            title=t("{part} warning", part=t(label)),
+            body=t("The car reports a {part} warning ({state}).",
+                   part=t(label), state=now),
+            vin=row.vin,
+            priority="high",
             tags=["warning"],
         )
 

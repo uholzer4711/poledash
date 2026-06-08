@@ -3,6 +3,56 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.18.0] — 2026-06-08
+
+### Added — remote control on the Test page
+
+- **The Test page can now send write commands to the car** via the same C3
+  backend the Polestar app uses (`polestar/c3_control.py`, `POST
+  /api/test/control`). Climate start/stop with target temperature + seat and
+  steering-wheel heating, lock / unlock / trunk, flash / honk+flash, open /
+  close windows, charge start/stop + amp limit + target SoC. An explicit
+  command allowlist (never a raw `getattr`), reusing the read client's lock so
+  a command can't race the poll snapshot, with one reset+retry. Confirm-dialogs
+  guard the hardware-moving commands. Verified working on Polestar 2 (MY2026);
+  the C3 backend has no `wakeup` (commands go through without it).
+
+### Added — richer C3 data + car-reported software update
+
+- **The Test page now surfaces data the C3 payloads already carried but we
+  never decoded** (`polestar/c3.py` `_collect`): the car's own average
+  consumption, live power/current/voltage while charging, three charge-time
+  horizons, the car's trip meters (auto + manual), extended health (12V
+  battery, washer fluid, engine-hours-to-service), and per-bulb light diagnosis
+  (which lamp is out, not just *a* lamp).
+- **OTA-update notification from the car itself** — `get_software_info` exposes
+  a pending `new_sw_version` + changelog; we notify once per version when it is
+  in a not-yet-installed state (`c3_software_pending`). More reliable than the
+  manual-scrape path, which can't compare when pypolestar reports a null
+  version. Shown on the Test page; the changelog's pseudo-HTML is cleaned.
+
+### Added — 12V battery & fluid-level alerts
+
+- **Health warnings now alert** (mail / ntfy / Telegram) on transition into a
+  bad state, deduped per day: **12V battery**, washer / brake / oil / coolant
+  levels (`c3_anomalies._check_health`, `_LEVEL_WARNINGS`). The bulb-failure
+  alert now names the failed lamp. New `C3Snapshot` columns
+  (`low_voltage_battery`, `washer_fluid`, `engine_hours_to_service`,
+  `failed_lights`) via the forward-only `_ensure_columns` migration. Note: the
+  C3 API exposes no numeric 12V voltage anywhere — only this warning flag.
+
+### Changed — adaptive idle / night poll throttling
+
+- **Polling now slows when the car is at rest**, to spare the shared account
+  and the 12V battery (`scheduler._adaptive_interval`, `config.py`). A hard
+  night window (default 23:00–05:00 local) drops both loops to 30 min; a
+  locked-and-parked car during the day drops the main poll to 20 min and C3 to
+  15 min. It **never** slows while charging or driving — "in use" is detected
+  from the latest C3 snapshots (unlocked, or moved > 0.3 km, or speed ≥ 3, which
+  also covers cars that auto-lock at speed). Dashboard/Test live reads still
+  fetch fresh on demand. All thresholds are env-tunable; disable with
+  `ADAPTIVE_IDLE_ENABLED=false`.
+
 ## [1.17.0] — 2026-06-08
 
 ### Changed — open/unlocked nags only overnight

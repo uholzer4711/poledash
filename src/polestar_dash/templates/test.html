@@ -14,6 +14,70 @@
 
   <div id="tst_err" class="card alert" style="display:none;margin-bottom:24px"></div>
 
+  {% set heat_opts = [(0, t("leave")), (1, t("off")), (2, t("Level 1")), (3, t("Level 2")), (4, t("Level 3"))] %}
+  <div class="card mb-6 no-print">
+    <div class="card-label">{{ t("Control") }} <span class="muted">· {{ t("write commands — real effect on the car") }}</span></div>
+    <div id="tst_cmd_result" class="mono-xs mt-2" style="min-height:1.3em">—</div>
+
+    <div class="mt-4">
+      <div class="mono-xs muted mb-2">{{ t("Climate") }}</div>
+      <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+        <label class="mono-xs">{{ t("Temperature °C") }}<br>
+          <input id="cmd_temp" type="number" value="21" min="16" max="30" step="0.5" style="width:84px"></label>
+        <label class="mono-xs">{{ t("Front seats") }}<br>
+          <select id="cmd_front_seat">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
+        <label class="mono-xs">{{ t("Rear seats") }}<br>
+          <select id="cmd_rear_seat">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
+        <label class="mono-xs">{{ t("Steering wheel") }}<br>
+          <select id="cmd_steer">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
+        <button class="btn accent" type="button" onclick="sendCmd('climate_start')">{{ t("Start climate") }} <span class="arrow">→</span></button>
+        <button class="btn" type="button" onclick="sendCmd('climate_stop')">{{ t("Stop climate") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('precleaning_start')">{{ t("Start air pre-cleaning") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('precleaning_stop')">{{ t("Stop pre-cleaning") }}</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <div class="mono-xs muted mb-2">{{ t("Security") }}</div>
+      <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+        <button class="btn" type="button" onclick="sendCmd('lock')">{{ t("Lock") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('unlock')">{{ t("Unlock") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('unlock_trunk')">{{ t("Unlock trunk") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('flash')">{{ t("Flash lights") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('honk_flash')">{{ t("Honk + flash") }}</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <div class="mono-xs muted mb-2">{{ t("Windows") }}</div>
+      <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+        <button class="btn" type="button" onclick="sendCmd('windows_open')">{{ t("Open windows") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('windows_close')">{{ t("Close windows") }}</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <div class="mono-xs muted mb-2">{{ t("Charging") }}</div>
+      <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+        <button class="btn" type="button" onclick="sendCmd('charge_start')">{{ t("Start charging") }}</button>
+        <button class="btn" type="button" onclick="sendCmd('charge_stop')">{{ t("Stop charging") }}</button>
+        <label class="mono-xs">{{ t("Amps (A)") }}<br>
+          <input id="cmd_amp" type="number" value="16" min="6" max="32" step="1" style="width:84px"></label>
+        <button class="btn" type="button" onclick="sendCmd('set_amp_limit')">{{ t("Set amp limit") }}</button>
+        <label class="mono-xs">{{ t("Target SoC %") }}<br>
+          <input id="cmd_soc" type="number" value="80" min="50" max="100" step="5" style="width:84px"></label>
+        <button class="btn" type="button" onclick="sendCmd('set_target_soc')">{{ t("Set target SoC") }}</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <div class="mono-xs muted mb-2">{{ t("Other") }}</div>
+      <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+        <button class="btn" type="button" onclick="sendCmd('wakeup')">{{ t("Wake up") }}</button>
+      </div>
+    </div>
+  </div>
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <div class="card mb-6">
     <div class="card-label">{{ t("Location") }} <span class="muted">· {{ t("GPS — net-new vs pypolestar") }}</span></div>
@@ -42,6 +106,13 @@
   <div class="card mb-6">
     <div class="card-label">{{ t("Battery, charging & more") }}</div>
     <div id="tst_extra" class="mono-xs mt-2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 24px"></div>
+  </div>
+
+  <div class="card mb-6" id="tst_sw_card" style="display:none">
+    <div class="card-label">{{ t("Software update") }} <span class="muted">· {{ t("reported by the car") }}</span></div>
+    <div class="stat num mt-2"><span class="accent" id="tst_sw_ver">—</span></div>
+    <div class="stat-sub" id="tst_sw_state">—</div>
+    <div class="mono-xs muted mt-2" id="tst_sw_notes" style="white-space:pre-line"></div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -181,28 +252,105 @@
         let hh = '';
         hh += badge({{ t("Lights") | tojson }}, h.any_light_failure ? {{ t("failure") | tojson }} : {{ t("ok") | tojson }}, [{{ t("ok") | tojson }}]);
         hh += badge({{ t("Tyres") | tojson }}, h.any_tyre_warning ? {{ t("warning") | tojson }} : {{ t("ok") | tojson }}, [{{ t("ok") | tojson }}]);
+        hh += badge({{ t("12V battery") | tojson }}, h.low_voltage_battery, ['ok']);
         hh += badge({{ t("Brake fluid") | tojson }}, h.brake_fluid, ['ok']);
         hh += badge({{ t("Oil") | tojson }}, h.oil, ['ok']);
         hh += badge({{ t("Coolant") | tojson }}, h.coolant, ['ok']);
+        hh += badge({{ t("Washer fluid") | tojson }}, h.washer_fluid, ['ok']);
         hh += badge({{ t("Service") | tojson }}, h.service_warning, ['no warning']);
+        if (h.failed_lights && h.failed_lights.length) {
+          hh += `<span class="badge warn">${ {{ t("Lights out") | tojson }} }: ${h.failed_lights.map(esc).join(', ')}</span>`;
+        }
         document.getElementById('tst_health').innerHTML = hh;
 
         // Extra grid
         const b = j.battery || {};
+        const tr = j.trips || {};
+        const wh = (v) => (v ? v + ' W' : '—');
+        const mins = (v) => (v ? v + ' min' : '—');
+        const km100 = (v) => (v != null && v !== 0 ? v + ' kWh/100km' : '—');
         const rows = [
           [{{ t("SoC") | tojson }}, b.charge_level != null ? b.charge_level + ' %' : '—'],
           [{{ t("Range") | tojson }}, b.range_km != null ? b.range_km + ' km' : '—'],
+          [{{ t("Avg consumption (car)") | tojson }}, km100(b.avg_consumption)],
           [{{ t("Plugged in") | tojson }}, b.is_plugged_in ? {{ t("yes") | tojson }} : {{ t("no") | tojson }}],
           [{{ t("Charging") | tojson }}, `${esc(b.charging_status)} (${esc(b.charging_type)})`],
           [{{ t("Connector") | tojson }}, esc(b.connection)],
+          [{{ t("Power") | tojson }}, wh(b.power_w)],
+          [{{ t("Current") | tojson }}, b.current_a ? b.current_a + ' A' : '—'],
+          [{{ t("Voltage") | tojson }}, b.voltage_v ? b.voltage_v + ' V' : '—'],
+          [{{ t("Time to full") | tojson }}, mins(b.time_to_full)],
+          [{{ t("Time to target") | tojson }}, mins(b.time_to_target)],
           [{{ t("Amp limit") | tojson }}, j.amp_limit != null ? j.amp_limit + ' A' : '—'],
           [{{ t("Odometer") | tojson }}, j.odometer_km != null ? j.odometer_km + ' km' : '—'],
+          [{{ t("Trip (auto)") | tojson }}, tr.auto_km != null ? tr.auto_km.toFixed(1) + ' km' : '—'],
+          [{{ t("Trip (manual)") | tojson }}, tr.manual_km != null ? tr.manual_km.toFixed(1) + ' km' : '—'],
           [{{ t("Days to service") | tojson }}, h.days_to_service != null ? h.days_to_service : '—'],
           [{{ t("Distance to service") | tojson }}, h.distance_to_service_km != null ? h.distance_to_service_km + ' km' : '—'],
           [{{ t("Available") | tojson }}, (j.availability && j.availability.status) || '—'],
         ];
         document.getElementById('tst_extra').innerHTML = rows.map(
           ([k, val]) => `<div><span class="muted">${k}:</span> ${esc(val)}</div>`).join('');
+
+        // Software update (car-reported pending OTA)
+        const sw = j.software || {};
+        const swCard = document.getElementById('tst_sw_card');
+        if (sw.new_version) {
+          swCard.style.display = 'block';
+          document.getElementById('tst_sw_ver').textContent = esc(sw.new_version);
+          document.getElementById('tst_sw_state').textContent = esc(sw.state);
+          document.getElementById('tst_sw_notes').textContent = sw.notes || '';
+        } else {
+          swCard.style.display = 'none';
+        }
+      };
+
+      // --- Control: write commands -------------------------------------------
+      const CMD_CONFIRM = { {% for c in commands %}{{ c.id | tojson }}: {{ c.confirm | tojson }}, {% endfor %} };
+      const CMD_LABEL = { {% for c in commands %}{{ c.id | tojson }}: {{ t(c.label) | tojson }}, {% endfor %} };
+      const CMDTXT = {
+        run: {{ t("Really run") | tojson }},
+        sending: {{ t("sending") | tojson }},
+        ok: {{ t("OK") | tojson }},
+        failed: {{ t("failed") | tojson }},
+        neterr: {{ t("network error: ") | tojson }},
+      };
+
+      window.sendCmd = async function (command) {
+        const params = {};
+        if (command === 'climate_start') {
+          params.temperature = parseFloat(document.getElementById('cmd_temp').value) || 0;
+          params.front_seat = parseInt(document.getElementById('cmd_front_seat').value) || 0;
+          params.rear_seat = parseInt(document.getElementById('cmd_rear_seat').value) || 0;
+          params.steering_wheel = parseInt(document.getElementById('cmd_steer').value) || 0;
+        } else if (command === 'set_amp_limit') {
+          params.amperage = parseInt(document.getElementById('cmd_amp').value);
+        } else if (command === 'set_target_soc') {
+          params.level = parseInt(document.getElementById('cmd_soc').value);
+        }
+        const label = CMD_LABEL[command] || command;
+        if (CMD_CONFIRM[command] && !confirm(`${CMDTXT.run}: ${label}?`)) return;
+
+        const out = document.getElementById('tst_cmd_result');
+        out.textContent = `${CMDTXT.sending}: ${label}…`;
+        let j;
+        try {
+          const r = await fetch('/api/test/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command, params }),
+          });
+          j = await r.json();
+        } catch (e) { out.textContent = CMDTXT.neterr + e; return; }
+
+        if (j.ok) {
+          out.innerHTML = `<span class="accent">${CMDTXT.ok}</span> · ${esc(label)} · ${esc(j.status)}` +
+            (j.message ? ` · ${esc(j.message)}` : '');
+        } else {
+          out.innerHTML = `<span style="color:var(--ujh-alert)">${CMDTXT.failed}</span> · ${esc(label)} · ${esc(j.status || j.error)}`;
+        }
+        // reflect the new state after the car has had a moment to act
+        setTimeout(() => tstLoad(true), 3500);
       };
 
       function init() { tstLoad(false); setInterval(() => tstLoad(false), 30000); }

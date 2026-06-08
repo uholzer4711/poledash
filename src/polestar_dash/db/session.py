@@ -68,6 +68,13 @@ def _ensure_columns(engine) -> None:
         plan += [
             ("chargingstation", "price_ct_per_kwh", "FLOAT"),
         ]
+    if "c3snapshot" in tables:
+        plan += [
+            ("c3snapshot", "washer_fluid", "VARCHAR"),
+            ("c3snapshot", "low_voltage_battery", "VARCHAR"),
+            ("c3snapshot", "engine_hours_to_service", "INTEGER"),
+            ("c3snapshot", "failed_lights", "VARCHAR"),
+        ]
 
     with engine.begin() as conn:
         for table, name, sql_type in plan:
