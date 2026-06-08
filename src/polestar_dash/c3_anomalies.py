@@ -37,6 +37,28 @@ _OPENINGS: list[tuple[str, str]] = [
 
 _OPEN_STATES = {"open", "ajar"}
 
+# Quiet hours for the "left open / unlocked" nags: only alert overnight, when
+# the car is parked at home and the owner can actually act on it. During the
+# day a briefly-open door (loading, parking lot) is normal and just noise.
+# Local time (Europe/Vienna), inclusive-from / exclusive-to → 20:00–05:59.
+_NIGHT_HOUR_FROM = 20
+_NIGHT_HOUR_TO = 6
+
+
+def _in_night_window(row: C3Snapshot) -> bool:
+    """True when the snapshot's local time falls in the overnight quiet window."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        ts = row.fetched_at
+        # Only stamp UTC when naive; otherwise we'd clobber the caller's tz.
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=ZoneInfo("UTC"))
+        local = ts.astimezone(ZoneInfo("Europe/Vienna"))
+    except Exception:  # noqa: BLE001
+        local = row.fetched_at
+    return local.hour >= _NIGHT_HOUR_FROM or local.hour < _NIGHT_HOUR_TO
+
 
 def _is_parked(row: C3Snapshot) -> bool:
     """True when the car is (almost certainly) stationary. Treat unknown speed
@@ -60,6 +82,8 @@ def _opened(row: C3Snapshot, prev: C3Snapshot | None, attr: str) -> bool:
 
 
 def _check_openings(row: C3Snapshot, prev: C3Snapshot | None) -> None:
+    if not _in_night_window(row):
+        return  # door/window-open nags only overnight (20:00–06:00 local)
     if not _is_parked(row):
         return
     for attr, label in _OPENINGS:
@@ -77,6 +101,8 @@ def _check_openings(row: C3Snapshot, prev: C3Snapshot | None) -> None:
 
 
 def _check_unlocked(row: C3Snapshot, prev: C3Snapshot | None) -> None:
+    if not _in_night_window(row):
+        return  # unlocked-while-parked nag only overnight (20:00–06:00 local)
     if row.is_locked is not False:  # None (unknown) or True → no alert
         return
     if not _is_parked(row):

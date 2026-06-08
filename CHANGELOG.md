@@ -3,6 +3,20 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.17.0] — 2026-06-08
+
+### Changed — open/unlocked nags only overnight
+
+- **"Door/window left open" and "left unlocked" notifications now fire only
+  between 20:00 and 06:00 local time** (Europe/Vienna). During the day a
+  briefly-open door (loading, parking lot) is normal and just noise; overnight
+  the car is parked at home and the owner can actually act on it. The `notify()`
+  daily dedup still applies, so an overnight-open window alerts once, not every
+  poll. Tyre/light warnings and the rain-&-windows alert are unaffected — those
+  stay active around the clock as genuine safety/weather warnings
+  (`c3_anomalies.py` `_in_night_window`, gating `_check_openings` /
+  `_check_unlocked`).
+
 ## [1.16.0] — 2026-06-03
 
 ### Changed — honest per-trip energy
