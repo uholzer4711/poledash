@@ -6,6 +6,35 @@
     <h1>{{ t("Software") }} <em class="accent">{{ t("version") }}</em></h1>
   </div>
 
+  {# Car-reported pending OTA (live from the C3 backend). Hidden unless the car
+     is actually announcing an update — the manual-scrape cards below are the
+     always-present source. #}
+  <div class="card mb-6" id="c3_sw_card" style="display:none;border-left:2px solid var(--ujh-orange)">
+    <div class="card-label">{{ t("Software update") }} <span class="muted">· {{ t("reported by the car") }}</span></div>
+    <div class="stat num mt-2"><em class="accent" id="c3_sw_ver">—</em></div>
+    <div class="stat-sub" id="c3_sw_state">—</div>
+    <div class="mono-xs muted mt-2" id="c3_sw_notes" style="white-space:pre-line"></div>
+  </div>
+  <script>
+    (function () {
+      function esc(s) { return String(s == null ? '—' : s); }
+      async function loadCarUpdate() {
+        try {
+          var r = await fetch('/api/c3/latest?live=1');
+          var j = await r.json();
+          var sw = j && j.software;
+          if (!sw || !sw.new_version) return;
+          document.getElementById('c3_sw_ver').textContent = esc(sw.new_version);
+          document.getElementById('c3_sw_state').textContent = esc(sw.state);
+          document.getElementById('c3_sw_notes').textContent = sw.notes || '';
+          document.getElementById('c3_sw_card').style.display = 'block';
+        } catch (e) { /* leave hidden on any error */ }
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadCarUpdate);
+      else loadCarUpdate();
+    })();
+  </script>
+
   {% if update_available and latest %}
   <div class="card mb-6" style="border-left:2px solid var(--ujh-orange)">
     <div class="card-label">{{ t("Update available") }}</div>

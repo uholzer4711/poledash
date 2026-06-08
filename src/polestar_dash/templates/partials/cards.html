@@ -139,6 +139,18 @@
         </div>
       </div>
       {% endif %}
+      {% if s.charger_connection_status %}
+      <div class="charge-stat-item">
+        <div class="mono-xs">{{ t("Connector") }}</div>
+        <div class="charge-stat-val num" style="font-size:22px">{{ s.charger_connection_status }}</div>
+      </div>
+      {% endif %}
+      {% if s.avg_consumption_kwh_per_100km %}
+      <div class="charge-stat-item">
+        <div class="mono-xs">{{ t("Ø consumption") }}</div>
+        <div class="charge-stat-val num">{{ "%.1f"|format(s.avg_consumption_kwh_per_100km) }}<span class="unit">kWh/100km</span></div>
+      </div>
+      {% endif %}
     </div>
 
     {% if s.minutes_to_full and time_label == "To target" %}

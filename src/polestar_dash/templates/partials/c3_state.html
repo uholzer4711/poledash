@@ -125,6 +125,7 @@
   <div class="card-label">{{ t("Health & warnings") }}
     <span class="muted" id="c3_state_meta">· —</span></div>
   <div id="c3_health" class="mt-2" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+  <div id="c3_extra" class="mono-xs muted mt-3"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -370,21 +371,37 @@
           ' · ' + LBL.speed + ' ' + esc(j.speed);
       }
 
-      // Health badges
+      // Health badges. Unknown ("—"/null) renders neutral, not red.
       function hb(label, val, good) {
-        var ok = good.indexOf(String(val)) >= 0;
-        return '<span class="badge ' + (ok ? 'ok' : 'alert') + '">' + label + ': ' + esc(val) + '</span>';
+        var s = String(val);
+        var cls = (val === null || val === undefined || s === '—' || s === '?')
+          ? '' : (good.indexOf(s) >= 0 ? 'ok' : 'alert');
+        return '<span class="badge ' + cls + '">' + label + ': ' + esc(val) + '</span>';
       }
       var hh = '';
       hh += hb({{ t("Tyres") | tojson }}, j.any_tyre_warning ? {{ t("warning") | tojson }} : {{ t("ok") | tojson }}, [{{ t("ok") | tojson }}]);
       hh += hb({{ t("Lights") | tojson }}, j.any_light_failure ? {{ t("failure") | tojson }} : {{ t("ok") | tojson }}, [{{ t("ok") | tojson }}]);
+      if (j.failed_lights) hh += '<span class="badge alert">' + {{ t("Lights out") | tojson }} + ': ' + esc(j.failed_lights) + '</span>';
+      hh += hb({{ t("12V battery") | tojson }}, j.low_voltage_battery, ['ok']);
       hh += hb({{ t("Brake fluid") | tojson }}, j.brake_fluid, ['ok']);
       hh += hb({{ t("Oil") | tojson }}, j.oil, ['ok']);
       hh += hb({{ t("Coolant") | tojson }}, j.coolant, ['ok']);
+      hh += hb({{ t("Washer fluid") | tojson }}, j.washer_fluid, ['ok']);
       // Service (warning + day/km countdown) lives in the Service card above —
       // not duplicated here; this strip is tyres/lights/fluids only.
       document.getElementById('c3_health').innerHTML = hh;
       document.getElementById('c3_state_meta').textContent = '· ' + fmtTs(j.fetched_at);
+
+      // Live extras (car odometers + availability) — net-new vs the main cards.
+      var ex = [];
+      if (j.availability_status && j.availability_status !== '—')
+        ex.push({{ t("Available") | tojson }} + ': ' + esc(j.availability_status));
+      if (j.trips && j.trips.auto_km != null)
+        ex.push({{ t("Trip (auto)") | tojson }} + ': ' + j.trips.auto_km.toFixed(1) + ' km');
+      if (j.trips && j.trips.manual_km != null)
+        ex.push({{ t("Trip (manual)") | tojson }} + ': ' + j.trips.manual_km.toFixed(1) + ' km');
+      var exEl = document.getElementById('c3_extra');
+      if (exEl) exEl.textContent = ex.join('   ·   ');
 
       drawMap(j, track);
     }

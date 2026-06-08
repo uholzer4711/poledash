@@ -1037,7 +1037,13 @@ async def c3_latest(vin: str | None = None, live: bool = False) -> dict:
         flat = c3_dict_to_row(data)
         if not flat:
             return None
-        return {**flat, "fetched_at": utcnow().isoformat(), "source": "live", **meta}
+        # trips (car odometers) + software (car-reported pending OTA) exist only
+        # in the live snapshot, not the flat C3Snapshot row — attach for the
+        # dashboard trip-meters line and the /software car-reported card.
+        return {
+            **flat, "fetched_at": utcnow().isoformat(), "source": "live",
+            "trips": data.get("trips"), "software": data.get("software"), **meta,
+        }
 
     # Live path (dashboard opt-in): prefer fresh data, fall back to the DB row.
     if live:

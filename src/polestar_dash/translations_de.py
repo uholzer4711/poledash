@@ -782,4 +782,5 @@ TRANSLATIONS_DE: dict[str, str] = {
         "Abends war ein Fenster noch offen — automatisch geschlossen.",
     "Tried to close the windows but couldn't confirm.":
         "Fenster sollten schließen, aber nicht bestätigt.",
+    "Ø consumption": "Ø Verbrauch",
 }
