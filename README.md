@@ -49,16 +49,16 @@ Update: `git pull && docker compose up -d --build`. Or add
 
 | Path | Purpose |
 |---|---|
-| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info, plus a **C3 vehicle-state** section: a top-view of the car with each open door/window/frunk/boot/sunroof highlighted (uses your uploaded vehicle image with an orange open-overlay + status chips, or a built-in green/red SVG diagram as fallback), lock/climate/cabin-air/weather cards, and a satellite mini-map with the live GPS pin + trail. The vehicle-state section reads **live** from the C3 backend so it matches the Test page |
-| `/history` | **Battery & Charging** — telemetry time-series + charging sessions |
+| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info, plus a **C3 vehicle-state** section: a top-view of the car with each open door/window/frunk/boot/sunroof highlighted (uses your uploaded vehicle image with an orange open-overlay + status chips, or a built-in green/red SVG diagram as fallback), lock/climate/cabin-air/weather cards, and a satellite mini-map with the live GPS pin + trail. The vehicle-state section reads **live** from the C3 backend so it matches the Test page. A **vehicle control panel** (lock/unlock, windows, climate incl. seat/wheel heating, pre-cleaning, flash/honk, wake) sits beside the diagram — every command shows **verified feedback** (sending → re-reads the car → ✓ verified / ✗ not confirmed) |
+| `/history` | **Battery & Charging** — telemetry time-series + charging sessions, plus a **charging control panel** (start/stop, amp limit, target SoC) |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
 | `/insights` | Wh/km vs outside temperature, weekly €/100 km, **cabin air & on-car temperature (daily, from C3)**, range factor, idle-drain detector, real trip cost, **CO₂ footprint**, **usable-battery-capacity trend** |
 | `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available |
 | `/routes` | Repeated routes aggregated from imported trips, with a most/least-efficient leaderboard |
-| `/test` | Experimental C3 detail: live GPS map, doors/locks/climate/air, **extended health** (12V battery, washer fluid, per-bulb light diagnosis), the car's own efficiency + live V/A/W, trip meters, car-reported pending software update — **plus remote control** buttons (climate start/stop incl. seat/wheel heating, lock/unlock/trunk, flash/honk, windows, charge start/stop + amp limit + target SoC). Real commands to the car; confirm-dialogs on the ones that move hardware |
+| `/test` | Raw C3 debug surface: live GPS map + the full decoded snapshot. The useful bits are now surfaced in the normal UI — extended health (12V battery, washer fluid, per-bulb diagnosis) on the dashboard, live V/A/W + Connector in the charging hero, the car-reported pending update on `/software`, and the control buttons on the dashboard + Battery & Charging — so `/test` is just the raw read-out |
 | `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
-| `/settings` `/errors` `/raw` | Settings (address labels + **geofence labels**, and a **Trip-flow map**), recent errors, raw API dump. Language (DE/EN) and the light/dark theme toggle live in the topbar |
+| `/settings` `/errors` `/raw` | Settings (address labels + **geofence labels**, a **Trip-flow map**, an **alerts frame** to toggle each notification + set its quiet-hour window, and **automations** — per-rule, opt-in), recent errors, raw API dump. Language (DE/EN) and the light/dark theme toggle live in the topbar |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |
 
@@ -74,6 +74,18 @@ published over MQTT (incl. a Home Assistant `device_tracker`). It also drives a
 washer/brake/oil/coolant levels, and bulb failures (naming the failed lamp) —
 and notifies when the **car itself reports a pending software update** (more
 reliable than the manual-scrape path). Disable with `C3_ENABLED=false`.
+
+**Remote control & automations.** The C3 backend also accepts *write* commands,
+so poledash can lock/unlock, open/close the windows, run climate + pre-cleaning,
+flash/honk, and start/stop charging (incl. amp limit + target SoC) — each issued
+from the dashboard or Battery & Charging panels and then **verified** by
+re-reading the car's state. On top of that sits a small **automation engine**
+(configure on `/settings`): rules that close the windows on their own — when it
+starts **raining** at the car, or when they're still open after a chosen
+**evening hour** — running either *autonomously* (act, verify, then notify) or
+as a **one-tap suggestion** (a push with a confirm link; nothing moves until you
+tap). Rules are opt-in and default to suggest. The one-tap link needs
+`PUBLIC_BASE_URL` set (otherwise the push degrades to a text hint).
 
 To spare the shared account and the 12V battery, polling **throttles when the
 car is at rest** — slower overnight (hard night window) and when the car is
@@ -99,7 +111,8 @@ See [`.env.example`](.env.example). Most useful:
 | `NIGHT_HOUR_FROM` / `NIGHT_HOUR_TO` | `23` / `5` | Hard-night window (local time), wraps midnight |
 | `NIGHT_POLL_INTERVAL_MIN` / `C3_NIGHT_POLL_INTERVAL_MIN` | `30` / `30` | Main / C3 cadence during the night window |
 | `IDLE_POLL_INTERVAL_MIN` / `C3_IDLE_POLL_INTERVAL_MIN` | `20` / `15` | Main / C3 cadence when locked & parked during the day |
-| `NOTIFY_DOOR_OPEN` / `NOTIFY_UNLOCKED` | `true` | C3 door-open / unlocked alerts |
+| `NOTIFY_DOOR_OPEN` / `NOTIFY_UNLOCKED` | `true` | Seed default for the C3 door-open / unlocked alerts (each alert is then toggled + time-windowed on `/settings`) |
+| `PUBLIC_BASE_URL` | — | External URL (e.g. `https://poledash.example.com`) for the one-tap confirm links in automation *suggest*-mode pushes; empty ⇒ text hint only |
 | `CAR_IMAGE_URL` | — | Optional vehicle image (an upload on `/settings` overrides it) |
 | `SMTP_HOST` | — | SMTP server (e.g. `smtp.gmail.com`) |
 | `SMTP_PORT` | `587` | STARTTLS port |

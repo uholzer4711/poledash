@@ -30,14 +30,34 @@ All notable changes to **polestar-dash**. Format roughly follows
   `app_settings.in_alert_window` and applied across `anomalies.py` /
   `c3_anomalies.py`. Settings page regrouped into labelled sections.
 - **Automation engine** (`automations.py`) — generic rule registry run from
-  `c3_poll_once` after the fresh fetch. First rule **rain → close windows**.
-  Per-rule, opt-in, with a mode toggle: *autonom* (act, verify, then notify) or
-  *vorschlag* (one-tap suggestion — nothing touches the car until you confirm).
+  `c3_poll_once` after the fresh fetch, each rule per-rule opt-in with a mode
+  toggle: *autonom* (act, verify, then notify) or *vorschlag* (one-tap suggestion
+  — nothing touches the car until you confirm). Two rules ship:
+  **rain → close windows** and **windows still open in the evening → close**
+  (the latter with a configurable "act from this local hour" dropdown, default
+  21:00). Rules default to disabled + suggest (they move real hardware).
 - **One-tap confirm flow** for suggestions, behind the existing reverse-proxy
   auth (no in-app auth added): a short-lived single-use `PendingAction` token,
   an ntfy `view` action button / Telegram URL button / email link, a `/confirm/{token}`
   page and `POST /api/confirm/{token}` that consumes the token, runs and verifies
   the command. `PUBLIC_BASE_URL` builds the links (degrades to a text hint if unset).
+- **`/test`-only data moved into the normal UI**, leaving `/test` as the raw
+  debug read-out: extended health (12V battery, washer fluid, per-bulb failure
+  list) added to the dashboard health strip; Connector + Ø-consumption added to
+  the charging hero; live availability + car trip-meters as a dashboard extras
+  line; the **car-reported pending OTA** surfaced on `/software`. The
+  `/api/c3/latest?live=1` response gained `trips` + `software` (live-only).
+
+### Changed
+
+- **Control panels restyled** — inputs and action buttons on separate rows
+  (`.control-fields` / `.control-actions`), even-width ghost buttons, readable
+  status line; no more labels jammed against buttons.
+- **Alert quiet-hours** use **hour dropdowns** (00:00–23:00 + "any") instead of
+  bare number fields; automations get a "Mode" + "Close after" dropdown.
+- Health badges render an unknown reading (`—`) as neutral, not red.
+- `windows_close` verification = "no window is open" (tolerant of a window that
+  reports `—`) rather than requiring every field to read exactly `closed`.
 
 ## [1.18.1] — 2026-06-08
 
