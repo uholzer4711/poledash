@@ -723,6 +723,12 @@ TRANSLATIONS_DE: dict[str, str] = {
         "jeden Alarm ein/ausschalten und sein Zeitfenster festlegen",
     "Alerts with no window set fire any time. A window like 20 → 6 means overnight.":
         "Alarme ohne Fenster melden jederzeit. Ein Fenster wie 20 → 6 meint über Nacht.",
+    "An alert only fires inside its time window. Leave both on “any” to alert around the clock; e.g. 20:00 → 06:00 means overnight only.":
+        "Ein Alarm meldet nur innerhalb seines Zeitfensters. Beide auf „egal“ = rund um die "
+        "Uhr; z. B. 20:00 → 06:00 meint nur über Nacht.",
+    "Time": "Uhrzeit",
+    "any": "egal",
+    "Mode": "Modus",
     "from": "von",
     "to": "bis",
     "Automations": "Automatismen",

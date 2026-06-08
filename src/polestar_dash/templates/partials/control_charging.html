@@ -1,21 +1,26 @@
 {# Charging control panel — reused on Battery & Charging. Start/stop charging,
    set the amp limit and the daily target SoC. `set_target_soc` lives on the
    pypolestar VehicleSnapshot (not C3), so it's marked unverifiable → the panel
-   honestly shows "sent — can't verify" instead of a false ✗. #}
+   honestly shows "sent — can't verify" instead of a false ✗. Inputs and action
+   buttons are on separate rows (.control-fields / .control-actions). #}
 <div class="card mb-6 no-print" id="charging_control">
   <div class="card-label">{{ t("Charging control") }}
     <span class="muted">· {{ t("write commands — real effect on the car") }}</span></div>
-  <div class="mono-xs mt-2" data-cmd-status style="min-height:1.3em">—</div>
-  <div class="mt-4">
-    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+  <div class="control-status" data-cmd-status>—</div>
+
+  <div class="control-group">
+    <div class="control-group-label">{{ t("Charging actions") }}</div>
+    <div class="control-fields">
+      <div class="field"><label>{{ t("Amps (A)") }}</label>
+        <input type="number" data-pkey="amperage" value="16" min="6" max="32" step="1"></div>
+      <div class="field"><label>{{ t("Target SoC %") }}</label>
+        <input type="number" data-pkey="level" value="80" min="50" max="100" step="5"></div>
+    </div>
+    <div class="control-actions">
       <button class="btn accent" type="button" data-cmd="charge_start" data-confirm data-label="{{ t('Start charging') }}">{{ t("Start charging") }} <span class="arrow">→</span></button>
-      <button class="btn" type="button" data-cmd="charge_stop" data-confirm data-label="{{ t('Stop charging') }}">{{ t("Stop charging") }}</button>
-      <label class="mono-xs">{{ t("Amps (A)") }}<br>
-        <input type="number" data-pkey="amperage" value="16" min="6" max="32" step="1" style="width:84px"></label>
-      <button class="btn" type="button" data-cmd="set_amp_limit" data-confirm data-label="{{ t('Set amp limit') }}">{{ t("Set amp limit") }}</button>
-      <label class="mono-xs">{{ t("Target SoC %") }}<br>
-        <input type="number" data-pkey="level" value="80" min="50" max="100" step="5" style="width:84px"></label>
-      <button class="btn" type="button" data-cmd="set_target_soc" data-confirm data-verifiable="false" data-label="{{ t('Set target SoC') }}">{{ t("Set target SoC") }}</button>
+      <button class="btn ghost" type="button" data-cmd="charge_stop" data-confirm data-label="{{ t('Stop charging') }}">{{ t("Stop charging") }}</button>
+      <button class="btn ghost" type="button" data-cmd="set_amp_limit" data-confirm data-label="{{ t('Set amp limit') }}">{{ t("Set amp limit") }}</button>
+      <button class="btn ghost" type="button" data-cmd="set_target_soc" data-confirm data-verifiable="false" data-label="{{ t('Set target SoC') }}">{{ t("Set target SoC") }}</button>
     </div>
   </div>
 </div>

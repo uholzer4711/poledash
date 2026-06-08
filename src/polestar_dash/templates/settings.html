@@ -14,20 +14,28 @@
   <div class="card mb-6" id="alerts_card">
     <div class="card-label">{{ t("Notifications") }}
       <span class="muted">· {{ t("toggle each alert and set its quiet-hour window") }}</span></div>
-    <p class="mono-xs muted mt-2">{{ t("Alerts with no window set fire any time. A window like 20 → 6 means overnight.") }}</p>
-    <div class="mt-4" style="display:grid;grid-template-columns:1fr;gap:10px">
+    <p class="mono-xs muted mt-2">{{ t("An alert only fires inside its time window. Leave both on “any” to alert around the clock; e.g. 20:00 → 06:00 means overnight only.") }}</p>
+    <div class="config-list">
       {% for a in alert_configs %}
-      <div class="flex gap-4" data-alert="{{ a.kind }}" style="align-items:center;flex-wrap:wrap">
-        <label class="flex gap-2" style="align-items:center;min-width:230px;flex:1">
+      <div class="config-row" data-alert="{{ a.kind }}">
+        <label class="config-toggle">
           <input type="checkbox" data-field="enabled" {% if a.enabled %}checked{% endif %}>
           <span>{{ t(a.label) }}</span>
         </label>
-        <label class="mono-xs">{{ t("from") }}
-          <input type="number" data-field="from" min="0" max="23" value="{{ a['from'] if a['from'] is not none else '' }}" style="width:56px"></label>
-        <label class="mono-xs">{{ t("to") }}
-          <input type="number" data-field="to" min="0" max="23" value="{{ a['to'] if a['to'] is not none else '' }}" style="width:56px"></label>
+        <div class="config-window">
+          <span class="mono-xs muted">{{ t("Time") }}</span>
+          <select class="inline-select" data-field="from" aria-label="{{ t('from') }}">
+            <option value="" {% if a['from'] is none %}selected{% endif %}>{{ t("any") }}</option>
+            {% for h in range(24) %}<option value="{{ h }}" {% if a['from'] == h %}selected{% endif %}>{{ "%02d:00"|format(h) }}</option>{% endfor %}
+          </select>
+          <span class="sep">→</span>
+          <select class="inline-select" data-field="to" aria-label="{{ t('to') }}">
+            <option value="" {% if a['to'] is none %}selected{% endif %}>{{ t("any") }}</option>
+            {% for h in range(24) %}<option value="{{ h }}" {% if a['to'] == h %}selected{% endif %}>{{ "%02d:00"|format(h) }}</option>{% endfor %}
+          </select>
+        </div>
         <button class="btn ghost" type="button" onclick="saveAlert(this)">{{ t("Save") }} <span class="arrow">→</span></button>
-        <span class="mono-xs muted" data-field="status"></span>
+        <span class="config-status" data-field="status"></span>
       </div>
       {% endfor %}
     </div>
@@ -37,19 +45,22 @@
     <div class="card-label">{{ t("Automations") }}
       <span class="muted">· {{ t("let the car act on its own — opt-in") }}</span></div>
     <p class="mono-xs muted mt-2">{{ t("Autonomous acts immediately, then notifies. Suggest sends a one-tap push and only acts when you confirm. Moving windows can pinch — leave on Suggest unless you're sure.") }}</p>
-    <div class="mt-4" style="display:grid;grid-template-columns:1fr;gap:10px">
+    <div class="config-list">
       {% for au in automation_configs %}
-      <div class="flex gap-4" data-automation="{{ au.id }}" style="align-items:center;flex-wrap:wrap">
-        <label class="flex gap-2" style="align-items:center;min-width:230px;flex:1">
+      <div class="config-row" data-automation="{{ au.id }}">
+        <label class="config-toggle">
           <input type="checkbox" data-field="enabled" {% if au.enabled %}checked{% endif %}>
           <span>{{ t(au.title) }}</span>
         </label>
-        <select data-field="mode">
-          <option value="vorschlag" {% if au.mode == 'vorschlag' %}selected{% endif %}>{{ t("Suggest (1-tap)") }}</option>
-          <option value="autonom" {% if au.mode == 'autonom' %}selected{% endif %}>{{ t("Autonomous") }}</option>
-        </select>
+        <div class="config-window">
+          <span class="mono-xs muted">{{ t("Mode") }}</span>
+          <select class="inline-select" data-field="mode">
+            <option value="vorschlag" {% if au.mode == 'vorschlag' %}selected{% endif %}>{{ t("Suggest (1-tap)") }}</option>
+            <option value="autonom" {% if au.mode == 'autonom' %}selected{% endif %}>{{ t("Autonomous") }}</option>
+          </select>
+        </div>
         <button class="btn ghost" type="button" onclick="saveAutomation(this)">{{ t("Save") }} <span class="arrow">→</span></button>
-        <span class="mono-xs muted" data-field="status"></span>
+        <span class="config-status" data-field="status"></span>
       </div>
       {% endfor %}
     </div>

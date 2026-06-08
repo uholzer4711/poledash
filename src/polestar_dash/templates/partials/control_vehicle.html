@@ -1,54 +1,57 @@
 {# Vehicle control panel — reused on the dashboard, next to the car diagram.
    Fires C3 write commands via window.poleControl with verified feedback
-   (sending → verifying → ✓ verified / ✗ not confirmed). Mobile-friendly: the
-   shared status line is its own row, buttons wrap via the existing .flex grid. #}
+   (sending → verifying → ✓ verified / ✗ not confirmed). Inputs sit in their own
+   field row, actions on a separate even-width button row (.control-actions), so
+   the panel reads as a clean grid — never label-jammed-against-button. #}
 {% set heat_opts = [(0, t("leave")), (1, t("off")), (2, t("Level 1")), (3, t("Level 2")), (4, t("Level 3"))] %}
 <div class="card mb-6 no-print" id="vehicle_control">
   <div class="card-label">{{ t("Vehicle control") }}
     <span class="muted">· {{ t("write commands — real effect on the car") }}</span></div>
-  <div class="mono-xs mt-2" data-cmd-status style="min-height:1.3em">—</div>
+  <div class="control-status" data-cmd-status>—</div>
 
-  <div class="mt-4">
-    <div class="mono-xs muted mb-2">{{ t("Security") }}</div>
-    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
-      <button class="btn" type="button" data-cmd="lock" data-confirm data-label="{{ t('Lock') }}">{{ t("Lock") }}</button>
-      <button class="btn" type="button" data-cmd="unlock" data-confirm data-label="{{ t('Unlock') }}">{{ t("Unlock") }}</button>
-      <button class="btn" type="button" data-cmd="unlock_trunk" data-confirm data-label="{{ t('Unlock trunk') }}">{{ t("Unlock trunk") }}</button>
-      <button class="btn" type="button" data-cmd="flash" data-verifiable="false" data-label="{{ t('Flash lights') }}">{{ t("Flash lights") }}</button>
-      <button class="btn" type="button" data-cmd="honk_flash" data-confirm data-verifiable="false" data-label="{{ t('Honk + flash') }}">{{ t("Honk + flash") }}</button>
+  <div class="control-group">
+    <div class="control-group-label">{{ t("Security") }}</div>
+    <div class="control-actions">
+      <button class="btn ghost" type="button" data-cmd="lock" data-confirm data-label="{{ t('Lock') }}">{{ t("Lock") }}</button>
+      <button class="btn ghost" type="button" data-cmd="unlock" data-confirm data-label="{{ t('Unlock') }}">{{ t("Unlock") }}</button>
+      <button class="btn ghost" type="button" data-cmd="unlock_trunk" data-confirm data-label="{{ t('Unlock trunk') }}">{{ t("Unlock trunk") }}</button>
+      <button class="btn ghost" type="button" data-cmd="flash" data-verifiable="false" data-label="{{ t('Flash lights') }}">{{ t("Flash lights") }}</button>
+      <button class="btn ghost" type="button" data-cmd="honk_flash" data-confirm data-verifiable="false" data-label="{{ t('Honk + flash') }}">{{ t("Honk + flash") }}</button>
     </div>
   </div>
 
-  <div class="mt-4">
-    <div class="mono-xs muted mb-2">{{ t("Windows") }}</div>
-    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
-      <button class="btn" type="button" data-cmd="windows_open" data-confirm data-label="{{ t('Open windows') }}">{{ t("Open windows") }}</button>
-      <button class="btn" type="button" data-cmd="windows_close" data-confirm data-label="{{ t('Close windows') }}">{{ t("Close windows") }}</button>
+  <div class="control-group">
+    <div class="control-group-label">{{ t("Windows") }}</div>
+    <div class="control-actions">
+      <button class="btn ghost" type="button" data-cmd="windows_open" data-confirm data-label="{{ t('Open windows') }}">{{ t("Open windows") }}</button>
+      <button class="btn ghost" type="button" data-cmd="windows_close" data-confirm data-label="{{ t('Close windows') }}">{{ t("Close windows") }}</button>
     </div>
   </div>
 
-  <div class="mt-4">
-    <div class="mono-xs muted mb-2">{{ t("Climate") }}</div>
-    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
-      <label class="mono-xs">{{ t("Temperature °C") }}<br>
-        <input type="number" data-pkey="temperature" value="21" min="16" max="30" step="0.5" style="width:84px"></label>
-      <label class="mono-xs">{{ t("Front seats") }}<br>
-        <select data-pkey="front_seat">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
-      <label class="mono-xs">{{ t("Rear seats") }}<br>
-        <select data-pkey="rear_seat">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
-      <label class="mono-xs">{{ t("Steering wheel") }}<br>
-        <select data-pkey="steering_wheel">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
+  <div class="control-group">
+    <div class="control-group-label">{{ t("Climate") }}</div>
+    <div class="control-fields">
+      <div class="field"><label>{{ t("Temperature °C") }}</label>
+        <input type="number" data-pkey="temperature" value="21" min="16" max="30" step="0.5"></div>
+      <div class="field"><label>{{ t("Front seats") }}</label>
+        <select data-pkey="front_seat">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></div>
+      <div class="field"><label>{{ t("Rear seats") }}</label>
+        <select data-pkey="rear_seat">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></div>
+      <div class="field"><label>{{ t("Steering wheel") }}</label>
+        <select data-pkey="steering_wheel">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></div>
+    </div>
+    <div class="control-actions">
       <button class="btn accent" type="button" data-cmd="climate_start" data-label="{{ t('Start climate') }}">{{ t("Start climate") }} <span class="arrow">→</span></button>
-      <button class="btn" type="button" data-cmd="climate_stop" data-label="{{ t('Stop climate') }}">{{ t("Stop climate") }}</button>
-      <button class="btn" type="button" data-cmd="precleaning_start" data-verifiable="false" data-label="{{ t('Start air pre-cleaning') }}">{{ t("Start air pre-cleaning") }}</button>
-      <button class="btn" type="button" data-cmd="precleaning_stop" data-verifiable="false" data-label="{{ t('Stop pre-cleaning') }}">{{ t("Stop pre-cleaning") }}</button>
+      <button class="btn ghost" type="button" data-cmd="climate_stop" data-label="{{ t('Stop climate') }}">{{ t("Stop climate") }}</button>
+      <button class="btn ghost" type="button" data-cmd="precleaning_start" data-verifiable="false" data-label="{{ t('Start air pre-cleaning') }}">{{ t("Start air pre-cleaning") }}</button>
+      <button class="btn ghost" type="button" data-cmd="precleaning_stop" data-verifiable="false" data-label="{{ t('Stop pre-cleaning') }}">{{ t("Stop pre-cleaning") }}</button>
     </div>
   </div>
 
-  <div class="mt-4">
-    <div class="mono-xs muted mb-2">{{ t("Other") }}</div>
-    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
-      <button class="btn" type="button" data-cmd="wakeup" data-verifiable="false" data-label="{{ t('Wake up') }}">{{ t("Wake up") }}</button>
+  <div class="control-group">
+    <div class="control-group-label">{{ t("Other") }}</div>
+    <div class="control-actions">
+      <button class="btn ghost" type="button" data-cmd="wakeup" data-verifiable="false" data-label="{{ t('Wake up') }}">{{ t("Wake up") }}</button>
     </div>
   </div>
 </div>

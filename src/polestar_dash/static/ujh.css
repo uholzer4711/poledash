@@ -516,6 +516,58 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .btn.ghost:hover { border-color: var(--ujh-ink); }
 .btn.accent { background: var(--ujh-orange); border-color: var(--ujh-orange); color: var(--ujh-bg); }
 .btn.accent:hover { background: var(--ujh-orange-deep); border-color: var(--ujh-orange-deep); color: var(--ujh-bg); }
+.btn[disabled] { opacity: 0.4; cursor: default; pointer-events: none; }
+
+/* ---------- Control panels (vehicle / charging command panels) ---------- */
+.control-status {
+  min-height: 1.4em; margin-top: var(--ujh-s-2);
+  font: 500 12px/1.5 var(--ujh-mono); letter-spacing: 0.04em;
+  color: var(--ujh-ink-3);
+}
+.control-group { margin-top: var(--ujh-s-5); }
+.control-group + .control-group {
+  padding-top: var(--ujh-s-5);
+  border-top: 1px solid var(--ujh-line);
+}
+.control-group-label {
+  font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ujh-ink-4); margin-bottom: var(--ujh-s-4);
+}
+.control-fields {
+  display: flex; flex-wrap: wrap; gap: var(--ujh-s-4) var(--ujh-s-6);
+  margin-bottom: var(--ujh-s-5);
+}
+.control-fields .field { min-width: 112px; }
+.control-fields .field > input, .control-fields .field > select { font-size: 15px; padding: 6px 0; }
+/* Action buttons sit on their own row with even widths so the panel reads as a
+   clean grid rather than label-jammed-against-button. */
+.control-actions { display: flex; flex-wrap: wrap; gap: var(--ujh-s-3); align-items: center; }
+.control-actions .btn { min-width: 140px; justify-content: center; }
+
+/* ---------- Settings: alert / automation rows ---------- */
+.config-list { display: flex; flex-direction: column; margin-top: var(--ujh-s-4); }
+.config-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--ujh-s-4);
+  padding: var(--ujh-s-4) 0; border-top: 1px solid var(--ujh-line);
+}
+.config-row:first-child { border-top: 0; }
+.config-toggle {
+  display: flex; align-items: center; gap: var(--ujh-s-3);
+  flex: 1 1 240px; min-width: 220px; cursor: pointer; font-size: 15px;
+}
+.config-toggle input[type=checkbox] {
+  width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--ujh-orange); cursor: pointer;
+}
+.config-window { display: flex; align-items: center; gap: var(--ujh-s-2); }
+.config-window .sep { color: var(--ujh-ink-4); font: 500 13px/1 var(--ujh-mono); }
+.inline-select {
+  background: transparent; border: 0; border-bottom: 1px solid var(--ujh-line-2);
+  padding: 6px 4px 6px 0; color: var(--ujh-ink);
+  font: 500 14px/1 var(--ujh-mono); cursor: pointer;
+  transition: border-color var(--ujh-t-base);
+}
+.inline-select:focus { outline: none; border-bottom-color: var(--ujh-orange); }
+.config-status { font: 500 11px/1 var(--ujh-mono); color: var(--ujh-ink-3); min-width: 3ch; }
 
 /* ---------- Field ---------- */
 .field {

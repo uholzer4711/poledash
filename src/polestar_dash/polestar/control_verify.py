@@ -39,10 +39,12 @@ _VERIFY: dict[str, dict[str, Any]] = {
              "check": lambda r, p: r.get("is_locked") is True},
     "unlock": {"fields": ["is_locked"], "expected": "unlocked",
                "check": lambda r, p: r.get("is_locked") is False},
+    # "Closed" = no window reads open/ajar (tolerant of a window reporting "—");
+    # "open" = at least one window now reads open. Robust to partial readings.
     "windows_close": {"fields": _WIN, "expected": "all closed",
-                      "check": lambda r, p: all(r.get(f) == "closed" for f in _WIN)},
+                      "check": lambda r, p: not any(r.get(f) in _OPEN for f in _WIN)},
     "windows_open": {"fields": _WIN, "expected": "open",
-                     "check": lambda r, p: all(r.get(f) in _OPEN for f in _WIN)},
+                     "check": lambda r, p: any(r.get(f) in _OPEN for f in _WIN)},
     "climate_start": {"fields": ["climate_active"], "expected": "climate on",
                       "check": lambda r, p: r.get("climate_active") is True},
     "climate_stop": {"fields": ["climate_active"], "expected": "climate off",
