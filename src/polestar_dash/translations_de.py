@@ -599,7 +599,6 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Stop charging": "Laden stoppen",
     "Set amp limit": "Ampere-Limit setzen",
     "Set target SoC": "Ziel-SoC setzen",
-    "Target SoC %": "Ziel-SoC %",
     "Amps (A)": "Ampere (A)",
     "Set": "Setzen",
     "Wake up": "Aufwecken",

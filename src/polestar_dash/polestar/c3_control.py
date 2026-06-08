@@ -18,7 +18,8 @@ InvocationStatus.SUCCESS. Note `wakeup()` is NOT implemented on this backend
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from polestar_api.models import (
     ChargeTargetLevelSettingType,
