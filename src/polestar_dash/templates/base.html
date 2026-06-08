@@ -13,7 +13,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/ujh.css?v=20260608b">
+  <link rel="stylesheet" href="/static/ujh.css?v=20260608c">
+  <script>
+    /* Pre-paint: resolve mobile vs web layout before first paint (no FOUC).
+       localStorage['view-mode'] = 'mobile' | 'web' | unset(=auto by width).
+       `view-mobile` drives all mobile CSS; `view-forced` adds the centred
+       phone-width frame when mobile is forced on a wide viewport. */
+    (function () {
+      try {
+        var vm = localStorage.getItem('view-mode');
+        var wide = !window.matchMedia('(max-width:640px)').matches;
+        var mobile = vm === 'mobile' || (!vm && !wide);
+        var r = document.documentElement;
+        if (mobile) r.classList.add('view-mobile');
+        if (vm === 'mobile' && wide) r.classList.add('view-forced');
+      } catch (e) {}
+    })();
+  </script>
   <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js" defer></script>
@@ -33,6 +49,7 @@
           <a class="{% if ui_lang() == 'de' %}active{% endif %}" onclick="setLang('de')">DE</a><span class="sep">/</span><a class="{% if ui_lang() == 'en' %}active{% endif %}" onclick="setLang('en')">EN</a>
         </span>
         <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()">{{ t("Light") }}</button>
+        <button class="view-toggle" id="view-btn" onclick="toggleViewMode()">{{ t("Mobile") }}</button>
       </div>
     </div>
     <nav class="navbar">
@@ -66,6 +83,7 @@
         <span><a href="/errors">{{ t("errors") }}</a> · <a href="/api/export.csv">{{ t("csv") }}</a> · <a href="/api/tripbook.ics">{{ t("ical") }}</a></span>
       </div>
     </footer>
+    {% include "partials/bottom_nav.html" %}
   </div>
   <script>
     (function(){
@@ -93,6 +111,34 @@
       catch(e) {}
       location.reload();
     }
+    // --- Mobil ⇄ Web view switch (mirrors the theme toggle) -------------------
+    // localStorage['view-mode'] = 'mobile' | 'web' | unset(=auto by width).
+    // The button shows what tapping switches TO (like the theme button).
+    const VIEW_LABELS = { mobile: {{ t("Mobile") | tojson }}, web: {{ t("Web") | tojson }} };
+    function _isMobileView(){
+      const vm = localStorage.getItem('view-mode');
+      const wide = !window.matchMedia('(max-width:640px)').matches;
+      return vm === 'mobile' || (!vm && !wide);
+    }
+    function setViewClasses(){
+      const r = document.documentElement;
+      const vm = localStorage.getItem('view-mode');
+      const wide = !window.matchMedia('(max-width:640px)').matches;
+      const mobile = _isMobileView();
+      r.classList.toggle('view-mobile', mobile);
+      r.classList.toggle('view-forced', vm === 'mobile' && wide);
+      const b = document.getElementById('view-btn');
+      if (b) b.textContent = mobile ? VIEW_LABELS.web : VIEW_LABELS.mobile;
+    }
+    function toggleViewMode(){
+      localStorage.setItem('view-mode', _isMobileView() ? 'web' : 'mobile');
+      location.reload();  // re-fits charts/maps cleanly under the new layout
+    }
+    // Auto mode follows the viewport when no explicit choice is stored.
+    window.matchMedia('(max-width:640px)').addEventListener('change', function(){
+      if (!localStorage.getItem('view-mode')) setViewClasses();
+    });
+    setViewClasses();
     applyThemeLabel();
     const LIVE_LABELS = {{ {"idle": t("IDLE"), "charging": t("CHARGING"), "plugged": t("PLUGGED"), "km": t("KM")} | tojson }};
     async function pollLive() {

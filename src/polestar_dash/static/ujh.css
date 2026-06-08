@@ -159,142 +159,150 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 @media (max-width: 900px) {
   .grid-3, .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* --- Mobile layout (class-driven) ------------------------------------------
+ * Mobile rules live under `html.view-mobile` (JS-toggled: auto on a narrow
+ * viewport OR forced via the Mobil/Web switch) rather than a bare media query,
+ * so the switch can force the phone layout on a desktop — and the desktop
+ * layout on a phone. A slim @media net keeps the essentials alive with JS off. */
 @media (max-width: 640px) {
   :root { --ujh-gutter: 12px; }
-
-  /* Base type smaller so everything fits */
-  body { font-size: 12px; line-height: 1.4; }
-  h1 { font-size: 17px; line-height: 1.1; letter-spacing: -0.02em; }
-  h2 { font-size: 13px; }
-  h3 { font-size: 12px; }
-
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
-  .grid { gap: var(--ujh-s-3); }
-  .section { margin-bottom: var(--ujh-s-6); }
-  .section-head { grid-template-columns: 1fr; gap: 2px; margin-bottom: var(--ujh-s-4); }
-  .section-head h1 { font-size: 17px; }
-  .section-head .num-tag { font-size: 9px; letter-spacing: 0.14em; }
-  main { padding: var(--ujh-s-4) 0 var(--ujh-s-6); }
-
-  /* Mono labels: tighter */
-  .mono { font-size: 10px; letter-spacing: 0.08em; }
-  .mono-xs { font-size: 9px; letter-spacing: 0.12em; }
-
-  /* Topbar: hide the wordmark in the middle, keep live status + lang + theme */
-  .topbar .center { display: none; }
-  .topbar { padding: 5px 0; font-size: 9px; gap: var(--ujh-s-2); letter-spacing: 0.06em; }
-  .topbar .right { gap: var(--ujh-s-3); }
-  .lang-switch { font-size: 9px; letter-spacing: 0.08em; gap: 3px; }
-  .theme-toggle { padding: 5px 8px; font-size: 9px; letter-spacing: 0.08em; }
-
-  /* Navbar: 2-row layout — logo+theme on top, full nav row below */
-  .navbar {
-    grid-template-columns: auto auto;
-    grid-template-rows: auto auto;
-    gap: var(--ujh-s-2);
-    padding: var(--ujh-s-2) 0;
-    justify-content: space-between;
-  }
-  .navbar .logo { font-size: 13px; grid-row: 1; grid-column: 1; }
-  .navbar .logo::before { width: 4px; height: 11px; }
-  .navbar > .theme-toggle,
-  .navbar > :last-child { grid-row: 1; grid-column: 2; }
-  .nav {
-    grid-row: 2; grid-column: 1 / -1;
-    gap: var(--ujh-s-3);
-    font-size: 11px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    justify-content: flex-start;
-    scrollbar-width: none;
-    mask-image: linear-gradient(to right, black 88%, transparent);
-    padding-bottom: 2px;
-    margin-top: 4px;
-    border-top: 1px solid var(--ujh-line);
-    padding-top: 6px;
-  }
-  .nav::-webkit-scrollbar { display: none; }
-  .nav a { white-space: nowrap; padding: 2px 0; letter-spacing: 0.02em; }
-
-  /* Cards / stats: tighter, smaller numbers */
-  .card { padding: var(--ujh-s-3); }
-  .card-label { font-size: 9px; letter-spacing: 0.1em; margin-bottom: var(--ujh-s-2); }
-  .stat { font-size: 19px; gap: 3px; }
-  .stat .unit, .stat-value .unit { font-size: 8px; letter-spacing: 0.06em; }
-  .stat-value { font-size: 19px; }
-  .stat-muted { font-size: 13px; }
-  .stat-sub { font-size: 9px; letter-spacing: 0.08em; margin-top: 4px; }
-
-  /* Charging hero */
-  .battery-vis { gap: var(--ujh-s-3); }
-  .battery-pct { font-size: 36px; min-width: 60px; }
-  .battery-pct .unit { font-size: 14px; }
-  .battery-bar { height: 32px; }
-  .battery-target-label { font-size: 8px; }
-  .vu-row { flex-direction: column; gap: var(--ujh-s-4); margin-bottom: var(--ujh-s-3); padding-bottom: var(--ujh-s-3); }
-  .vu-meter { min-width: 0; }
-  .vu-val { font-size: 24px; }
-  .vu-track { height: 6px; }
-  .charge-stats { gap: var(--ujh-s-3) var(--ujh-s-5); }
-  .charge-stat-val { font-size: 19px; }
-
-  /* Vehicle card */
-  .veh-title { font-size: 20px; }
-  .kv-row { gap: var(--ujh-s-3) var(--ujh-s-4); margin-top: var(--ujh-s-2); }
-  .kv span:first-child { font-size: 9px; letter-spacing: 0.12em; }
-  .card-row { gap: var(--ujh-s-3); flex-wrap: wrap; }
-
-  /* SoC ring text */
-  .ring-label { font-size: 18px; }
-
-  /* Badges */
-  .badge { font-size: 9px; letter-spacing: 0.12em; padding: 3px 8px; }
-
-  /* Tables: tighter padding, smaller font */
-  table.index { font-size: 12px; }
-  table.index thead th { font-size: 10px; letter-spacing: 0.08em; padding: 10px var(--ujh-s-3); }
-  table.index tbody td { padding: 10px var(--ujh-s-3); }
-
-  /* Month accordions: let the header stats wrap under the month key. */
-  details.month-acc > summary { flex-wrap: wrap; gap: var(--ujh-s-2) var(--ujh-s-3); padding: var(--ujh-s-3) var(--ujh-s-4); }
-  .month-acc-stats { margin-left: 0; flex-basis: 100%; gap: var(--ujh-s-3); font-size: 10px; }
-
-  /* Buttons: keep touch-friendly tap height but shrink text */
-  .btn { padding: 12px 16px; width: 100%; justify-content: center; font-size: 13px; }
-  .btn + .btn { margin-top: var(--ujh-s-2); }
-
-  /* Inputs (16px = iOS auto-zoom guard, do not lower) */
   input, select, textarea { font-size: 16px !important; }
-  .field > label { font-size: 9px; letter-spacing: 0.12em; }
-
-  /* Footer */
-  .foot { padding: var(--ujh-s-3) 0 var(--ujh-s-5); font-size: 9px; letter-spacing: 0.1em; }
-  .flex-between { flex-direction: column; gap: var(--ujh-s-2); align-items: flex-start; }
-
-  /* Raw JSON */
-  .raw-dump { font-size: 11px; padding: var(--ujh-s-3); }
-
-  /* Chart containers: override inline heights for portrait phones.
-   * Templates use inline style="position:relative;height:NNNpx" which would
-   * otherwise be untouchable. Match by attribute selector. */
-  div[style*="position:relative"][style*="height:360px"] { height: 200px !important; }
-  div[style*="position:relative"][style*="height:300px"] { height: 180px !important; }
-  div[style*="position:relative"][style*="height:280px"] { height: 170px !important; }
-  div[style*="position:relative"][style*="height:260px"] { height: 160px !important; }
-  div[style*="position:relative"][style*="height:240px"] { height: 150px !important; }
-  div[style*="position:relative"][style*="margin-top:12px"] { margin-top: 6px !important; }
-  div[style*="position:relative"][style*="margin-top:16px"] { margin-top: 6px !important; }
-  div[style*="position:relative"][style*="margin-top:8px"]  { margin-top: 4px !important; }
-
-  /* Chart-bearing cards: kill side padding so the canvas can use the full
-   * viewport width. Detect by a direct chart-wrapper child. */
-  .card:has(> div[style*="position:relative"]),
-  .card:has(> canvas) {
-    padding: var(--ujh-s-2) 4px;
-  }
-  .card canvas { max-width: 100%; }
 }
+
+html.view-mobile { --ujh-gutter: 12px; }
+
+/* Type scale — larger / more readable than the old cramped set. */
+html.view-mobile body { font-size: 14px; line-height: 1.5; }
+html.view-mobile h1 { font-size: 22px; line-height: 1.12; letter-spacing: -0.02em; }
+html.view-mobile h2 { font-size: 16px; }
+html.view-mobile h3 { font-size: 14px; }
+
+html.view-mobile .grid-2, html.view-mobile .grid-3, html.view-mobile .grid-4 { grid-template-columns: 1fr; }
+html.view-mobile .grid { gap: var(--ujh-s-3); }
+html.view-mobile .section { margin-bottom: var(--ujh-s-6); }
+html.view-mobile .section-head { grid-template-columns: 1fr; gap: 2px; margin-bottom: var(--ujh-s-4); }
+html.view-mobile .section-head h1 { font-size: 22px; }
+html.view-mobile .section-head .num-tag { font-size: 9px; letter-spacing: 0.14em; }
+html.view-mobile main { padding: var(--ujh-s-4) 0 calc(64px + env(safe-area-inset-bottom)); }
+
+html.view-mobile .mono { font-size: 11px; letter-spacing: 0.08em; }
+html.view-mobile .mono-xs { font-size: 10px; letter-spacing: 0.12em; }
+
+/* Topbar: hide the centre wordmark; nav links move to the bottom bar. */
+html.view-mobile .topbar .center { display: none; }
+html.view-mobile .topbar { padding: 6px 0; font-size: 9px; gap: var(--ujh-s-2); letter-spacing: 0.06em; }
+html.view-mobile .topbar .right { gap: var(--ujh-s-2); }
+html.view-mobile .lang-switch { font-size: 9px; letter-spacing: 0.08em; gap: 3px; }
+html.view-mobile .theme-toggle, html.view-mobile .view-toggle { padding: 5px 8px; font-size: 9px; letter-spacing: 0.08em; }
+
+html.view-mobile .navbar {
+  grid-template-columns: auto auto; align-items: center;
+  gap: var(--ujh-s-2); padding: var(--ujh-s-3) 0; justify-content: space-between;
+}
+html.view-mobile .navbar .logo { font-size: 15px; }
+html.view-mobile .navbar .logo::before { width: 4px; height: 12px; }
+html.view-mobile .navbar .nav { display: none; }   /* replaced by .bottom-nav */
+
+/* Cards / stats */
+html.view-mobile .card { padding: var(--ujh-s-4); }
+html.view-mobile .card-label { font-size: 10px; letter-spacing: 0.1em; margin-bottom: var(--ujh-s-2); }
+html.view-mobile .stat { font-size: 26px; gap: 4px; }
+html.view-mobile .stat .unit, html.view-mobile .stat-value .unit { font-size: 10px; letter-spacing: 0.06em; }
+html.view-mobile .stat-value { font-size: 26px; }
+html.view-mobile .stat-muted { font-size: 16px; }
+html.view-mobile .stat-sub { font-size: 10px; letter-spacing: 0.08em; margin-top: 4px; }
+
+/* Charging hero */
+html.view-mobile .battery-vis { gap: var(--ujh-s-3); }
+html.view-mobile .battery-pct { font-size: 40px; min-width: 64px; }
+html.view-mobile .battery-pct .unit { font-size: 15px; }
+html.view-mobile .battery-bar { height: 32px; }
+html.view-mobile .battery-target-label { font-size: 9px; }
+html.view-mobile .vu-row { flex-direction: column; gap: var(--ujh-s-4); margin-bottom: var(--ujh-s-3); padding-bottom: var(--ujh-s-3); }
+html.view-mobile .vu-meter { min-width: 0; }
+html.view-mobile .vu-val { font-size: 28px; }
+html.view-mobile .vu-track { height: 6px; }
+html.view-mobile .charge-stats { gap: var(--ujh-s-3) var(--ujh-s-5); }
+html.view-mobile .charge-stat-val { font-size: 22px; }
+
+/* Vehicle card */
+html.view-mobile .veh-title { font-size: 22px; }
+html.view-mobile .kv-row { gap: var(--ujh-s-3) var(--ujh-s-4); margin-top: var(--ujh-s-2); }
+html.view-mobile .kv span:first-child { font-size: 10px; letter-spacing: 0.12em; }
+html.view-mobile .card-row { gap: var(--ujh-s-3); flex-wrap: wrap; }
+html.view-mobile .ring-label { font-size: 18px; }
+
+/* Badges */
+html.view-mobile .badge { font-size: 10px; letter-spacing: 0.1em; padding: 3px 8px; }
+
+/* Month accordions */
+html.view-mobile details.month-acc > summary { flex-wrap: wrap; gap: var(--ujh-s-2) var(--ujh-s-3); padding: var(--ujh-s-3) var(--ujh-s-4); }
+html.view-mobile .month-acc-stats { margin-left: 0; flex-basis: 100%; gap: var(--ujh-s-3); font-size: 11px; }
+
+/* Buttons */
+html.view-mobile .btn { padding: 13px 16px; width: 100%; justify-content: center; font-size: 14px; min-height: 44px; }
+html.view-mobile .btn + .btn { margin-top: var(--ujh-s-2); }
+html.view-mobile .field > label { font-size: 10px; letter-spacing: 0.12em; }
+
+/* Footer */
+html.view-mobile .foot { padding: var(--ujh-s-3) 0 var(--ujh-s-5); font-size: 10px; letter-spacing: 0.1em; }
+html.view-mobile .flex-between { flex-direction: column; gap: var(--ujh-s-2); align-items: flex-start; }
+
+/* Raw JSON */
+html.view-mobile .raw-dump { font-size: 12px; padding: var(--ujh-s-3); }
+
+/* Chart containers: shrink the inline heights for portrait phones. */
+html.view-mobile div[style*="position:relative"][style*="height:360px"] { height: 220px !important; }
+html.view-mobile div[style*="position:relative"][style*="height:300px"] { height: 190px !important; }
+html.view-mobile div[style*="position:relative"][style*="height:280px"] { height: 180px !important; }
+html.view-mobile div[style*="position:relative"][style*="height:260px"] { height: 170px !important; }
+html.view-mobile div[style*="position:relative"][style*="height:240px"] { height: 160px !important; }
+html.view-mobile div[style*="position:relative"][style*="margin-top:12px"] { margin-top: 6px !important; }
+html.view-mobile div[style*="position:relative"][style*="margin-top:16px"] { margin-top: 6px !important; }
+html.view-mobile div[style*="position:relative"][style*="margin-top:8px"]  { margin-top: 4px !important; }
+html.view-mobile .card:has(> div[style*="position:relative"]),
+html.view-mobile .card:has(> canvas) { padding: var(--ujh-s-2) 4px; }
+html.view-mobile .card canvas { max-width: 100%; }
+
+/* Tables → cards: one pattern for every table.index. Each <td> shows its
+ * column name via data-label (added in the templates). */
+html.view-mobile table.index { font-size: 13px; }
+html.view-mobile table.index thead { display: none; }
+html.view-mobile table.index,
+html.view-mobile table.index tbody { display: block; }
+html.view-mobile table.index tbody tr {
+  display: block; border: 1px solid var(--ujh-line);
+  margin-bottom: var(--ujh-s-3); padding: var(--ujh-s-3); background: transparent;
+}
+html.view-mobile table.index tbody td {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--ujh-s-4);
+  padding: 6px 0; border: 0; text-align: left !important; white-space: normal;
+}
+html.view-mobile table.index tbody td::before {
+  content: attr(data-label); color: var(--ujh-ink-3); flex: 0 0 auto;
+  font: 500 10px/1.3 var(--ujh-mono); letter-spacing: 0.1em; text-transform: uppercase;
+}
+html.view-mobile table.index tbody td[data-label=""]::before { content: none; }
+html.view-mobile table.index tbody td.cell-block { flex-direction: column; align-items: flex-start; gap: 4px; }
+
+/* JS-rendered session cards: 4 stats as a tidy 2×2 */
+html.view-mobile .card .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Settings config rows (alerts / automations) */
+html.view-mobile .config-toggle { min-width: 0; flex-basis: 100%; }
+html.view-mobile .config-row { gap: var(--ujh-s-2); }
+
+/* Control panels: 2-column quick-action grid with big tap targets */
+html.view-mobile .control-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--ujh-s-2); }
+html.view-mobile .control-actions .btn { width: 100%; min-width: 0; min-height: 46px; margin-top: 0; padding: 12px; }
+html.view-mobile .control-fields { gap: var(--ujh-s-3) var(--ujh-s-4); }
+
+/* Maps: cap heights on phones (ids are stable) */
+html.view-mobile #am_map { height: 260px !important; }
+html.view-mobile #tf_map { height: 300px !important; }
+html.view-mobile #trip-map { height: 260px !important; }
+html.view-mobile #c3_map, html.view-mobile #tst_map { height: 300px !important; }
 
 /* iPhone safe-area (notch / home-indicator) — always honored */
 @supports (padding: max(0px)) {
@@ -910,6 +918,64 @@ footer.foot {
   cursor: pointer; transition: all var(--ujh-t-base);
 }
 .theme-toggle:hover { border-color: var(--ujh-ink); color: var(--ujh-ink); }
+
+/* View switch (Mobil ⇄ Web) — same chrome as the theme toggle. */
+.view-toggle {
+  background: transparent; border: 1px solid var(--ujh-line-2);
+  padding: 6px 10px; color: var(--ujh-ink-3);
+  font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.14em; text-transform: uppercase;
+  cursor: pointer; transition: all var(--ujh-t-base);
+}
+.view-toggle:hover { border-color: var(--ujh-ink); color: var(--ujh-ink); }
+
+/* ---------- Bottom tab bar (mobile only) ----------
+ * Shown under html.view-mobile, hidden otherwise. Minimal line icons (the one
+ * design-system-sanctioned icon use, owner-approved) + text labels. */
+.bottom-nav {
+  display: none;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  grid-template-columns: repeat(5, 1fr);
+  background: var(--ujh-bg); border-top: 1px solid var(--ujh-line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+html.view-mobile .bottom-nav { display: grid; }
+.bn-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; min-height: 54px; padding: 7px 2px;
+  font: 500 9px/1 var(--ujh-mono); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ujh-ink-3); text-align: center; text-decoration: none;
+  background: none; border: 0; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.bn-tab.active { color: var(--ujh-orange); }
+.bn-icon { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.bn-more { position: relative; display: flex; }
+.bn-more > summary { list-style: none; flex: 1; }
+.bn-more > summary::-webkit-details-marker { display: none; }
+.bn-more-panel {
+  position: fixed; left: 0; right: 0; bottom: calc(54px + env(safe-area-inset-bottom));
+  z-index: 51; background: var(--ujh-bg); border-top: 1px solid var(--ujh-line);
+  display: grid; grid-template-columns: repeat(2, 1fr);
+}
+.bn-more-panel a, .bn-more-panel span {
+  padding: 15px 18px; min-height: 48px; display: flex; align-items: center;
+  font: 500 13px/1 var(--ujh-sans); color: var(--ujh-ink-2); text-decoration: none;
+  border-bottom: 1px solid var(--ujh-line); border-right: 1px solid var(--ujh-line);
+}
+.bn-more-panel a.active { color: var(--ujh-orange); }
+.bn-more-panel .nav-disabled { color: var(--ujh-ink-3); opacity: 0.45; cursor: not-allowed; }
+
+/* Forced mobile on a wide viewport: a centred phone-width column with a subtle
+ * frame, so it reads as "web on a phone". The fixed bars centre to match. */
+html.view-forced body { background: var(--ujh-bg-2); }
+html.view-forced .shell {
+  max-width: 440px; margin: 0 auto; min-height: 100vh;
+  border-left: 1px solid var(--ujh-line); border-right: 1px solid var(--ujh-line);
+  background: var(--ujh-bg);
+}
+html.view-forced .bottom-nav, html.view-forced .bn-more-panel {
+  left: 50%; right: auto; transform: translateX(-50%); width: min(440px, 100%);
+  border-left: 1px solid var(--ujh-line); border-right: 1px solid var(--ujh-line);
+}
 
 /* ---------- Chart container neutralization ---------- */
 canvas { background: transparent; }

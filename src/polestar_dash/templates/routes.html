@@ -76,29 +76,29 @@
       <tbody>
         {% for r in routes %}
           <tr>
-            <td>
+            <td class="cell-block" data-label="{{ t('From → To') }}">
               <span class="accent">{{ r.start }}</span>
               <span class="muted">→</span>
               <span class="accent">{{ r.end }}</span>
             </td>
-            <td class="right tnum">{{ r.trips }}</td>
-            <td class="right tnum">{{ "%.1f"|format(r.total_km) }}</td>
-            <td class="right tnum">{% if r.avg_km %}{{ "%.1f"|format(r.avg_km) }}{% else %}—{% endif %}</td>
-            <td class="right tnum">
+            <td class="right tnum" data-label="{{ t('Trips') }}">{{ r.trips }}</td>
+            <td class="right tnum" data-label="{{ t('Total km') }}">{{ "%.1f"|format(r.total_km) }}</td>
+            <td class="right tnum" data-label="{{ t('Avg km') }}">{% if r.avg_km %}{{ "%.1f"|format(r.avg_km) }}{% else %}—{% endif %}</td>
+            <td class="right tnum" data-label="{{ t('Avg duration') }}">
               {% if r.avg_minutes %}{{ r.avg_minutes }} min{% else %}—{% endif %}
               {% if r.min_minutes and r.max_minutes %}<span class="muted mono-xs">({{ r.min_minutes }}–{{ r.max_minutes }})</span>{% endif %}
             </td>
-            <td class="right tnum">
+            <td class="right tnum" data-label="kWh/100km">
               {% if r.avg_kwh_per_100km %}<span class="accent">{{ r.avg_kwh_per_100km }}</span>{% else %}—{% endif %}
             </td>
-            <td class="right tnum mono-xs">
+            <td class="right tnum mono-xs" data-label="{{ t('Best / Worst') }}">
               {% if r.best_kwh_per_100km %}{{ r.best_kwh_per_100km }}{% else %}—{% endif %}
               <span class="muted">/</span>
               {% if r.worst_kwh_per_100km %}{{ r.worst_kwh_per_100km }}{% else %}—{% endif %}
             </td>
-            <td class="right tnum">{% if r.avg_temp_c is not none %}{{ r.avg_temp_c }}°C{% else %}—{% endif %}</td>
-            <td class="right tnum">{% if r.avg_pm25 is not none %}{{ r.avg_pm25 }}{% else %}—{% endif %}</td>
-            <td class="right tnum mono-xs">{{ r.last_at|localtime('%Y-%m-%d') if r.last_at else '—' }}</td>
+            <td class="right tnum" data-label="{{ t('Ø Temp') }}">{% if r.avg_temp_c is not none %}{{ r.avg_temp_c }}°C{% else %}—{% endif %}</td>
+            <td class="right tnum" data-label="{{ t('Ø PM2.5') }}">{% if r.avg_pm25 is not none %}{{ r.avg_pm25 }}{% else %}—{% endif %}</td>
+            <td class="right tnum mono-xs" data-label="{{ t('Last') }}">{{ r.last_at|localtime('%Y-%m-%d') if r.last_at else '—' }}</td>
           </tr>
         {% endfor %}
       </tbody>

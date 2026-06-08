@@ -59,7 +59,7 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/routes` | Repeated routes aggregated from imported trips, with a most/least-efficient leaderboard |
 | `/test` | Raw C3 debug surface: live GPS map + the full decoded snapshot. The useful bits are now surfaced in the normal UI — extended health (12V battery, washer fluid, per-bulb diagnosis) on the dashboard, live V/A/W + Connector in the charging hero, the car-reported pending update on `/software`, and the control buttons on the dashboard + Battery & Charging — so `/test` is just the raw read-out |
 | `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
-| `/settings` `/errors` `/raw` | Settings (address labels + **geofence labels**, a **Trip-flow map**, an **alerts frame** to toggle each notification + set its quiet-hour window, and **automations** — per-rule, opt-in), recent errors, raw API dump. Language (DE/EN) and the light/dark theme toggle live in the topbar |
+| `/settings` `/errors` `/raw` | Settings (address labels + **geofence labels**, a **Trip-flow map**, an **alerts frame** to toggle each notification + set its quiet-hour window, and **automations** — per-rule, opt-in), recent errors, raw API dump. Language (DE/EN), the light/dark theme toggle and a **Mobil ⇄ Web** view switch live in the topbar; on phones a bottom tab bar replaces the top nav and wide tables fold into readable cards |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |
 

@@ -3,6 +3,36 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.21.0] — 2026-06-08
+
+### Added — mobile-first overhaul + Mobil⇄Web switch
+
+- **Bottom tab bar on mobile** (`partials/bottom_nav.html`) — fixed, safe-area
+  aware, with a minimal set of geometric line icons (the one owner-approved
+  exception to the no-icons rule, recorded in the project conventions) + text labels. 4
+  primary tabs (Dashboard / Charge / Tripbook / Insights) + a pure-CSS "More"
+  sheet for the rest (Routes / Software / Log / Settings, demo-aware Raw/Lab/Test).
+  Replaces the cramped horizontal-scroll top nav on phones.
+- **Mobil ⇄ Web view switch** in the topbar (mirrors the theme toggle:
+  `localStorage['view-mode']`, pre-paint IIFE, no FOUC). Unset = auto by
+  viewport width; forcing **Mobil** on a desktop renders a centred ~440px
+  phone-width column with a subtle frame; forcing **Web** on a phone is the
+  escape hatch to the full desktop layout.
+- **Tables become cards on mobile** — one CSS pattern turns every `table.index`
+  into stacked cards with per-cell labels (`data-label` + `::before`). Fixes the
+  unreadable 8–10-column tables on Tripbook, Routes and Errors (no more
+  horizontal scrolling).
+
+### Changed
+
+- **Mobile CSS is now class-driven** (`html.view-mobile`) instead of a bare
+  `@media (max-width:640px)` query, so the switch can force either layout on any
+  device. A slim media-query net keeps the essentials (gutter, single-column
+  grids, 16px inputs) working with JS disabled.
+- **Larger, more readable mobile type scale** (body 12→14px, stat 19→26px,
+  h1 17→22px), relaxed settings config rows, 2-column quick-action grid for the
+  control-panel buttons (≥44px tap targets), and capped map heights on phones.
+
 ## [1.20.0] — 2026-06-08
 
 ### Added

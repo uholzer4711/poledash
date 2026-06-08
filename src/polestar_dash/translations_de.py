@@ -783,6 +783,11 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Tried to close the windows but couldn't confirm.":
         "Fenster sollten schließen, aber nicht bestätigt.",
     "Ø consumption": "Ø Verbrauch",
+    # --- Mobile view switch + bottom nav ---
+    "Mobile": "Mobil",
+    "Web": "Web",
+    "More": "Mehr",
+    "Primary": "Hauptmenü",
     # --- Activity log (/log) ---
     "Log": "Log",
     "09 / LOG": "09 / LOG",

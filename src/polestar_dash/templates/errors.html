@@ -13,9 +13,9 @@
       <tbody>
         {% for r in rows %}
           <tr>
-            <td class="mono">{{ r.occurred_at|localtime('%Y-%m-%d %H:%M:%S') }}</td>
-            <td class="mono">{{ r.vin or "—" }}</td>
-            <td><code class="accent">{{ r.message }}</code></td>
+            <td class="mono" data-label="{{ t('When') }}">{{ r.occurred_at|localtime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td class="mono" data-label="{{ t('VIN') }}">{{ r.vin or "—" }}</td>
+            <td class="cell-block" data-label="{{ t('Message') }}"><code class="accent">{{ r.message }}</code></td>
           </tr>
         {% endfor %}
       </tbody>
