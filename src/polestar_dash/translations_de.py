@@ -773,4 +773,13 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Automation acted": "Automatik ausgeführt",
     "Suggestion": "Vorschlag",
     "Open poledash to confirm.": "Öffne poledash zum Bestätigen.",
+    "Windows still open in the evening → close":
+        "Fenster abends noch offen → schließen",
+    "Close after": "Schließen ab",
+    "A window is still open ({parts}) after {after}:00. Close it?":
+        "Ein Fenster ist nach {after}:00 noch offen ({parts}). Schließen?",
+    "A window was still open in the evening — closed it automatically.":
+        "Abends war ein Fenster noch offen — automatisch geschlossen.",
+    "Tried to close the windows but couldn't confirm.":
+        "Fenster sollten schließen, aber nicht bestätigt.",
 }

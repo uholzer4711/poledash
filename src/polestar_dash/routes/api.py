@@ -459,6 +459,7 @@ def app_settings_set_automation(
     rule_id: str,
     enabled: bool | None = Query(None),
     mode: str | None = Query(None),
+    after: str | None = Query(None),
 ) -> dict:
     from ..app_settings import get_automation_config, set_automation_config
     from ..automations import rule_by_id
@@ -468,9 +469,10 @@ def app_settings_set_automation(
         raise HTTPException(status_code=404, detail=f"Unknown automation: {rule_id}")
     if mode is not None and mode not in ("autonom", "vorschlag"):
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
-    set_automation_config(rule_id, enabled=enabled, mode=mode)
+    set_automation_config(rule_id, enabled=enabled, mode=mode, after=after)
     return {"id": rule_id, **get_automation_config(
-        rule_id, default_enabled=rule.default_enabled, default_mode=rule.default_mode)}
+        rule_id, default_enabled=rule.default_enabled, default_mode=rule.default_mode,
+        default_after=rule.default_after)}
 
 
 @router.post("/confirm/{token}")

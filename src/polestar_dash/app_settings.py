@@ -227,18 +227,29 @@ AUTOMATION_MODES = ("autonom", "vorschlag")
 
 
 def get_automation_config(
-    rule_id: str, *, default_enabled: bool = False, default_mode: str = "vorschlag"
+    rule_id: str,
+    *,
+    default_enabled: bool = False,
+    default_mode: str = "vorschlag",
+    default_after: int | None = None,
 ) -> dict:
     en_raw = get_setting(f"automation.{rule_id}.enabled", None)
     mode = get_setting(f"automation.{rule_id}.mode", None)
     return {
         "enabled": _as_bool(en_raw, default_enabled),
         "mode": mode if mode in AUTOMATION_MODES else default_mode,
+        # Optional per-rule "act from this local hour" threshold (used by
+        # time-triggered rules; None for rules that don't need it).
+        "after": _as_hour(get_setting(f"automation.{rule_id}.after", None), default_after),
     }
 
 
 def set_automation_config(
-    rule_id: str, *, enabled: bool | None = None, mode: str | None = None
+    rule_id: str,
+    *,
+    enabled: bool | None = None,
+    mode: str | None = None,
+    after: Any = None,
 ) -> None:
     if enabled is not None:
         set_setting(f"automation.{rule_id}.enabled", "1" if enabled else "0")
@@ -246,6 +257,8 @@ def set_automation_config(
         if mode not in AUTOMATION_MODES:
             raise ValueError(f"Unknown mode: {mode!r}")
         set_setting(f"automation.{rule_id}.mode", mode)
+    if after is not None:
+        set_setting(f"automation.{rule_id}.after", _hour_str(after))
 
 
 def blended_price_ct(days: int = 90) -> tuple[float, str]:

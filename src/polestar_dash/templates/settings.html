@@ -52,6 +52,14 @@
           <input type="checkbox" data-field="enabled" {% if au.enabled %}checked{% endif %}>
           <span>{{ t(au.title) }}</span>
         </label>
+        {% if au.time_label %}
+        <div class="config-window">
+          <span class="mono-xs muted">{{ t(au.time_label) }}</span>
+          <select class="inline-select" data-field="after" aria-label="{{ t(au.time_label) }}">
+            {% for h in range(24) %}<option value="{{ h }}" {% if au.after == h %}selected{% endif %}>{{ "%02d:00"|format(h) }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endif %}
         <div class="config-window">
           <span class="mono-xs muted">{{ t("Mode") }}</span>
           <select class="inline-select" data-field="mode">
@@ -87,11 +95,13 @@
       var id = row.getAttribute('data-automation');
       var enabled = row.querySelector('[data-field=enabled]').checked;
       var mode = row.querySelector('[data-field=mode]').value;
+      var afterEl = row.querySelector('[data-field=after]');
       var st = row.querySelector('[data-field=status]');
       st.textContent = '…';
+      var qs = '?enabled=' + (enabled ? 'true' : 'false') + '&mode=' + encodeURIComponent(mode);
+      if (afterEl) qs += '&after=' + encodeURIComponent(afterEl.value);
       try {
-        var r = await fetch('/api/app-settings/automation/' + encodeURIComponent(id) +
-          '?enabled=' + (enabled ? 'true' : 'false') + '&mode=' + encodeURIComponent(mode), { method: 'POST' });
+        var r = await fetch('/api/app-settings/automation/' + encodeURIComponent(id) + qs, { method: 'POST' });
         st.textContent = r.ok ? {{ t("saved") | tojson }} : {{ t("error") | tojson }};
       } catch (e) { st.textContent = {{ t("error") | tojson }}; }
     }
