@@ -141,9 +141,11 @@ async def run_command(command: str, params: dict | None = None) -> dict:
                 await c3._reset()
                 return {"ok": False, "command": command,
                         "error": f"{type(e).__name__}: {e}"[:240]}
+        # Invalidate the read cache *inside* the lock so a concurrent
+        # get_c3_snapshot can't repopulate it right after we null it (which
+        # would serve pre-command door/lock state on the next refresh).
+        c3._cache = None
 
-    # the cached read snapshot is now stale — force a fresh one next refresh
-    c3._cache = None
     out = _decode(res)
     out["command"] = command
     return out

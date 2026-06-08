@@ -98,7 +98,11 @@ def _maybe_notify(snap: Snapshot, closed_session) -> None:  # noqa: ANN001
     ):
         notify(
             kind="service_due",
-            key=f"{snap.vin}-d{snap.days_to_service}",
+            # Bucket by week, not the raw day-count: keying on days_to_service
+            # minted a fresh key every day (≈30 alerts for one service). A
+            # weekly bucket caps it to a handful and self-re-arms after the
+            # service is done (days_to_service jumps back up to a new bucket).
+            key=f"{snap.vin}-service-w{snap.days_to_service // 7}",
             title=t("Service due soon"),
             body=t(
                 "{days} days or {dist} km to next service.",

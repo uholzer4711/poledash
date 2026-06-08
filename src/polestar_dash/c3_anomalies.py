@@ -11,6 +11,7 @@ opening, so a window cracked while driving doesn't nag.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from .config import get_settings
@@ -204,7 +205,10 @@ async def check_rain_windows(row: C3Snapshot) -> None:
     if not wx or not wx.get("is_rain"):
         return
     parts = ", ".join(t(lbl) for lbl in open_labels)
-    notify(
+    # notify() does blocking ntfy/SMTP/Telegram I/O; this is the one C3 check
+    # awaited directly on the event loop, so offload the send to a worker.
+    await asyncio.to_thread(
+        notify,
         kind="c3_rain_windows",
         key=_day_key(row, "rainwindows"),
         title=t("Rain & windows open"),

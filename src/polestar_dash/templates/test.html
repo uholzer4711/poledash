@@ -57,7 +57,7 @@
     </div>
 
     <div class="mt-4">
-      <div class="mono-xs muted mb-2">{{ t("Charging") }}</div>
+      <div class="mono-xs muted mb-2">{{ t("Charging actions") }}</div>
       <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
         <button class="btn" type="button" onclick="sendCmd('charge_start')">{{ t("Start charging") }}</button>
         <button class="btn" type="button" onclick="sendCmd('charge_stop')">{{ t("Stop charging") }}</button>
@@ -135,6 +135,12 @@
 
       function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
       function esc(s) { return String(s ?? '—'); }
+      // HTML-escape for values that reach innerHTML and could carry backend
+      // free-form text (the command result's status/message/error).
+      function escHtml(s) {
+        return String(s ?? '—').replace(/[&<>"']/g, (c) =>
+          ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
 
       // badge: green when value is in `good`, orange (warn) otherwise.
       function badge(label, value, good) {
@@ -344,10 +350,10 @@
         } catch (e) { out.textContent = CMDTXT.neterr + e; return; }
 
         if (j.ok) {
-          out.innerHTML = `<span class="accent">${CMDTXT.ok}</span> · ${esc(label)} · ${esc(j.status)}` +
-            (j.message ? ` · ${esc(j.message)}` : '');
+          out.innerHTML = `<span class="accent">${CMDTXT.ok}</span> · ${escHtml(label)} · ${escHtml(j.status)}` +
+            (j.message ? ` · ${escHtml(j.message)}` : '');
         } else {
-          out.innerHTML = `<span style="color:var(--ujh-alert)">${CMDTXT.failed}</span> · ${esc(label)} · ${esc(j.status || j.error)}`;
+          out.innerHTML = `<span style="color:var(--ujh-alert)">${CMDTXT.failed}</span> · ${escHtml(label)} · ${escHtml(j.status || j.error)}`;
         }
         // reflect the new state after the car has had a moment to act
         setTimeout(() => tstLoad(true), 3500);
