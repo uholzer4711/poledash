@@ -3,6 +3,31 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.18.1] — 2026-06-08
+
+### Fixed — multi-agent review pass
+
+- **Stale state after a control command** — `c3_control.run_command` now
+  invalidates the read cache (`c3._cache = None`) *inside* the shared lock, so a
+  concurrent `get_c3_snapshot` can't repopulate it the instant after; the
+  post-command refresh was occasionally serving pre-command door/lock state.
+- **Event-loop stall on the rain-&-windows alert** — `check_rain_windows` now
+  offloads its terminal `notify()` via `asyncio.to_thread`. It was the one C3
+  check awaited directly on the loop, so a fired alert blocked everything (main
+  poll, dashboard, MQTT) for up to ~35 s on the blocking ntfy/SMTP/Telegram send.
+- **`service_due` notification spam** — the dedup key was `…-d{days_to_service}`,
+  which minted a fresh key every day and produced up to ~30 alerts for a single
+  upcoming service. Now bucketed by week (`…-service-w{days // 7}`), capped to a
+  handful and self-re-arming after the service is done.
+- **i18n** — `"Current"` now translates to **Strom** (electrical current; was the
+  wrong word "Aktuell"). The charging *control* group header gets its own key
+  `"Charging actions"` → **Laden**, so it no longer collides with the `"Charging"`
+  status verb (Lädt).
+- **Latent XSS on the Test control page** — the command result's
+  status/message/error (backend free-form text) is now HTML-escaped before it
+  reaches `innerHTML` (low risk behind the mandated reverse proxy, but a real
+  reflected-injection pattern).
+
 ## [1.18.0] — 2026-06-08
 
 ### Added — remote control on the Test page
