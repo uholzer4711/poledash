@@ -11,6 +11,7 @@ from datetime import timedelta
 
 from sqlmodel import Session, select
 
+from .app_settings import alert_enabled, in_alert_window
 from .db.models import VehicleSnapshot
 from .db.session import get_engine
 from .i18n import t
@@ -28,8 +29,8 @@ RANGE_FACTOR_WINDOW_MIN = 60    # median over this window kills 1-2 poll API spi
 RANGE_FACTOR_MIN_SAMPLES = 5    # need a stable window before trusting the median
 LOOKBACK_HOURS = 6
 LOW_SOC_REMINDER_THRESHOLD = 25  # %, nudge if not plugged in below this
-LOW_SOC_REMINDER_HOUR_FROM = 17  # local-hour window when nudges are useful
-LOW_SOC_REMINDER_HOUR_TO = 23
+# The local-hour window when nudges are useful is configured per-alert in
+# settings (alert "low_soc_unplugged"), default 17→23.
 
 
 def _prev_snapshot(vin: str, before: Snapshot) -> VehicleSnapshot | None:
@@ -194,7 +195,7 @@ def _check_low_soc_unplugged(snap: Snapshot) -> None:
         local = ts.astimezone(ZoneInfo("Europe/Vienna"))
     except Exception:  # noqa: BLE001
         local = snap.fetched_at
-    if not (LOW_SOC_REMINDER_HOUR_FROM <= local.hour <= LOW_SOC_REMINDER_HOUR_TO):
+    if not in_alert_window("low_soc_unplugged", local.hour):
         return
     day = local.strftime("%Y-%m-%d")
     key = f"{snap.vin}-{day}-lowsoc"
@@ -215,6 +216,8 @@ def check_battery_trend() -> None:
 
     If the recent average dropped >10%, fire an alert. Called by the
     weekly-digest scheduler job."""
+    if not alert_enabled("battery_trend"):
+        return
     from datetime import timedelta as td
 
     now = utcnow()
@@ -271,7 +274,11 @@ def run_anomaly_checks(snap: Snapshot, *, prev: VehicleSnapshot | None = None) -
     if prev is None:
         prev = _prev_snapshot(snap.vin, snap)
     if prev is not None:
-        _check_soc_drop(snap, prev)
-        _check_power_collapse(snap, prev)
-    _check_range_factor(snap)
-    _check_low_soc_unplugged(snap)
+        if alert_enabled("anomaly_soc_drop"):
+            _check_soc_drop(snap, prev)
+        if alert_enabled("anomaly_power_collapse"):
+            _check_power_collapse(snap, prev)
+    if alert_enabled("anomaly_range_factor"):
+        _check_range_factor(snap)
+    if alert_enabled("low_soc_unplugged"):
+        _check_low_soc_unplugged(snap)

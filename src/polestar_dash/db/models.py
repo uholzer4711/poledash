@@ -247,6 +247,28 @@ class NotificationLog(SQLModel, table=True):
     key: str = Field(index=True)  # idempotency key (e.g. session id, date)
 
 
+class PendingAction(SQLModel, table=True):
+    """A deferred C3 command awaiting one-tap confirmation.
+
+    Created when an automation rule in "vorschlag" (suggest) mode fires: the
+    push notification carries a link to /confirm/{token}; tapping it (behind the
+    same reverse-proxy auth as the whole app) consumes the token and runs the
+    command. The token is a one-time intent guard, never authentication — the
+    confirm route is protected by the proxy like every other route.
+    """
+
+    token: str = Field(primary_key=True)
+    created_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime = Field(index=True)
+    rule_id: str
+    command: str
+    params_json: str = "{}"
+    vin: str | None = None
+    status: str = "pending"  # pending | consumed | done | expired
+    consumed_at: datetime | None = None
+    result_json: str | None = None
+
+
 class C3Snapshot(SQLModel, table=True):
     """Structured snapshot from the C3 (Volvo Cloud Connectivity) backend.
 

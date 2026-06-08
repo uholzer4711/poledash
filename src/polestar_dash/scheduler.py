@@ -12,6 +12,7 @@ from sqlmodel import Session
 
 from .anomalies import run_anomaly_checks
 from .backup import run_backup
+from .automations import run_automations
 from .c3_anomalies import check_rain_windows, run_c3_anomaly_checks
 from .config import get_settings
 from .db.models import C3Snapshot, FetchError, RawC3Snapshot, RawSnapshot, VehicleSnapshot
@@ -379,6 +380,10 @@ async def c3_poll_once() -> None:
         except Exception:  # noqa: BLE001
             log.exception("C3 rain/windows check failed for VIN %s", vin)
         try:
+            await run_automations(row)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 automations failed for VIN %s", vin)
+        try:
             schedule_publish_c3(row)
         except Exception:  # noqa: BLE001
             log.exception("C3 MQTT publish failed for VIN %s", vin)
@@ -435,6 +440,15 @@ def _prune_raw_snapshots() -> None:
     log.info("Pruned %s RawSnapshot + %s RawC3Snapshot rows older than %s days",
              getattr(result, "rowcount", "?"), getattr(result_c3, "rowcount", "?"),
              RAW_RETENTION_DAYS)
+    # Also sweep stale one-tap confirm tokens (short-lived; never accumulate).
+    try:
+        from .pending_actions import sweep_pending
+
+        swept = sweep_pending()
+        if swept:
+            log.info("Swept %s expired pending-action tokens", swept)
+    except Exception:  # noqa: BLE001
+        log.exception("pending-action sweep failed")
 
 
 def _enrich_c3_env() -> None:

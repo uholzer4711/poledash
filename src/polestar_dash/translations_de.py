@@ -692,4 +692,79 @@ TRANSLATIONS_DE: dict[str, str] = {
         "Noch keine Kabinen-PM2.5-Daten — importiere ein Fahrtenbuch, nachdem C3 gepollt hat.",
     "Everything the C3 backend adds: doors/windows/openings state-timeline, lock &amp; security, climate, cabin PM2.5, on-car weather, live location geomap, plus charging, SoC, range &amp; service. 27 panels, 30s refresh.":
         "Alles, was das C3-Backend liefert: Türen/Fenster/Öffnungen als State-Timeline, Schloss &amp; Sicherheit, Klima, Kabinen-PM2.5, Wetter am Auto, Live-Standort-Geomap, plus Laden, SoC, Reichweite &amp; Service. 27 Panels, 30s-Refresh.",
+    # --- C3 control panels + verification (control.js / partials / confirm) ---
+    "Vehicle control": "Fahrzeug-Steuerung",
+    "Charging control": "Lade-Steuerung",
+    "sending…": "sende…",
+    "verifying…": "prüfe…",
+    "verified": "bestätigt",
+    "not confirmed": "nicht bestätigt",
+    "sent — can't verify": "gesendet — nicht prüfbar",
+    "Run": "Ausführen",
+    # --- Confirm page (confirm.html) ---
+    "Confirm action": "Aktion bestätigen",
+    "CONFIRM": "BESTÄTIGEN",
+    "Confirm": "Bestätigen",
+    "action": "Aktion",
+    "This action has expired or was not found.":
+        "Diese Aktion ist abgelaufen oder wurde nicht gefunden.",
+    "Already handled.": "Bereits erledigt.",
+    "Tap to run this command on the car now.":
+        "Tippe, um diesen Befehl jetzt am Auto auszuführen.",
+    "Run now": "Jetzt ausführen",
+    "Action carried out.": "Aktion ausgeführt.",
+    "could not confirm the change": "Änderung konnte nicht bestätigt werden",
+    # --- Settings: alert + automation frames + section headers ---
+    "06.1 / ALERTS & AUTOMATION": "06.1 / ALARME & AUTOMATIK",
+    "Alerts &": "Alarme &",
+    "automations": "Automatismen",
+    "Notifications": "Benachrichtigungen",
+    "toggle each alert and set its quiet-hour window":
+        "jeden Alarm ein/ausschalten und sein Zeitfenster festlegen",
+    "Alerts with no window set fire any time. A window like 20 → 6 means overnight.":
+        "Alarme ohne Fenster melden jederzeit. Ein Fenster wie 20 → 6 meint über Nacht.",
+    "from": "von",
+    "to": "bis",
+    "Automations": "Automatismen",
+    "let the car act on its own — opt-in":
+        "das Auto eigenständig handeln lassen — Opt-in",
+    "Autonomous acts immediately, then notifies. Suggest sends a one-tap push and only acts when you confirm. Moving windows can pinch — leave on Suggest unless you're sure.":
+        "Autonom handelt sofort und meldet danach. Vorschlag schickt eine 1-Tipp-Push und "
+        "handelt erst nach deiner Bestätigung. Fenster können klemmen — lass es auf Vorschlag, "
+        "außer du bist sicher.",
+    "Suggest (1-tap)": "Vorschlag (1-Tipp)",
+    "Autonomous": "Autonom",
+    "error": "Fehler",
+    "06.2 / PRICING & ENERGY": "06.2 / PREISE & ENERGIE",
+    "Pricing &": "Preise &",
+    "energy": "Energie",
+    "06.3 / LOCATIONS & TRIPS": "06.3 / ORTE & FAHRTEN",
+    "Locations &": "Orte &",
+    "06.4 / APPEARANCE & VEHICLE": "06.4 / DARSTELLUNG & FAHRZEUG",
+    "Appearance &": "Darstellung &",
+    "vehicle": "Fahrzeug",
+    "06.5 / INTEGRATIONS & OPS": "06.5 / INTEGRATIONEN & BETRIEB",
+    "Integrations &": "Integrationen &",
+    "ops": "Betrieb",
+    # --- Alert labels (app_settings.ALERT_LABELS) ---
+    "Door / window left open": "Tür / Fenster offen gelassen",
+    "Fluid / level warning": "Flüssigkeits- / Füllstand-Warnung",
+    "Unexpected SoC drop": "Unerwarteter SoC-Abfall",
+    "Charging power collapse": "Ladeleistung eingebrochen",
+    "Low range factor": "Niedriger Reichweiten-Faktor",
+    "Low battery reminder": "Erinnerung: niedriger Akku",
+    "Battery trend": "Akku-Trend",
+    # --- Automation engine (automations.py) ---
+    "Rain → close windows": "Regen → Fenster schließen",
+    "Close windows now": "Fenster jetzt schließen",
+    "It started raining and these are open: {parts}. Close them?":
+        "Es regnet und diese sind offen: {parts}. Schließen?",
+    "It started raining — closed the windows automatically.":
+        "Es regnet — Fenster automatisch geschlossen.",
+    "It started raining — tried to close the windows but couldn't confirm.":
+        "Es regnet — Fenster sollten schließen, aber nicht bestätigt.",
+    "Confirmed.": "Bestätigt.",
+    "Automation acted": "Automatik ausgeführt",
+    "Suggestion": "Vorschlag",
+    "Open poledash to confirm.": "Öffne poledash zum Bestätigen.",
 }

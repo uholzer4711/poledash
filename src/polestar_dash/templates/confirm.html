@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Confirm action") }} · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">{{ t("CONFIRM") }}</div>
+    <h1>{{ t("Confirm") }} <em class="accent">{{ t("action") }}</em></h1>
+  </div>
+
+  {% if pa is none %}
+    <div class="card"><p class="muted">{{ t("This action has expired or was not found.") }}</p></div>
+  {% elif pa.status != 'pending' %}
+    <div class="card"><p class="muted">{{ t("Already handled.") }}</p></div>
+  {% else %}
+    <div class="card mb-6">
+      <div class="card-label">{{ t(rule.title) if rule else pa.command }}</div>
+      <p class="mt-2">{{ t("Tap to run this command on the car now.") }}</p>
+      <div id="cf_status" class="mono-xs mt-2" style="min-height:1.3em">—</div>
+      <button class="btn accent" id="cf_btn" type="button"
+              style="margin-top:12px;width:100%;max-width:340px">
+        {{ (t(rule.suggest_label) if rule and rule.suggest_label else t("Run now")) }}
+        <span class="arrow">→</span>
+      </button>
+    </div>
+    <script>
+      (function () {
+        var TXT = {
+          sending: {{ t("sending…") | tojson }},
+          done: {{ t("Action carried out.") | tojson }},
+          verified: {{ t("verified") | tojson }},
+          notConfirmed: {{ t("could not confirm the change") | tojson }},
+          failed: {{ t("failed") | tojson }},
+          neterr: {{ t("network error: ") | tojson }},
+          already: {{ t("Already handled.") | tojson }}
+        };
+        var token = {{ token | tojson }};
+        var btn = document.getElementById('cf_btn');
+        var out = document.getElementById('cf_status');
+        btn.addEventListener('click', async function () {
+          btn.disabled = true;
+          out.textContent = TXT.sending;
+          var j;
+          try {
+            var r = await fetch('/api/confirm/' + encodeURIComponent(token), { method: 'POST' });
+            if (r.status === 409) { out.textContent = TXT.already; return; }
+            j = await r.json();
+          } catch (e) { out.textContent = TXT.neterr + e; btn.disabled = false; return; }
+          var v = j.verify || {};
+          if (v.verified === true) {
+            out.innerHTML = '<span class="accent">' + TXT.done + ' · ' + TXT.verified + '</span>';
+          } else if (j.ok && v.verified !== false) {
+            out.innerHTML = '<span class="accent">' + TXT.done + '</span>';
+          } else {
+            out.innerHTML = '<span style="color:var(--ujh-alert)">' +
+              (j.ok ? TXT.notConfirmed : TXT.failed) + '</span>';
+          }
+        });
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from .config import get_settings
+from .app_settings import alert_enabled, in_alert_window
 from .db.models import C3Snapshot
 from .i18n import t
 from .notify import notify
@@ -54,16 +54,10 @@ _LEVEL_WARNINGS: list[tuple[str, str]] = [
 def _is_bad(value) -> bool:  # noqa: ANN001
     return value in _WARN_BAD
 
-# Quiet hours for the "left open / unlocked" nags: only alert overnight, when
-# the car is parked at home and the owner can actually act on it. During the
-# day a briefly-open door (loading, parking lot) is normal and just noise.
-# Local time (Europe/Vienna), inclusive-from / exclusive-to → 20:00–05:59.
-_NIGHT_HOUR_FROM = 20
-_NIGHT_HOUR_TO = 6
-
-
-def _in_night_window(row: C3Snapshot) -> bool:
-    """True when the snapshot's local time falls in the overnight quiet window."""
+def _local_hour(row: C3Snapshot) -> int:
+    """The snapshot's local (Europe/Vienna) hour. Quiet-hour windows for the
+    "left open / unlocked" nags are configured per-alert in settings — only
+    alert overnight by default, when the car is parked and the owner can act."""
     try:
         from zoneinfo import ZoneInfo
 
@@ -74,7 +68,7 @@ def _in_night_window(row: C3Snapshot) -> bool:
         local = ts.astimezone(ZoneInfo("Europe/Vienna"))
     except Exception:  # noqa: BLE001
         local = row.fetched_at
-    return local.hour >= _NIGHT_HOUR_FROM or local.hour < _NIGHT_HOUR_TO
+    return local.hour
 
 
 def _is_parked(row: C3Snapshot) -> bool:
@@ -99,8 +93,10 @@ def _opened(row: C3Snapshot, prev: C3Snapshot | None, attr: str) -> bool:
 
 
 def _check_openings(row: C3Snapshot, prev: C3Snapshot | None) -> None:
-    if not _in_night_window(row):
-        return  # door/window-open nags only overnight (20:00–06:00 local)
+    if not alert_enabled("c3_open"):
+        return
+    if not in_alert_window("c3_open", _local_hour(row)):
+        return  # door/window-open nags only inside the configured window
     if not _is_parked(row):
         return
     for attr, label in _OPENINGS:
@@ -118,8 +114,10 @@ def _check_openings(row: C3Snapshot, prev: C3Snapshot | None) -> None:
 
 
 def _check_unlocked(row: C3Snapshot, prev: C3Snapshot | None) -> None:
-    if not _in_night_window(row):
-        return  # unlocked-while-parked nag only overnight (20:00–06:00 local)
+    if not alert_enabled("c3_unlocked"):
+        return
+    if not in_alert_window("c3_unlocked", _local_hour(row)):
+        return  # unlocked-while-parked nag only inside the configured window
     if row.is_locked is not False:  # None (unknown) or True → no alert
         return
     if not _is_parked(row):
@@ -139,7 +137,11 @@ def _check_unlocked(row: C3Snapshot, prev: C3Snapshot | None) -> None:
 
 
 def _check_health(row: C3Snapshot, prev: C3Snapshot | None) -> None:
-    if row.any_tyre_warning and not (prev and prev.any_tyre_warning):
+    if (
+        alert_enabled("c3_tyre")
+        and row.any_tyre_warning
+        and not (prev and prev.any_tyre_warning)
+    ):
         notify(
             kind="c3_tyre",
             key=_day_key(row, "tyre"),
@@ -148,7 +150,11 @@ def _check_health(row: C3Snapshot, prev: C3Snapshot | None) -> None:
             vin=row.vin,
             tags=["warning"],
         )
-    if row.any_light_failure and not (prev and prev.any_light_failure):
+    if (
+        alert_enabled("c3_light")
+        and row.any_light_failure
+        and not (prev and prev.any_light_failure)
+    ):
         body = t("The car reports a bulb/light failure.")
         if row.failed_lights:
             body = t("The car reports a light failure: {bulbs}.", bulbs=row.failed_lights)
@@ -162,6 +168,8 @@ def _check_health(row: C3Snapshot, prev: C3Snapshot | None) -> None:
         )
 
     # Level / fluid warnings — 12V battery especially. Transition ok → bad.
+    if not alert_enabled("c3_level"):
+        return
     for attr, label in _LEVEL_WARNINGS:
         now = getattr(row, attr, None)
         if not _is_bad(now):
@@ -194,6 +202,8 @@ async def check_rain_windows(row: C3Snapshot) -> None:
     """Alert once/day if it's raining at the car's location while a window or
     the sunroof is open. The weather lookup only runs when a window is actually
     open (rare), so it costs nothing on the common all-closed poll."""
+    if not alert_enabled("c3_rain_windows"):
+        return
     if row.lat is None or row.lng is None:
         return
     open_labels = _windows_open(row)
@@ -220,9 +230,9 @@ async def check_rain_windows(row: C3Snapshot) -> None:
 
 
 def run_c3_anomaly_checks(row: C3Snapshot, *, prev: C3Snapshot | None = None) -> None:
-    s = get_settings()
-    if s.notify_door_open:
-        _check_openings(row, prev)
-    if s.notify_unlocked:
-        _check_unlocked(row, prev)
+    # Each check self-gates on its per-alert config (enable + quiet-hour window),
+    # so callers just run them all. The legacy NOTIFY_DOOR_OPEN/NOTIFY_UNLOCKED
+    # env flags now seed the default-enabled state (see app_settings).
+    _check_openings(row, prev)
+    _check_unlocked(row, prev)
     _check_health(row, prev)

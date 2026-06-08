@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # --- HTTP server ---
     host: str = "0.0.0.0"
     port: int = 8000
+    # Public, externally-reachable base URL of this app (e.g.
+    # "https://poledash.example.com"), used to build the one-tap confirm links
+    # in automation "suggest"-mode push notifications. Empty ⇒ the notification
+    # degrades to a text hint ("open poledash to confirm") with no button.
+    public_base_url: str = ""
 
     # --- Persistence ---
     data_dir: Path = Path("/data")

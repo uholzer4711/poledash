@@ -320,7 +320,12 @@ def _broad_label_warnings(labels: dict[str, list[str]]) -> dict[str, dict[str, i
 
 @router.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request):
-    from ..app_settings import get_charging_loss_factor, get_default_price_ct
+    from ..app_settings import (
+        all_alert_configs,
+        get_charging_loss_factor,
+        get_default_price_ct,
+    )
+    from ..automations import all_automation_configs
     from ..journey_import import get_address_geofences, get_address_labels
 
     s = get_settings()
@@ -353,6 +358,8 @@ def settings_page(request: Request):
             "integrations": integrations,
             "default_price_ct": get_default_price_ct(),
             "charging_loss_factor": get_charging_loss_factor(),
+            "alert_configs": all_alert_configs(),
+            "automation_configs": all_automation_configs(),
         },
     )
 
@@ -360,6 +367,23 @@ def settings_page(request: Request):
 @router.get("/history", response_class=HTMLResponse)
 def history_page(request: Request):
     return templates.TemplateResponse(request, "history.html", {})
+
+
+@router.get("/confirm/{token}", response_class=HTMLResponse)
+def confirm_page(request: Request, token: str):
+    """One-tap confirmation landing page for an automation suggestion. Behind
+    the same reverse-proxy auth as the rest of the app — the token just names
+    which pending action to run."""
+    from ..automations import rule_by_id
+    from ..pending_actions import get_pending
+
+    pa = get_pending(token)
+    rule = rule_by_id(pa.rule_id) if pa else None
+    return templates.TemplateResponse(
+        request,
+        "confirm.html",
+        {"pa": pa, "token": token, "rule": rule},
+    )
 
 
 @router.get("/insights", response_class=HTMLResponse)

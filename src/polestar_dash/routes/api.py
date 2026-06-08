@@ -2,17 +2,23 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..app_settings import (
+    ALERT_DEFAULTS,
+    all_alert_configs,
     blended_price_ct,
+    get_alert_config,
     get_charging_loss_factor,
     get_default_price_ct,
+    set_alert_config,
     set_charging_loss_factor,
     set_default_price_ct,
 )
@@ -53,6 +59,8 @@ from ..journey_import import (
     upsert,
 )
 from ..polestar.c3 import c3_dict_to_row, get_c3_snapshot
+from ..polestar.c3_control import run_command
+from ..polestar.control_verify import verify_command
 from ..routes_stats import list_routes, trips_for_route
 from ..tripbook import detect_trips
 from ..util import utcnow
@@ -398,6 +406,111 @@ def app_settings_set_language(value: str = Query(...)) -> dict:
         raise HTTPException(status_code=400, detail=f"Unsupported language: {value}")
     set_language(value)
     return {"language": get_language()}
+
+
+# --- C3 remote control (shared by dashboard + Battery&Charging panels) --------
+# The canonical command endpoint. `run_command` carries its own allowlist
+# (c3_control._COMMANDS), so an unknown command is rejected there — this stays a
+# thin pass-through. `/api/test/control` (routes/test.py) is the legacy alias.
+
+
+class ControlRequest(BaseModel):
+    command: str
+    params: dict | None = None
+
+
+@router.post("/control")
+async def control(req: ControlRequest) -> dict:
+    """Fire one C3 write command (lock, windows, climate, …). Real car effect."""
+    return await run_command(req.command, req.params)
+
+
+@router.get("/app-settings/alerts")
+def app_settings_alerts() -> dict:
+    """Per-alert config (enable + quiet-hour window) for the settings frame."""
+    return {"alerts": all_alert_configs()}
+
+
+@router.post("/app-settings/alert/{kind}")
+def app_settings_set_alert(
+    kind: str,
+    enabled: bool | None = Query(None),
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = Query(None, alias="to"),
+) -> dict:
+    """Update one alert. `from`/`to` are local hours; empty string clears the
+    window (fires any time); omit to leave a field unchanged."""
+    if kind not in ALERT_DEFAULTS:
+        raise HTTPException(status_code=404, detail=f"Unknown alert: {kind}")
+    set_alert_config(kind, enabled=enabled, hour_from=from_, hour_to=to)
+    return {"kind": kind, **get_alert_config(kind)}
+
+
+@router.get("/app-settings/automations")
+def app_settings_automations() -> dict:
+    """Per-rule automation config (enabled + mode) for the settings frame."""
+    from ..automations import all_automation_configs
+
+    return {"automations": all_automation_configs()}
+
+
+@router.post("/app-settings/automation/{rule_id}")
+def app_settings_set_automation(
+    rule_id: str,
+    enabled: bool | None = Query(None),
+    mode: str | None = Query(None),
+) -> dict:
+    from ..app_settings import get_automation_config, set_automation_config
+    from ..automations import rule_by_id
+
+    rule = rule_by_id(rule_id)
+    if rule is None:
+        raise HTTPException(status_code=404, detail=f"Unknown automation: {rule_id}")
+    if mode is not None and mode not in ("autonom", "vorschlag"):
+        raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
+    set_automation_config(rule_id, enabled=enabled, mode=mode)
+    return {"id": rule_id, **get_automation_config(
+        rule_id, default_enabled=rule.default_enabled, default_mode=rule.default_mode)}
+
+
+@router.post("/confirm/{token}")
+async def confirm_action(token: str) -> dict:
+    """Run a deferred (suggested) automation command after one-tap confirm.
+
+    Atomically consumes the token, runs the command and verifies it. A second
+    tap (or an expired token) gets 409 rather than re-firing the command."""
+    from ..pending_actions import consume_pending, finalize_pending
+
+    pa = consume_pending(token)
+    if pa is None:
+        raise HTTPException(status_code=409, detail="expired or already handled")
+    try:
+        params = json.loads(pa.params_json or "{}")
+    except ValueError:
+        params = {}
+    res = await run_command(pa.command, params)
+    verdict = await verify_command(pa.command, params)
+    out = {"command": pa.command, **res, "verify": verdict}
+    finalize_pending(token, out)
+    return out
+
+
+@router.get("/control/verify")
+async def control_verify(command: str, params: str | None = None) -> dict:
+    """Force one fresh C3 read and report whether `command` took effect.
+
+    `params` is an optional JSON string (only `set_amp_limit` needs it). Returns
+    {verified: bool|None, …}; None = sent but not (yet) confirmable.
+    """
+    p: dict = {}
+    if params:
+        try:
+            parsed = json.loads(params)
+            if isinstance(parsed, dict):
+                p = parsed
+        except ValueError:
+            p = {}
+    return await verify_command(command, p)
 
 
 def _recalc_session_energy() -> None:

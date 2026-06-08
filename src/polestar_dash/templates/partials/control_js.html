@@ -1,0 +1,17 @@
+{# Shared bootstrap for the C3 control panels: hands the user-facing status
+   words to control.js (so the static JS stays English-literal-free) and loads
+   it once. Vehicle + charging panels live on different pages, so a single
+   include each is enough; control.js also self-guards (window.poleControl). #}
+<script>
+  window.POLE_CONTROL_I18N = {
+    sending: {{ t("sending…") | tojson }},
+    verifying: {{ t("verifying…") | tojson }},
+    verified: {{ t("verified") | tojson }},
+    notConfirmed: {{ t("not confirmed") | tojson }},
+    sentCantVerify: {{ t("sent — can't verify") | tojson }},
+    failed: {{ t("failed") | tojson }},
+    neterr: {{ t("network error: ") | tojson }},
+    confirmRun: {{ t("Run") | tojson }}
+  };
+</script>
+<script src="/static/control.js"></script>

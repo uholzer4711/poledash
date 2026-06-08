@@ -3,6 +3,42 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.19.0] — 2026-06-08
+
+### Added — controls in the tabs, verified feedback, alert config, automations
+
+- **Vehicle control on the dashboard, charging control on Battery & Charging.**
+  The C3 write commands (lock/unlock, windows, climate, pre-cleaning, flash/honk,
+  wake; and charge start/stop, amp limit, target SoC) now live as reusable panels
+  next to the live car diagram and the charging charts — not just on `/test`,
+  which stays as raw debug. Shared `static/control.js` (`window.poleControl`,
+  same plain-IIFE pattern as `map.js`), included via `partials/control_vehicle.html`
+  and `partials/control_charging.html`. Mobile-friendly (existing 640px grid).
+- **Verified command feedback.** Every command shows `sending → verifying… →
+  ✓ verified / ✗ not confirmed`. A new `polestar/control_verify.py` maps each
+  command to its expected post-state and `GET /api/control/verify` forces one
+  fresh C3 read to confirm it (e.g. windows actually became `closed`). Commands
+  with no C3 read-back (`set_target_soc`, flash/honk/wake) honestly report
+  "sent — can't verify" instead of a false ✗. Verify polls 3× (3/6/9 s backoff)
+  with a server-side floor, to stay gentle on the shared C3 rate limit.
+- **Generic command endpoint** `POST /api/control` (reuses the `run_command`
+  allowlist); `/api/test/control` stays as the legacy alias.
+- **Settings: alert configuration frame.** Each alert can be toggled and given a
+  local-hour quiet-window (`GET`/`POST /api/app-settings/alert/{kind}`). The
+  previously hardcoded windows (door/unlock 20→6, low-SoC 17→23) now live in
+  `AppSetting` with those values as defaults; centralized in
+  `app_settings.in_alert_window` and applied across `anomalies.py` /
+  `c3_anomalies.py`. Settings page regrouped into labelled sections.
+- **Automation engine** (`automations.py`) — generic rule registry run from
+  `c3_poll_once` after the fresh fetch. First rule **rain → close windows**.
+  Per-rule, opt-in, with a mode toggle: *autonom* (act, verify, then notify) or
+  *vorschlag* (one-tap suggestion — nothing touches the car until you confirm).
+- **One-tap confirm flow** for suggestions, behind the existing reverse-proxy
+  auth (no in-app auth added): a short-lived single-use `PendingAction` token,
+  an ntfy `view` action button / Telegram URL button / email link, a `/confirm/{token}`
+  page and `POST /api/confirm/{token}` that consumes the token, runs and verifies
+  the command. `PUBLIC_BASE_URL` builds the links (degrades to a text hint if unset).
+
 ## [1.18.1] — 2026-06-08
 
 ### Fixed — multi-agent review pass
