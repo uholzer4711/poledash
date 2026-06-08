@@ -3,6 +3,26 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.20.0] — 2026-06-08
+
+### Added
+
+- **Log tab** (`/log`) — a live activity feed of everything the app's own
+  loggers emit (polls, persistence, sessions, notifications, automations,
+  errors). Backed by an in-memory ring buffer (`logbuffer.py`, last 2000 lines,
+  no DB growth) attached to the `polestar_dash` logger; `GET /api/log` serves it
+  with level filter + incremental `since_id`. Page auto-refreshes (4 s),
+  level-filterable, pause/clear, WARNING orange / ERROR red.
+
+### Fixed
+
+- **Automations + one-tap confirm reported "not confirmed" on commands that
+  actually worked.** Verification ran a single read immediately after the
+  command, but the car needs ~10 s to physically actuate (e.g. close windows),
+  so it read the old state. Both paths now use `verify_command_with_retries`
+  (waits 6/7/9 s, returns success as soon as the post-state is reached) —
+  mirroring the dashboard's client-side verify backoff.
+
 ## [1.19.0] — 2026-06-08
 
 ### Added — controls in the tabs, verified feedback, alert config, automations

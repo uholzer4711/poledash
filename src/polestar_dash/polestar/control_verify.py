@@ -134,3 +134,31 @@ async def verify_command(command: str, params: dict | None = None) -> dict:
     verdict = predicate(command, params or {}, flat)
     verdict.update({"ok": True, "command": command, "age_s": data.get("age_s", 0)})
     return verdict
+
+
+async def verify_command_with_retries(
+    command: str, params: dict | None = None, delays: tuple[int, ...] = (6, 7, 9)
+) -> bool | None:
+    """Poll the car a few times before judging — physical actuation takes time
+    (windows ~10 s), so a single immediate read would falsely report "not
+    confirmed". Returns True as soon as the post-state is reached; otherwise the
+    last definitive False, else None (couldn't confirm / not verifiable).
+
+    Used by the automation engine and the one-tap confirm route, mirroring the
+    dashboard's client-side 3/6/9 s verify backoff.
+    """
+    import asyncio
+
+    if not is_verifiable(command):
+        return None
+    last: bool | None = None
+    for delay in delays:
+        await asyncio.sleep(delay)
+        v = await verify_command(command, params)
+        verified = v.get("verified")
+        if verified is True:
+            return True
+        if verified is False:
+            last = False
+        # verified is None (busy/unknown) → keep `last` as-is, try again
+    return last

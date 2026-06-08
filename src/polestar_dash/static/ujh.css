@@ -569,6 +569,27 @@ main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .inline-select:focus { outline: none; border-bottom-color: var(--ujh-orange); }
 .config-status { font: 500 11px/1 var(--ujh-mono); color: var(--ujh-ink-3); min-width: 3ch; }
 
+/* ---------- Activity log (/log) ---------- */
+.logstream { font: 500 12px/1.5 var(--ujh-mono); max-height: 72vh; overflow: auto; }
+.logrow {
+  display: grid; grid-template-columns: 74px 64px 116px 1fr; gap: var(--ujh-s-3);
+  padding: 5px var(--ujh-s-5); border-bottom: 1px solid var(--ujh-line);
+  align-items: baseline;
+}
+.logrow:last-child { border-bottom: 0; }
+.logts { color: var(--ujh-ink-4); white-space: nowrap; }
+.loglvl { color: var(--ujh-ink-3); letter-spacing: 0.06em; }
+.loglogger { color: var(--ujh-ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.logmsg { color: var(--ujh-ink); white-space: pre-wrap; word-break: break-word; }
+.log-WARNING .loglvl, .log-WARNING .logmsg { color: var(--ujh-orange); }
+.log-ERROR .loglvl, .log-ERROR .logmsg,
+.log-CRITICAL .loglvl, .log-CRITICAL .logmsg { color: var(--ujh-alert); }
+.logexc { margin-top: 4px; color: var(--ujh-alert); white-space: pre-wrap; font-size: 11px; }
+@media (max-width: 640px) {
+  .logrow { grid-template-columns: 1fr; gap: 2px; padding: 8px var(--ujh-s-4); }
+  .loglogger { display: none; }
+}
+
 /* ---------- Field ---------- */
 .field {
   display: flex; flex-direction: column; gap: 6px;

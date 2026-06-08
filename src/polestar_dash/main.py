@@ -22,6 +22,11 @@ logging.basicConfig(
 )
 log = logging.getLogger("polestar_dash")
 
+# Capture the app's own log stream into an in-memory ring buffer for the /log tab.
+from .logbuffer import install as _install_logbuffer  # noqa: E402
+
+_install_logbuffer()
+
 PKG_DIR = Path(__file__).resolve().parent
 
 

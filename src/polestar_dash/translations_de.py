@@ -783,4 +783,16 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Tried to close the windows but couldn't confirm.":
         "Fenster sollten schließen, aber nicht bestätigt.",
     "Ø consumption": "Ø Verbrauch",
+    # --- Activity log (/log) ---
+    "Log": "Log",
+    "09 / LOG": "09 / LOG",
+    'Activity <em class="accent">log</em>': 'Aktivitäts<em class="accent">log</em>',
+    "Live feed of what the tool does — polls, sessions, notifications, automations, errors. Kept in memory (last 2000 lines); full history is in the container logs.":
+        "Live-Feed dessen, was das Tool tut — Abrufe, Ladevorgänge, Benachrichtigungen, "
+        "Automatismen, Fehler. Im Speicher gehalten (letzte 2000 Zeilen); vollständige "
+        "Historie in den Container-Logs.",
+    "Level": "Stufe",
+    "Resume": "Fortsetzen",
+    "last update": "letzte Aktualisierung",
+    "no log entries yet": "noch keine Log-Einträge",
 }

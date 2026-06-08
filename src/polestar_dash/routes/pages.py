@@ -369,6 +369,12 @@ def history_page(request: Request):
     return templates.TemplateResponse(request, "history.html", {})
 
 
+@router.get("/log", response_class=HTMLResponse)
+def log_page(request: Request):
+    """Live activity log — everything the app's own loggers emit."""
+    return templates.TemplateResponse(request, "log.html", {})
+
+
 @router.get("/confirm/{token}", response_class=HTMLResponse)
 def confirm_page(request: Request, token: str):
     """One-tap confirmation landing page for an automation suggestion. Behind

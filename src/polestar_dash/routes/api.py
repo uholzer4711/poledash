@@ -60,7 +60,7 @@ from ..journey_import import (
 )
 from ..polestar.c3 import c3_dict_to_row, get_c3_snapshot
 from ..polestar.c3_control import run_command
-from ..polestar.control_verify import verify_command
+from ..polestar.control_verify import verify_command, verify_command_with_retries
 from ..routes_stats import list_routes, trips_for_route
 from ..tripbook import detect_trips
 from ..util import utcnow
@@ -425,6 +425,27 @@ async def control(req: ControlRequest) -> dict:
     return await run_command(req.command, req.params)
 
 
+@router.get("/log")
+def api_log(
+    limit: int = Query(300, ge=1, le=2000),
+    level: str = Query("INFO"),
+    since_id: int = Query(0, ge=0),
+) -> dict:
+    """Recent app-activity log records (in-memory ring buffer) for the /log tab.
+
+    `since_id` lets the page fetch only new lines for incremental refresh.
+    """
+    import logging as _logging
+
+    from ..logbuffer import get_records
+
+    lvl = _logging.getLevelName((level or "INFO").upper())
+    if not isinstance(lvl, int):
+        lvl = _logging.INFO
+    recs = get_records(limit=limit, min_level=lvl, since_id=since_id)
+    return {"records": recs, "last_id": recs[-1]["id"] if recs else since_id}
+
+
 @router.get("/app-settings/alerts")
 def app_settings_alerts() -> dict:
     """Per-alert config (enable + quiet-hour window) for the settings frame."""
@@ -491,8 +512,11 @@ async def confirm_action(token: str) -> dict:
     except ValueError:
         params = {}
     res = await run_command(pa.command, params)
-    verdict = await verify_command(pa.command, params)
-    out = {"command": pa.command, **res, "verify": verdict}
+    # Wait for the car to actuate before judging (windows ~10 s), like the
+    # autonomous path — avoids a false "could not confirm" on a command that
+    # actually worked.
+    verified = await verify_command_with_retries(pa.command, params)
+    out = {"command": pa.command, **res, "verify": {"verified": verified}}
     finalize_pending(token, out)
     return out
 

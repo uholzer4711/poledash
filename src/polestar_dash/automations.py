@@ -36,7 +36,7 @@ from .i18n import t
 from .notify import notify
 from .pending_actions import create_pending
 from .polestar.c3_control import run_command
-from .polestar.control_verify import verify_command
+from .polestar.control_verify import verify_command_with_retries
 from .util import utcnow
 
 log = logging.getLogger(__name__)
@@ -174,8 +174,9 @@ async def _run_autonomous(rule: Rule, row: C3Snapshot, ctx: dict) -> None:
     if not _claim_once(f"auto_{rule.id}", day, row.vin):
         return  # already acted on this condition today
     res = await run_command(rule.command, rule.params)
-    verdict = await verify_command(rule.command, rule.params)
-    verified = verdict.get("verified")
+    # Wait for the car to physically actuate before judging — a single immediate
+    # read would falsely say "not confirmed" (windows take ~10 s to close).
+    verified = await verify_command_with_retries(rule.command, rule.params)
     ok = verified is True or (verified is None and res.get("ok"))
     body = t(rule.acted_body, parts=_parts(ctx), after=ctx.get("after"))
     if not ok:

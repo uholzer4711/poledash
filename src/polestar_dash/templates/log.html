@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Log") }} · poledash{% endblock %}
+{% block content %}
+  <div class="section-head">
+    <div class="num-tag">{{ t("09 / LOG") }}</div>
+    <h1>{{ t('Activity <em class="accent">log</em>') | safe }}</h1>
+    <p class="muted">{{ t("Live feed of what the tool does — polls, sessions, notifications, automations, errors. Kept in memory (last 2000 lines); full history is in the container logs.") }}</p>
+  </div>
+
+  <div class="card mb-6 no-print">
+    <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="min-width:150px">
+        <label>{{ t("Level") }}</label>
+        <select id="log_level">
+          <option value="DEBUG">{{ t("All") }}</option>
+          <option value="INFO" selected>INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+        </select>
+      </div>
+      <button class="btn ghost" type="button" id="log_pause">{{ t("Pause") }}</button>
+      <button class="btn ghost" type="button" id="log_clear">{{ t("Clear") }}</button>
+      <span class="mono-xs muted" id="log_meta" style="margin-left:auto">—</span>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div id="log_stream" class="logstream"></div>
+  </div>
+
+  <script>
+    (function () {
+      var lastId = 0, paused = false;
+      var stream = document.getElementById('log_stream');
+      var levelSel = document.getElementById('log_level');
+      var meta = document.getElementById('log_meta');
+      var TXT = {
+        update: {{ t("last update") | tojson }},
+        neterr: {{ t("network error: ") | tojson }},
+        pause: {{ t("Pause") | tojson }},
+        resume: {{ t("Resume") | tojson }},
+        empty: {{ t("no log entries yet") | tojson }}
+      };
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>]/g,
+          function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
+      }
+      function fmtTs(sec) { try { return new Date(sec * 1000).toLocaleTimeString(); } catch (e) { return ''; } }
+      function rowHtml(r) {
+        var exc = r.exc ? '<pre class="logexc">' + esc(r.exc) + '</pre>' : '';
+        var logger = (r.logger || '').replace(/^polestar_dash\.?/, '') || 'app';
+        return '<div class="logrow log-' + esc(r.level) + '">' +
+          '<span class="logts">' + fmtTs(r.ts) + '</span>' +
+          '<span class="loglvl">' + esc(r.level) + '</span>' +
+          '<span class="loglogger">' + esc(logger) + '</span>' +
+          '<span class="logmsg">' + esc(r.msg) + exc + '</span></div>';
+      }
+      async function poll() {
+        if (paused) return;
+        try {
+          var r = await fetch('/api/log?since_id=' + lastId +
+            '&level=' + encodeURIComponent(levelSel.value) + '&limit=500');
+          var j = await r.json();
+          if (j.records && j.records.length) {
+            lastId = j.last_id;
+            var html = '';
+            for (var i = j.records.length - 1; i >= 0; i--) html += rowHtml(j.records[i]);
+            stream.insertAdjacentHTML('afterbegin', html);
+            while (stream.children.length > 1200) stream.removeChild(stream.lastChild);
+          }
+          if (!stream.children.length) stream.innerHTML = '<div class="logrow"><span class="logmsg muted">' + esc(TXT.empty) + '</span></div>';
+          meta.textContent = TXT.update + ': ' + new Date().toLocaleTimeString();
+        } catch (e) { meta.textContent = TXT.neterr + e; }
+      }
+      function reset() { lastId = 0; stream.innerHTML = ''; poll(); }
+      levelSel.addEventListener('change', reset);
+      document.getElementById('log_pause').addEventListener('click', function () {
+        paused = !paused;
+        this.textContent = paused ? TXT.resume : TXT.pause;
+      });
+      document.getElementById('log_clear').addEventListener('click', function () { stream.innerHTML = ''; });
+      poll();
+      setInterval(poll, 4000);
+    })();
+  </script>
+{% endblock %}
