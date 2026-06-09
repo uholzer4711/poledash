@@ -144,7 +144,9 @@ def compute_co2(days: int = 365) -> dict:
         total_g += r.consumption_kwh * r.co2_g_per_kwh
         total_km += r.distance_km or 0
         n += 1
-    ICE_G_PER_KM = 150.0  # typical petrol car, tank-to-wheel
+    from .app_settings import get_petrol_params
+
+    ICE_G_PER_KM = float(get_petrol_params()["co2_g_per_km"])  # configurable ICE ref
     return {
         "window_days": days,
         "trips": n,
@@ -398,3 +400,193 @@ def compute_temp_scatter(days: int = 365) -> list[dict]:
             "started_at": r.started_at.isoformat(),
         })
     return out
+
+
+# ---------------------------------------------------------------------------
+# Insight helpers — small derived facts the narrative engine turns into
+# plain-language sentences. Each is defensive: returns None / enough_data=False
+# when there isn't enough history, so the UI can omit the sentence.
+# ---------------------------------------------------------------------------
+
+def _avg(xs: list[float]) -> float | None:
+    return sum(xs) / len(xs) if xs else None
+
+
+def temp_efficiency_delta(temp_scatter: list[dict]) -> dict | None:
+    """How much more energy the car uses in the cold vs in mild weather.
+    Buckets Wh/km by outside temp (<5 °C cold, 5–18 mild, >18 warm)."""
+    cold = [p["wh_per_km"] for p in temp_scatter if p["temp_c"] < 5]
+    mild = [p["wh_per_km"] for p in temp_scatter if 5 <= p["temp_c"] <= 18]
+    warm = [p["wh_per_km"] for p in temp_scatter if p["temp_c"] > 18]
+    cold_a, mild_a, warm_a = _avg(cold), _avg(mild), _avg(warm)
+    base = mild_a if mild_a else warm_a
+    if base is None or cold_a is None or len(cold) < 2 or (len(mild) + len(warm)) < 2:
+        return None
+    return {
+        "cold_wh": round(cold_a), "mild_wh": round(base),
+        "warm_wh": round(warm_a) if warm_a else None,
+        "delta_pct": round((cold_a - base) / base * 100),
+        "samples": len(cold) + len(mild) + len(warm),
+    }
+
+
+def speed_sweet_spot(scatter: list[dict]) -> dict | None:
+    """The speed band with the lowest Wh/km, and how much a highway pace costs.
+    `scatter` items carry `avg_kmh` and `wh_per_km` (from /api/insights)."""
+    bands = [(0, 30), (30, 50), (50, 70), (70, 90), (90, 110), (110, 999)]
+    agg: dict[tuple, list[float]] = {b: [] for b in bands}
+    for p in scatter:
+        kmh, wh = p.get("avg_kmh"), p.get("wh_per_km")
+        if kmh is None or wh is None:
+            continue
+        for b in bands:
+            if b[0] <= kmh < b[1]:
+                agg[b].append(wh)
+                break
+    means = {b: _avg(v) for b, v in agg.items() if len(v) >= 2}
+    if len(means) < 2:
+        return None
+    best = min(means, key=means.get)
+    highway = means.get((90, 110)) or means.get((110, 999))
+    best_wh = means[best]
+    return {
+        "best_low": best[0], "best_high": best[1] if best[1] < 999 else None,
+        "best_wh": round(best_wh),
+        "highway_wh": round(highway) if highway else None,
+        "highway_delta_pct": (
+            round((highway - best_wh) / best_wh * 100) if highway and best_wh else None
+        ),
+        "samples": sum(len(v) for v in agg.values()),
+    }
+
+
+def range_now_vs_then(days: int = 180) -> dict | None:
+    """Implied 100 %-pack range now vs ~`days` ago, from compute_range_factor."""
+    pts = compute_range_factor(days=days)
+    if len(pts) < 6:
+        return None
+    recent = [p["range_at_100"] for p in pts[-7:]]
+    early = [p["range_at_100"] for p in pts[:7]]
+    now_a, then_a = _avg(recent), _avg(early)
+    if not now_a or not then_a:
+        return None
+    return {
+        "now_km": round(now_a), "then_km": round(then_a),
+        "delta_pct": round((now_a - then_a) / then_a * 100),
+        "span_days": days,
+    }
+
+
+def cold_charge_throttle(charge_temp_scatter: list[dict]) -> dict | None:
+    """Peak charging power when cold (<5 °C) vs warm (>15 °C)."""
+    cold = [p["peak_kw"] for p in charge_temp_scatter if p["temp_c"] < 5]
+    warm = [p["peak_kw"] for p in charge_temp_scatter if p["temp_c"] > 15]
+    cold_a, warm_a = _avg(cold), _avg(warm)
+    if cold_a is None or warm_a is None or not warm_a:
+        return None
+    return {
+        "cold_kw": round(cold_a, 1), "warm_kw": round(warm_a, 1),
+        "drop_pct": round((warm_a - cold_a) / warm_a * 100),
+        "samples": len(cold) + len(warm),
+    }
+
+
+def cost_vs_petrol(trip_cost: dict, forecast: dict) -> dict | None:
+    """EV €/100 km vs an equivalent petrol car + projected monthly saving."""
+    from .app_settings import get_petrol_params
+
+    ev_per100 = trip_cost.get("eur_per_100km")
+    if ev_per100 is None:
+        return None
+    p = get_petrol_params()
+    petrol_per100 = p["price_eur_per_l"] * p["l_per_100km"]
+    monthly_km = forecast.get("monthly_km") or 0
+    return {
+        "ev_per_100km": round(ev_per100, 2),
+        "petrol_per_100km": round(petrol_per100, 2),
+        "saved_per_100km": round(petrol_per100 - ev_per100, 2),
+        "saved_per_month": round((petrol_per100 - ev_per100) * monthly_km / 100, 2),
+        "monthly_km": round(monthly_km),
+    }
+
+
+def _eur_per_100km_window(start, end, vin: str | None) -> float | None:  # noqa: ANN001
+    """EV €/100 km for an explicit [start, end) window (imported trips)."""
+    price_ct, _ = blended_price_ct(days=90)
+    with Session(get_engine()) as s:
+        stmt = (
+            select(JourneyImport)
+            .where(JourneyImport.started_at >= start)
+            .where(JourneyImport.started_at < end)
+            .where(JourneyImport.consumption_kwh.is_not(None))
+        )
+        if vin:
+            stmt = stmt.where(JourneyImport.vin == vin)
+        rows = list(s.exec(stmt).all())
+    kwh = sum((r.consumption_kwh or 0) for r in rows)
+    km = sum((r.distance_km or 0) for r in rows)
+    if km <= 0:
+        return None
+    return round(kwh * price_ct / 100.0 / km * 100, 2)
+
+
+def month_over_month_cost(vin: str | None = None) -> dict | None:
+    """€/100 km of the last 30 days vs the prior 30 days."""
+    now = utcnow()
+    cur = _eur_per_100km_window(now - timedelta(days=30), now, vin)
+    prev = _eur_per_100km_window(now - timedelta(days=60), now - timedelta(days=30), vin)
+    if cur is None or prev is None or prev == 0:
+        return None
+    return {"current": cur, "previous": prev, "delta_pct": round((cur - prev) / prev * 100)}
+
+
+def charge_price_split(days: int = 365, vin: str | None = None) -> dict | None:
+    """Average ct/kWh for slow AC (peak < 11 kW) vs fast DC (peak ≥ 22 kW)."""
+    from .app_settings import get_default_price_ct
+
+    default_ct = get_default_price_ct()
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        stmt = (
+            select(ChargeSession)
+            .where(ChargeSession.started_at >= since)
+            .where(ChargeSession.is_complete.is_(True))  # noqa: E712
+            .where(ChargeSession.energy_kwh.is_not(None))
+            .where(ChargeSession.peak_power_w.is_not(None))
+        )
+        if vin:
+            stmt = stmt.where(ChargeSession.vin == vin)
+        rows = list(s.exec(stmt).all())
+    ac = {"kwh": 0.0, "cost": 0.0}
+    dc = {"kwh": 0.0, "cost": 0.0}
+    for r in rows:
+        kwh = r.energy_kwh or 0
+        if kwh <= 0:
+            continue
+        ct = r.price_ct_per_kwh if r.price_ct_per_kwh is not None else default_ct
+        bucket = ac if (r.peak_power_w or 0) < 11000 else (dc if (r.peak_power_w or 0) >= 22000 else None)
+        if bucket is None:
+            continue
+        bucket["kwh"] += kwh
+        bucket["cost"] += kwh * ct
+    out = {}
+    if ac["kwh"] > 0:
+        out["ac_ct"] = round(ac["cost"] / ac["kwh"], 1)
+        out["ac_kwh"] = round(ac["kwh"], 1)
+    if dc["kwh"] > 0:
+        out["dc_ct"] = round(dc["cost"] / dc["kwh"], 1)
+        out["dc_kwh"] = round(dc["kwh"], 1)
+    return out or None
+
+
+def idle_loss_summary(days: int = 365, vin: str | None = None) -> dict | None:
+    """Total kWh + € lost to idle drains (vampire / pre-conditioning) in window."""
+    from .app_settings import get_default_price_ct
+    from .idle_drain import detect_idle_drains
+
+    drains = detect_idle_drains(vin=vin, days=days)
+    if not drains:
+        return None
+    total_kwh = sum(d.kwh for d in drains)
+    eur = total_kwh * get_default_price_ct() / 100.0
+    return {"events": len(drains), "kwh": round(total_kwh, 1), "eur": round(eur, 2)}

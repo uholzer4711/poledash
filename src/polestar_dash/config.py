@@ -82,6 +82,13 @@ class Settings(BaseSettings):
     log_persist_interval_min: int = Field(default=2, ge=1, le=60)
     log_retention_days: int = Field(default=90, ge=1, le=3650)
 
+    # --- Petrol comparison (Insights: cost & CO2 vs an equivalent ICE) ---
+    # Defaults: a typical petrol car ~7 l/100 km at €1.75/l, ~150 g CO2/km
+    # tank-to-wheel. Runtime-overridable via /settings (AppSetting).
+    petrol_price_eur_per_l: float = Field(default=1.75, ge=0, le=10)
+    petrol_l_per_100km: float = Field(default=7.0, ge=0, le=30)
+    petrol_co2_g_per_km: int = Field(default=150, ge=0, le=500)
+
     # --- ntfy.sh ---
     ntfy_url: str = "https://ntfy.sh"
     ntfy_topic: str = ""

@@ -3,6 +3,36 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.29.0] — 2026-06-09
+
+### Changed — Insights: answer-first redesign
+
+- **The Insights page now answers questions instead of dumping charts.** Five
+  themed sections — *What is the car costing me? · How efficiently am I driving?
+  · How healthy is the battery? · Am I wasting energy? · Impact & patterns* —
+  each leading with a headline number, **auto-generated plain-language insight
+  sentences**, and the charts demoted to collapsible `<details>` evidence. A
+  **Bottom line** band surfaces the 2–3 most useful takeaways, and a **time-range
+  selector** (30/90/180/365 d) drives the whole page.
+- **New insight engine** (`insights_narrative.py`) builds localised sentences
+  from the existing `compute_*` data plus new derived facts in
+  `insights_extras.py`: cold-weather efficiency penalty, the most-efficient speed
+  band (using the previously-unused per-trip speed data), range-now-vs-then,
+  cold-charging throttle, EV-vs-petrol cost, month-over-month cost, AC/DC price
+  split, and idle-loss totals. `/api/insights` returns the narrative.
+- **Petrol comparison is configurable** — `PETROL_PRICE_EUR_PER_L` (1.75),
+  `PETROL_L_PER_100KM` (7.0), `PETROL_CO2_G_PER_KM` (150), editable on /settings;
+  feeds both the cost saving and the CO₂ comparison (the latter was a hardcoded
+  150 g/km).
+- **New chart**: Wh/km vs speed. Redundant battery charts (range factor /
+  capacity / SoH) are consolidated under one "battery health" section.
+
+### Changed — Dashboard SoH is compact
+
+- The dashboard battery-health card is now a small **"SOH"** line; the measured
+  kWh, sample count and explanation expand on click (same `<details>` pattern as
+  the Vehicle card), with a link to the trend on Battery & Charging.
+
 ## [1.28.0] — 2026-06-09
 
 ### Added — SoH persisted + trend chart, log filters remembered

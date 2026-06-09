@@ -72,6 +72,46 @@ def set_charging_loss_factor(value: float) -> None:
     set_setting(CHARGING_LOSS_FACTOR_KEY, round(float(value), 3))
 
 
+def get_petrol_params() -> dict:
+    """Petrol-car reference for the Insights ICE comparison. AppSetting
+    overrides win over the config/env defaults."""
+    from .config import get_settings
+
+    s = get_settings()
+
+    def _num(key: str, fallback: float) -> float:
+        raw = get_setting(key, None)
+        try:
+            return float(raw) if raw is not None else float(fallback)
+        except (TypeError, ValueError):
+            return float(fallback)
+
+    return {
+        "price_eur_per_l": _num("petrol_price_eur_per_l", s.petrol_price_eur_per_l),
+        "l_per_100km": _num("petrol_l_per_100km", s.petrol_l_per_100km),
+        "co2_g_per_km": int(_num("petrol_co2_g_per_km", s.petrol_co2_g_per_km)),
+    }
+
+
+def set_petrol_params(
+    price_eur_per_l: float | None = None,
+    l_per_100km: float | None = None,
+    co2_g_per_km: float | None = None,
+) -> None:
+    if price_eur_per_l is not None:
+        if not 0 <= price_eur_per_l <= 10:
+            raise ValueError("Petrol price must be 0–10 €/l")
+        set_setting("petrol_price_eur_per_l", round(float(price_eur_per_l), 3))
+    if l_per_100km is not None:
+        if not 0 <= l_per_100km <= 30:
+            raise ValueError("Consumption must be 0–30 l/100km")
+        set_setting("petrol_l_per_100km", round(float(l_per_100km), 2))
+    if co2_g_per_km is not None:
+        if not 0 <= co2_g_per_km <= 500:
+            raise ValueError("CO2 must be 0–500 g/km")
+        set_setting("petrol_co2_g_per_km", int(co2_g_per_km))
+
+
 CALIBRATED_BATTERY_KEY = "calibrated_battery_kwh"
 
 

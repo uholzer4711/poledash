@@ -3,103 +3,120 @@
 {% block content %}
   <div class="section-head">
     <div class="num-tag">{{ t("06 / INSIGHTS") }}</div>
-    <h1>{{ t("Efficiency &") }} <em class="accent">{{ t("cost") }}</em></h1>
+    <h1>{{ t("What the data") }} <em class="accent">{{ t("tells you") }}</em></h1>
     <p class="muted" id="hdr_meta">—</p>
   </div>
+
+  <div class="card mb-6 no-print">
+    <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="min-width:150px">
+        <label>{{ t("Time range") }}</label>
+        <select id="days_sel">
+          <option value="30">{{ t("Last 30 days") }}</option>
+          <option value="90" selected>{{ t("Last 90 days") }}</option>
+          <option value="180">{{ t("Last 180 days") }}</option>
+          <option value="365">{{ t("Last year") }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
   <div id="errbox" class="card alert" style="display:none;margin-bottom:24px"></div>
 
-  <div class="grid grid-4 mb-6">
+  {# ── Fazit ─────────────────────────────────────────────────────────────── #}
+  <div class="card mb-6" id="summary_card" style="display:none">
+    <div class="card-label">{{ t("Bottom line") }}</div>
+    <div id="ins_summary" class="ins-list ins-big mt-2"></div>
+  </div>
+
+  {# ── 1 · Kosten ────────────────────────────────────────────────────────── #}
+  <div class="ins-head"><div class="num-tag">06.1</div>
+    <h2>{{ t("What is the car costing me?") }}</h2></div>
+  <div class="grid grid-4 mb-4">
     <div class="card">
-      <div class="card-label">{{ t("Monthly forecast · km") }}</div>
-      <div class="stat num" id="fc_km">—</div>
-      <div class="stat-sub" id="fc_km_sub">—</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("Monthly forecast · kWh") }}</div>
-      <div class="stat num" id="fc_kwh">—</div>
-      <div class="stat-sub" id="fc_kwh_sub">—</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("Monthly forecast · cost") }}</div>
+      <div class="card-label">{{ t("Cost · monthly") }}</div>
       <div class="stat num">€ <em class="accent" id="fc_cost">—</em></div>
       <div class="stat-sub" id="fc_cost_sub">—</div>
     </div>
+    <div class="card">
+      <div class="card-label">{{ t("Cost per 100 km") }}</div>
+      <div class="stat num">€ <span id="tc_per100">—</span></div>
+      <div class="stat-sub" id="tc_perkm_sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("Real trip cost (window)") }}</div>
+      <div class="stat num">€ <span id="tc_eur">—</span></div>
+      <div class="stat-sub" id="tc_sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("Forecast · km / month") }}</div>
+      <div class="stat num" id="fc_km">—</div>
+      <div class="stat-sub" id="fc_km_sub">—</div>
+    </div>
+  </div>
+  <div id="ins_cost" class="ins-list mb-4"></div>
+  <details class="card mb-6"><summary class="card-label">{{ t("Cost per 100 km · weekly") }}</summary>
+    <div style="position:relative;height:280px;margin-top:16px"><canvas id="cost"></canvas></div>
+  </details>
+
+  {# ── 2 · Effizienz ─────────────────────────────────────────────────────── #}
+  <div class="ins-head"><div class="num-tag">06.2</div>
+    <h2>{{ t("How efficiently am I driving?") }}</h2></div>
+  <div class="grid grid-4 mb-4">
     <div class="card">
       <div class="card-label">{{ t("Avg consumption (window)") }}</div>
       <div class="stat num" id="fc_per100">—</div>
       <div class="stat-sub" id="fc_per100_sub">—</div>
     </div>
-  </div>
-
-  <div class="grid grid-4 mb-6">
     <div class="card">
-      <div class="card-label">{{ t("Real trip cost (window)") }}</div>
-      <div class="stat num">€ <em class="accent" id="tc_eur">—</em></div>
-      <div class="stat-sub" id="tc_sub">—</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("Cost per km") }}</div>
-      <div class="stat num" id="tc_perkm">—</div>
-      <div class="stat-sub" id="tc_perkm_sub">—</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("CO₂ footprint (window)") }}</div>
-      <div class="stat num" id="co2_total">—</div>
-      <div class="stat-sub" id="co2_sub">—</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("CO₂ vs petrol car") }}</div>
-      <div class="stat num"><em class="accent" id="co2_saved">—</em></div>
-      <div class="stat-sub" id="co2_saved_sub">—</div>
+      <div class="card-label">{{ t("Energy · kWh / month") }}</div>
+      <div class="stat num" id="fc_kwh">—</div>
+      <div class="stat-sub" id="fc_kwh_sub">—</div>
     </div>
   </div>
-
+  <div id="ins_efficiency" class="ins-list mb-4"></div>
   <div class="grid grid-2 mb-6">
-    <div class="card">
-      <div class="card-label">{{ t("Range factor · implied 100% pack") }}</div>
-      <div style="position:relative;height:260px;margin-top:12px"><canvas id="range_chart"></canvas></div>
-      <div class="mono-xs muted mt-2">{{ t("Daily mean of range_km ÷ (SoC/100). Higher = more optimistic onboard estimate.") }}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("Wh/km vs outside temperature") }}</div>
-      <div style="position:relative;height:260px;margin-top:12px"><canvas id="temp_chart"></canvas></div>
-      <div class="mono-xs muted mt-2">{{ t("Each point = one imported trip with weather data. Cold = heater overhead.") }}</div>
-    </div>
+    <details class="card" open><summary class="card-label">{{ t("Wh/km vs outside temperature") }}</summary>
+      <div style="position:relative;height:260px;margin-top:16px"><canvas id="temp_chart"></canvas></div>
+    </details>
+    <details class="card"><summary class="card-label">{{ t("Wh/km vs speed") }}</summary>
+      <div style="position:relative;height:260px;margin-top:16px"><canvas id="speed_chart"></canvas></div>
+    </details>
   </div>
 
+  {# ── 3 · Batterie ──────────────────────────────────────────────────────── #}
+  <div class="ins-head"><div class="num-tag">06.3</div>
+    <h2>{{ t("How healthy is the battery?") }}</h2></div>
+  <div class="grid grid-4 mb-4">
+    <div class="card">
+      <div class="card-label">{{ t("Battery health") }} <span class="muted">· {{ t("estimate") }}</span></div>
+      <div class="stat num"><span id="soh_pct">—</span></div>
+      <div class="stat-sub" id="soh_sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("Range at 100%") }}</div>
+      <div class="stat num" id="range_now">—</div>
+      <div class="stat-sub" id="range_sub">—</div>
+    </div>
+  </div>
+  <div id="ins_battery" class="ins-list mb-4"></div>
   <div class="grid grid-2 mb-6">
-    <div class="card">
-      <div class="card-label">{{ t("Cold charging · peak kW vs temperature") }}</div>
-      <div style="position:relative;height:260px;margin-top:12px"><canvas id="charge_temp_chart"></canvas></div>
-      <div class="mono-xs muted mt-2">{{ t("Each point = one charge session (on-car temperature from C3). A cold pack throttles peak power.") }}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">{{ t("Cabin air & on-car temperature · daily") }}</div>
-      <div style="position:relative;height:260px;margin-top:12px"><canvas id="air_chart"></canvas></div>
-      <div class="mono-xs muted mt-2">{{ t("Daily mean cabin PM2.5 (µg/m³) and on-car outside temperature, straight from C3 polls. Lower PM2.5 is cleaner.") }}</div>
-    </div>
+    <details class="card" open><summary class="card-label">{{ t("Range factor · implied 100% pack") }}</summary>
+      <div style="position:relative;height:260px;margin-top:16px"><canvas id="range_chart"></canvas></div>
+    </details>
+    <details class="card"><summary class="card-label">{{ t("Usable battery capacity · monthly") }}</summary>
+      <div style="position:relative;height:260px;margin-top:16px"><canvas id="battery_chart"></canvas></div>
+    </details>
+    <details class="card"><summary class="card-label">{{ t("Cold charging · peak kW vs temperature") }}</summary>
+      <div style="position:relative;height:260px;margin-top:16px"><canvas id="charge_temp_chart"></canvas></div>
+    </details>
   </div>
 
+  {# ── 4 · Verluste ──────────────────────────────────────────────────────── #}
+  <div class="ins-head"><div class="num-tag">06.4</div>
+    <h2>{{ t("Am I wasting energy?") }}</h2></div>
+  <div id="ins_waste" class="ins-list mb-4"></div>
   <div class="card mb-6">
-    <div class="card-label">{{ t("Usable battery capacity · monthly") }}</div>
-    <div style="position:relative;height:260px;margin-top:12px"><canvas id="battery_chart"></canvas></div>
-    <div class="mono-xs muted mt-2">{{ t("Implied usable kWh = energy ÷ SoC-drop, per month. A downward slope over many months hints at degradation.") }}</div>
-  </div>
-
-  <div class="card mb-6">
-    <div class="flex-between">
-      <div class="card-label">{{ t("Charging calendar · last 365 days") }}</div>
-      <div class="mono-xs muted" id="heatmap_legend">—</div>
-    </div>
-    <div id="heatmap" style="margin-top:16px;overflow-x:auto"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-label">{{ t("Cost per 100 km · weekly") }}</div>
-    <div style="position:relative;height:280px;margin-top:12px"><canvas id="cost"></canvas></div>
-  </div>
-
-  <div class="card mt-6">
     <div class="flex-between">
       <div class="card-label">{{ t("Idle drains") }} <span class="muted">· {{ t("pre-conditioning / standheizung / vampire") }}</span></div>
       <div class="mono-xs" id="drain_total">—</div>
@@ -113,15 +130,61 @@
     </table>
   </div>
 
+  {# ── 5 · Umwelt & Muster ───────────────────────────────────────────────── #}
+  <div class="ins-head"><div class="num-tag">06.5</div>
+    <h2>{{ t("Impact & patterns") }}</h2></div>
+  <div class="grid grid-4 mb-4">
+    <div class="card">
+      <div class="card-label">{{ t("CO₂ saved vs petrol") }}</div>
+      <div class="stat num"><em class="accent" id="co2_saved">—</em></div>
+      <div class="stat-sub" id="co2_saved_sub">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t("CO₂ footprint (window)") }}</div>
+      <div class="stat num" id="co2_total">—</div>
+      <div class="stat-sub" id="co2_sub">—</div>
+    </div>
+  </div>
+  <div id="ins_impact" class="ins-list mb-4"></div>
+  <div class="card mb-6">
+    <div class="flex-between">
+      <div class="card-label">{{ t("Charging calendar · last 365 days") }}</div>
+      <div class="mono-xs muted" id="heatmap_legend">—</div>
+    </div>
+    <div id="heatmap" style="margin-top:16px;overflow-x:auto"></div>
+  </div>
+  <details class="card mb-6"><summary class="card-label">{{ t("Cabin air & on-car temperature · daily") }}</summary>
+    <div style="position:relative;height:260px;margin-top:16px"><canvas id="air_chart"></canvas></div>
+    <div class="mono-xs muted mt-2">{{ t("Daily mean cabin PM2.5 (µg/m³) and on-car outside temperature, straight from C3 polls. Lower PM2.5 is cleaner.") }}</div>
+  </details>
+
+  <style>
+    .ins-head { display:flex; align-items:baseline; gap:12px; margin:40px 0 16px; }
+    .ins-head h2 { margin:0; }
+    .ins-list { display:flex; flex-direction:column; gap:8px; }
+    .ins-list .insight {
+      border-left:2px solid var(--ujh-line-2); padding-left:12px;
+      color:var(--ujh-ink); line-height:1.5;
+    }
+    .ins-list .insight.warn { border-left-color:var(--ujh-orange); }
+    .ins-list.ins-big .insight { font-size:16px; }
+    details.card > summary { cursor:pointer; list-style:none; }
+    details.card > summary::-webkit-details-marker { display:none; }
+    details.card > summary::after { content:' →'; color:var(--ujh-ink-4); }
+    details.card[open] > summary::after { content:''; }
+  </style>
+
   <script>
+    let JD = null;  // last /api/insights payload
+    const charts = {};
     function fmtDur(min) {
       if (min == null) return '—';
       if (min < 60) return `${min} min`;
       return `${Math.floor(min/60)} h ${min%60} min`;
     }
+    function escHtml(s){ return String(s==null?'':s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
     function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-    // NOTE: do not name this `P` — the date-fns CDN bundle exposes `window.P`
-    // (their long-date format helper) and shadows our function. Took an hour to debug.
+    // NOTE: do not name this `P` — the date-fns CDN bundle exposes `window.P`.
     function palette() {
       return {
         orange: cssVar('--ujh-orange') || '#ff5b14',
@@ -132,46 +195,92 @@
         line2: cssVar('--ujh-line-2') || '#36393e',
       };
     }
-
+    function mkChart(id, cfg) {
+      const c = document.getElementById(id); if (!c) return;
+      if (charts[id]) charts[id].destroy();
+      charts[id] = new Chart(c, cfg);
+    }
+    // Charts inside a closed <details> render at 0 size — resize on open.
+    document.addEventListener('toggle', (e) => {
+      if (e.target.tagName === 'DETAILS' && e.target.open) {
+        e.target.querySelectorAll('canvas').forEach(cv => { if (charts[cv.id]) charts[cv.id].resize(); });
+      }
+    }, true);
+    function renderNarrative(id, items) {
+      const el = document.getElementById(id); if (!el) return;
+      el.innerHTML = (items || []).map(it =>
+        `<div class="insight ${it.tone === 'warn' ? 'warn' : ''}">${escHtml(it.text)}</div>`).join('');
+    }
     function noData(canvasId, msg) {
-      const c = document.getElementById(canvasId);
-      if (!c) return;
-      const parent = c.parentElement;
+      const c = document.getElementById(canvasId); if (!c) return;
       c.style.display = 'none';
       const note = document.createElement('div');
       note.className = 'mono-xs muted';
       note.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;text-align:center;padding:24px';
       note.textContent = msg;
-      parent.appendChild(note);
+      c.parentElement.appendChild(note);
     }
 
     async function load() {
-      const r = await fetch('/api/insights?days=180');
+      const days = document.getElementById('days_sel').value;
+      const r = await fetch('/api/insights?days=' + days);
       if (!r.ok) throw new Error('insights API returned ' + r.status);
-      const j = await r.json();
+      const j = await r.json(); JD = j;
       const p = palette();
       const price = (j.default_price_ct_per_kwh ?? 0).toFixed(1);
       document.getElementById('hdr_meta').textContent =
-        `${j.trips_total || 0} trips · default ${price} ct/kWh`;
+        `${j.trips_total || 0} ` + {{ t("trips") | tojson }} + ` · ${price} ct/kWh · ${days}d`;
 
-      // ---- Forecast cards
+      // ── Narrative ───────────────────────────────────────────────────────
+      const nr = j.narrative || {};
+      const sum = nr.summary || [];
+      document.getElementById('summary_card').style.display = sum.length ? '' : 'none';
+      renderNarrative('ins_summary', sum);
+      renderNarrative('ins_cost', nr.cost);
+      renderNarrative('ins_efficiency', nr.efficiency);
+      renderNarrative('ins_battery', nr.battery);
+      renderNarrative('ins_waste', nr.waste);
+      renderNarrative('ins_impact', nr.impact);
+
+      // ── Headline numbers ────────────────────────────────────────────────
       const fc = j.forecast || {};
+      if (fc.monthly_cost_eur != null) {
+        document.getElementById('fc_cost').textContent = fc.monthly_cost_eur.toFixed(2);
+        const ps = fc.price_source === 'blended' ? {{ t("blended from sessions") | tojson }} : {{ t("app default") | tojson }};
+        document.getElementById('fc_cost_sub').textContent = `@ ${fc.price_ct_per_kwh} ct/kWh · ${ps}`;
+      }
       if (fc.monthly_km != null) {
         document.getElementById('fc_km').textContent = fc.monthly_km.toLocaleString();
-        document.getElementById('fc_km_sub').textContent = `${fc.km_per_day} km/day · ${fc.window_days}d window`;
+        document.getElementById('fc_km_sub').textContent = `${fc.km_per_day} km/` + {{ t("day") | tojson }};
       }
       if (fc.monthly_kwh != null) {
         document.getElementById('fc_kwh').innerHTML = `${fc.monthly_kwh}<span class="unit">kWh</span>`;
-        document.getElementById('fc_kwh_sub').textContent = `source: ${fc.source}`;
-      }
-      if (fc.monthly_cost_eur != null) {
-        document.getElementById('fc_cost').textContent = fc.monthly_cost_eur.toFixed(2);
-        const ps = fc.price_source === 'blended' ? 'blended from sessions' : 'app default';
-        document.getElementById('fc_cost_sub').textContent = `@ ${fc.price_ct_per_kwh} ct/kWh · ${ps}`;
+        document.getElementById('fc_kwh_sub').textContent = {{ t("source") | tojson }} + ': ' + fc.source;
       }
       if (fc.avg_kwh_per_100km != null) {
         document.getElementById('fc_per100').innerHTML = `${fc.avg_kwh_per_100km}<span class="unit">kWh/100km</span>`;
-        document.getElementById('fc_per100_sub').textContent = `last ${fc.window_days} days`;
+        document.getElementById('fc_per100_sub').textContent = `${days}d`;
+      }
+      const tc = j.trip_cost || {};
+      if (tc.total_eur != null && tc.trips) {
+        document.getElementById('tc_eur').textContent = tc.total_eur.toFixed(2);
+        document.getElementById('tc_sub').textContent = `${tc.total_kwh} kWh · ${tc.trips} ` + {{ t("trips") | tojson }};
+        document.getElementById('tc_per100').textContent = tc.eur_per_100km != null ? tc.eur_per_100km.toFixed(2) : '—';
+        document.getElementById('tc_perkm_sub').textContent = tc.ct_per_km != null ? `${tc.ct_per_km} ct/km` : '—';
+      }
+      const co2 = j.co2 || {};
+      if (co2.total_kg != null && co2.trips) {
+        document.getElementById('co2_total').innerHTML = `${co2.total_kg}<span class="unit">kg</span>`;
+        document.getElementById('co2_sub').textContent = co2.g_per_km != null ? `${co2.g_per_km} g/km · ${co2.total_km} km` : `${co2.total_km} km`;
+        document.getElementById('co2_saved').textContent = co2.saved_kg != null ? `${co2.saved_kg} kg` : '—';
+        document.getElementById('co2_saved_sub').textContent = {{ t("vs petrol · ") | tojson }} + `${co2.ice_kg} kg`;
+      }
+      const soh = j.soh || {};
+      if (soh.enough_data) {
+        document.getElementById('soh_pct').innerHTML = `${soh.soh_pct}<span class="unit">%</span>`;
+        document.getElementById('soh_sub').textContent = `≈ ${soh.implied_kwh} kWh · ${soh.samples} ` + {{ t("samples") | tojson }};
+      } else {
+        document.getElementById('soh_sub').textContent = {{ t("Collecting data") | tojson }};
       }
 
       const baseAxis = {
@@ -179,204 +288,117 @@
         ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } },
       };
 
-      const costHas    = j.cost_by_week.length > 0;
-      if (!costHas)            { noData('cost',    {{ t("No completed charging sessions in the period — costs appear once a session finishes.") | tojson }}); }
-
-      // Cost per 100 km weekly — bars with €/100km line overlay
-      if (costHas) new Chart(document.getElementById('cost'), {
-        type: 'bar',
-        data: {
-          labels: j.cost_by_week.map(c => c.week),
-          datasets: [
-            { label: '€', data: j.cost_by_week.map(c => c.cost_eur),
-              backgroundColor: p.ink2, borderColor: p.ink, borderWidth: 1, yAxisID: 'y1', order: 2 },
-            { label: '€/100km', type: 'line', data: j.cost_by_week.map(c => c.eur_per_100km),
-              borderColor: p.orange, backgroundColor: p.orange, pointRadius: 3, tension: 0.2, yAxisID: 'y2', order: 1, spanGaps: true },
-          ],
-        },
-        options: { responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } } },
-          scales: {
-            x: baseAxis,
-            y1: { ...baseAxis, position: 'left',  title: { display: true, text: '€',       color: p.ink3 }, beginAtZero: true },
-            y2: { ...baseAxis, position: 'right', title: { display: true, text: '€/100km', color: p.ink3 }, grid: { display: false }, beginAtZero: true },
-          } },
-      });
-
-      // ---- Range factor (line over time)
-      const rf = j.range_factor || [];
-      if (rf.length >= 2) {
-        new Chart(document.getElementById('range_chart'), {
-          type: 'line',
-          data: { datasets: [{
-            label: {{ t("implied range at 100%") | tojson }},
-            data: rf.map(d => ({x: d.date, y: d.range_at_100})),
-            borderColor: p.orange, backgroundColor: p.orange + '30',
-            pointRadius: 0, tension: 0.25, fill: true,
-          }]},
-          options: { responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ...baseAxis, type: 'time', time: { unit: 'month' } },
-              y: { ...baseAxis, title: { display: true, text: 'km', color: p.ink3 } },
-            } },
-        });
-      } else { noData('range_chart', {{ t("Need at least 2 days of snapshots with SoC + range.") | tojson }}); }
-
-      // ---- Temperature scatter
-      const ts = j.temp_scatter || [];
-      if (ts.length) {
-        new Chart(document.getElementById('temp_chart'), {
-          type: 'scatter',
-          data: { datasets: [{
-            label: {{ t("Trips") | tojson }},
-            data: ts.map(d => ({x: d.temp_c, y: d.wh_per_km})),
-            backgroundColor: p.orange + 'b0', borderColor: p.orange, pointRadius: 4,
-          }]},
-          options: { responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ...baseAxis, title: { display: true, text: '°C',     color: p.ink3 } },
-              y: { ...baseAxis, title: { display: true, text: 'Wh/km',  color: p.ink3 }, beginAtZero: true },
-            } },
-        });
-      } else { noData('temp_chart', {{ t("Import a journey log and run /api/journey-imports/enrich to fetch outside temperatures.") | tojson }}); }
-
-      // ---- Cold charging: peak kW vs on-car temperature
-      const cts = j.charge_temp_scatter || [];
-      if (cts.length) {
-        new Chart(document.getElementById('charge_temp_chart'), {
-          type: 'scatter',
-          data: { datasets: [{
-            label: {{ t("Charging sessions") | tojson }},
-            data: cts.map(d => ({x: d.temp_c, y: d.peak_kw})),
-            backgroundColor: p.orange + 'b0', borderColor: p.orange, pointRadius: 4,
-          }]},
-          options: { responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { ...baseAxis, title: { display: true, text: '°C',  color: p.ink3 } },
-              y: { ...baseAxis, title: { display: true, text: 'kW',  color: p.ink3 }, beginAtZero: true },
-            } },
-        });
-      } else { noData('charge_temp_chart', {{ t("No charge sessions with a C3 temperature yet.") | tojson }}); }
-
-      // ---- Cabin air + on-car temperature: daily means, straight from C3 polls
-      const env = (j.c3_env_timeline && j.c3_env_timeline.points) || [];
-      if (env.length) {
-        new Chart(document.getElementById('air_chart'), {
-          type: 'line',
-          data: { labels: env.map(d => d.date), datasets: [
-            { label: 'PM2.5', data: env.map(d => d.pm25), yAxisID: 'yPm',
-              borderColor: p.orange, backgroundColor: p.orange + '30',
-              pointRadius: 3, tension: 0.25, fill: true, spanGaps: true },
-            { label: {{ t("on-car °C") | tojson }}, data: env.map(d => d.temp_c), yAxisID: 'yTemp',
-              borderColor: p.ink2, backgroundColor: p.ink2,
-              pointRadius: 2, tension: 0.25, fill: false, spanGaps: true },
+      // ── Cost per 100 km weekly ──────────────────────────────────────────
+      if ((j.cost_by_week || []).length) {
+        mkChart('cost', {
+          type: 'bar',
+          data: { labels: j.cost_by_week.map(c => c.week), datasets: [
+            { label: '€', data: j.cost_by_week.map(c => c.cost_eur), backgroundColor: p.ink2, borderColor: p.ink, borderWidth: 1, yAxisID: 'y1', order: 2 },
+            { label: '€/100km', type: 'line', data: j.cost_by_week.map(c => c.eur_per_100km), borderColor: p.orange, backgroundColor: p.orange, pointRadius: 3, tension: 0.2, yAxisID: 'y2', order: 1, spanGaps: true },
           ]},
           options: { responsive: true, maintainAspectRatio: false,
             plugins: { legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } } },
-            scales: {
-              x: baseAxis,
-              yPm:   { ...baseAxis, position: 'left',  title: { display: true, text: 'µg/m³', color: p.ink3 }, beginAtZero: true },
-              yTemp: { ...baseAxis, position: 'right', title: { display: true, text: '°C', color: p.ink3 }, grid: { display: false } },
-            } },
+            scales: { x: baseAxis,
+              y1: { ...baseAxis, position: 'left', title: { display: true, text: '€', color: p.ink3 }, beginAtZero: true },
+              y2: { ...baseAxis, position: 'right', title: { display: true, text: '€/100km', color: p.ink3 }, grid: { display: false }, beginAtZero: true } } },
         });
-      } else { noData('air_chart', {{ t("No C3 environment data yet — appears once C3 polling has run.") | tojson }}); }
+      } else { noData('cost', {{ t("No completed charging sessions in the period — costs appear once a session finishes.") | tojson }}); }
 
-      // ---- Real trip cost (window)
-      const tc = j.trip_cost || {};
-      if (tc.total_eur != null && tc.trips) {
-        document.getElementById('tc_eur').textContent = tc.total_eur.toFixed(2);
-        document.getElementById('tc_sub').textContent =
-          `${tc.total_kwh} kWh · ${tc.trips} ` + {{ t("trips") | tojson }} + ` @ ${tc.price_ct_per_kwh} ct/kWh`;
-        document.getElementById('tc_perkm').innerHTML =
-          tc.ct_per_km != null ? `${tc.ct_per_km}<span class="unit">ct/km</span>` : '—';
-        document.getElementById('tc_perkm_sub').textContent =
-          tc.eur_per_100km != null ? `€ ${tc.eur_per_100km}/100km` : '—';
+      // ── Wh/km vs temperature ────────────────────────────────────────────
+      const tsd = j.temp_scatter || [];
+      if (tsd.length) {
+        mkChart('temp_chart', { type: 'scatter',
+          data: { datasets: [{ label: {{ t("Trips") | tojson }}, data: tsd.map(d => ({x: d.temp_c, y: d.wh_per_km})), backgroundColor: p.orange + 'b0', borderColor: p.orange, pointRadius: 4 }]},
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { x: { ...baseAxis, title: { display: true, text: '°C', color: p.ink3 } }, y: { ...baseAxis, title: { display: true, text: 'Wh/km', color: p.ink3 }, beginAtZero: true } } } });
+      } else { noData('temp_chart', {{ t("Import a journey log and run /api/journey-imports/enrich to fetch outside temperatures.") | tojson }}); }
+
+      // ── Wh/km vs speed (NEW) ────────────────────────────────────────────
+      const spd = (j.scatter || []).filter(d => d.avg_kmh != null && d.wh_per_km != null);
+      if (spd.length) {
+        mkChart('speed_chart', { type: 'scatter',
+          data: { datasets: [{ label: {{ t("Trips") | tojson }}, data: spd.map(d => ({x: d.avg_kmh, y: d.wh_per_km})), backgroundColor: p.ink2 + 'b0', borderColor: p.ink2, pointRadius: 4 }]},
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { x: { ...baseAxis, title: { display: true, text: 'km/h', color: p.ink3 }, beginAtZero: true }, y: { ...baseAxis, title: { display: true, text: 'Wh/km', color: p.ink3 }, beginAtZero: true } } } });
+      } else { noData('speed_chart', {{ t("Need trips with a known average speed.") | tojson }}); }
+
+      // ── Range factor + headline ─────────────────────────────────────────
+      const rf = j.range_factor || [];
+      if (rf.length) {
+        const last = rf[rf.length - 1];
+        document.getElementById('range_now').innerHTML = `${last.range_at_100}<span class="unit">km</span>`;
+        document.getElementById('range_sub').textContent = {{ t("implied from SoC + range") | tojson }};
       }
+      if (rf.length >= 2) {
+        mkChart('range_chart', { type: 'line',
+          data: { datasets: [{ label: {{ t("implied range at 100%") | tojson }}, data: rf.map(d => ({x: d.date, y: d.range_at_100})), borderColor: p.orange, backgroundColor: p.orange + '30', pointRadius: 0, tension: 0.25, fill: true }]},
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { x: { ...baseAxis, type: 'time', time: { unit: 'month' } }, y: { ...baseAxis, title: { display: true, text: 'km', color: p.ink3 } } } } });
+      } else { noData('range_chart', {{ t("Need at least 2 days of snapshots with SoC + range.") | tojson }}); }
 
-      // ---- CO₂ footprint (window)
-      const co2 = j.co2 || {};
-      if (co2.total_kg != null && co2.trips) {
-        document.getElementById('co2_total').innerHTML = `${co2.total_kg}<span class="unit">kg</span>`;
-        document.getElementById('co2_sub').textContent =
-          co2.g_per_km != null ? `${co2.g_per_km} g/km · ${co2.total_km} km` : `${co2.total_km} km`;
-        document.getElementById('co2_saved').textContent =
-          co2.saved_kg != null ? `${co2.saved_kg > 0 ? '−' : '+'}${Math.abs(co2.saved_kg)} kg` : '—';
-        document.getElementById('co2_saved_sub').textContent =
-          {{ t("vs ICE @ 150 g/km · ") | tojson }} + `${co2.ice_kg} kg`;
-      }
-
-      // ---- Usable battery capacity per month
+      // ── Usable capacity monthly ─────────────────────────────────────────
       const bt = (j.battery_trend && j.battery_trend.points) || [];
       if (bt.length >= 2) {
-        new Chart(document.getElementById('battery_chart'), {
-          type: 'line',
-          data: { labels: bt.map(d => d.month), datasets: [{
-            label: {{ t("usable kWh") | tojson }},
-            data: bt.map(d => d.kwh),
-            borderColor: p.orange, backgroundColor: p.orange + '30',
-            pointRadius: 4, tension: 0.25, fill: true, spanGaps: true,
-          }]},
-          options: { responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: baseAxis,
-              y: { ...baseAxis, title: { display: true, text: 'kWh', color: p.ink3 } },
-            } },
-        });
+        mkChart('battery_chart', { type: 'line',
+          data: { labels: bt.map(d => d.month), datasets: [{ label: {{ t("usable kWh") | tojson }}, data: bt.map(d => d.kwh), borderColor: p.orange, backgroundColor: p.orange + '30', pointRadius: 4, tension: 0.25, fill: true, spanGaps: true }]},
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { x: baseAxis, y: { ...baseAxis, title: { display: true, text: 'kWh', color: p.ink3 } } } } });
       } else { noData('battery_chart', {{ t("Collecting data — a capacity trend needs several months of trips with a noticeable SoC drop.") | tojson }}); }
 
-      // ---- Charging calendar heatmap
-      const hm = j.charge_heatmap || {};
-      const byDay = hm.by_day || {};
-      const maxKwh = hm.max_kwh || 0;
-      const sinceD = new Date(hm.since + 'T00:00:00Z');
-      const untilD = new Date(hm.until + 'T00:00:00Z');
-      // Snap start to a Monday so each column is one ISO week.
-      const startMon = new Date(sinceD);
-      const dow = (startMon.getUTCDay() + 6) % 7; // 0..6, Mon..Sun
-      startMon.setUTCDate(startMon.getUTCDate() - dow);
-      const totalDays = Math.floor((untilD - startMon) / 86400000) + 1;
-      const weeks = Math.ceil(totalDays / 7);
-      const cell = 12, gap = 3;
-      const w = weeks * (cell + gap), h = 7 * (cell + gap) + 22;
-      const days = [{{ t("Mon") | tojson }},{{ t("Wed") | tojson }},{{ t("Fri") | tojson }}];
-      let svg = `<svg viewBox="0 0 ${w + 40} ${h}" style="width:100%;max-width:${(w+40)*1.3}px;height:auto">`;
-      days.forEach((d, i) => {
-        svg += `<text x="0" y="${i*2*(cell+gap)+cell}" fill="${p.ink3}" font-family="JetBrains Mono" font-size="10">${d}</text>`;
-      });
-      for (let i = 0; i < totalDays; i++) {
-        const day = new Date(startMon);
-        day.setUTCDate(day.getUTCDate() + i);
-        if (day < sinceD || day > untilD) continue;
-        const iso = day.toISOString().slice(0, 10);
-        const kwh = byDay[iso] || 0;
-        const intensity = maxKwh > 0 ? kwh / maxKwh : 0;
-        const col = Math.floor(i / 7);
-        const row = i % 7;
-        const x = 30 + col * (cell + gap);
-        const y = row * (cell + gap);
-        let fill = p.line;
-        if (intensity > 0) {
-          // Blend ink2 → orange by intensity.
-          const t = Math.min(1, Math.max(0.15, intensity));
-          fill = `color-mix(in srgb, ${p.orange} ${Math.round(t*100)}%, ${p.line})`;
-        }
-        svg += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${fill}"><title>${iso} · ${kwh.toFixed(1)} kWh</title></rect>`;
-      }
-      svg += `</svg>`;
-      document.getElementById('heatmap').innerHTML = svg;
-      document.getElementById('heatmap_legend').textContent =
-        maxKwh > 0
-          ? `peak ${maxKwh.toFixed(1)} kWh/day · ${Object.keys(byDay).length} charging days`
-          : 'no charging sessions yet';
+      // ── Cold charging scatter ───────────────────────────────────────────
+      const cts = j.charge_temp_scatter || [];
+      if (cts.length) {
+        mkChart('charge_temp_chart', { type: 'scatter',
+          data: { datasets: [{ label: {{ t("Charging sessions") | tojson }}, data: cts.map(d => ({x: d.temp_c, y: d.peak_kw})), backgroundColor: p.orange + 'b0', borderColor: p.orange, pointRadius: 4 }]},
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+            scales: { x: { ...baseAxis, title: { display: true, text: '°C', color: p.ink3 } }, y: { ...baseAxis, title: { display: true, text: 'kW', color: p.ink3 }, beginAtZero: true } } } });
+      } else { noData('charge_temp_chart', {{ t("No charge sessions with a C3 temperature yet.") | tojson }}); }
 
-      // Idle drains table
-      const dr = await (await fetch('/api/idle-drain?days=180')).json();
+      // ── Cabin air ───────────────────────────────────────────────────────
+      const env = (j.c3_env_timeline && j.c3_env_timeline.points) || [];
+      if (env.length) {
+        mkChart('air_chart', { type: 'line',
+          data: { labels: env.map(d => d.date), datasets: [
+            { label: 'PM2.5', data: env.map(d => d.pm25), yAxisID: 'yPm', borderColor: p.orange, backgroundColor: p.orange + '30', pointRadius: 3, tension: 0.25, fill: true, spanGaps: true },
+            { label: {{ t("on-car °C") | tojson }}, data: env.map(d => d.temp_c), yAxisID: 'yTemp', borderColor: p.ink2, backgroundColor: p.ink2, pointRadius: 2, tension: 0.25, fill: false, spanGaps: true },
+          ]},
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } } },
+            scales: { x: baseAxis, yPm: { ...baseAxis, position: 'left', title: { display: true, text: 'µg/m³', color: p.ink3 }, beginAtZero: true }, yTemp: { ...baseAxis, position: 'right', title: { display: true, text: '°C', color: p.ink3 }, grid: { display: false } } } } });
+      } else { noData('air_chart', {{ t("No C3 environment data yet — appears once C3 polling has run.") | tojson }}); }
+
+      // ── Charging calendar heatmap ───────────────────────────────────────
+      const hm = j.charge_heatmap || {}, byDay = hm.by_day || {}, maxKwh = hm.max_kwh || 0;
+      if (hm.since) {
+        const sinceD = new Date(hm.since + 'T00:00:00Z'), untilD = new Date(hm.until + 'T00:00:00Z');
+        const startMon = new Date(sinceD);
+        startMon.setUTCDate(startMon.getUTCDate() - ((startMon.getUTCDay() + 6) % 7));
+        const totalDays = Math.floor((untilD - startMon) / 86400000) + 1;
+        const weeks = Math.ceil(totalDays / 7), cell = 12, gap = 3;
+        const w = weeks * (cell + gap), h = 7 * (cell + gap) + 22;
+        const dl = [{{ t("Mon") | tojson }},{{ t("Wed") | tojson }},{{ t("Fri") | tojson }}];
+        let svg = `<svg viewBox="0 0 ${w + 40} ${h}" style="width:100%;max-width:${(w+40)*1.3}px;height:auto">`;
+        dl.forEach((d, i) => { svg += `<text x="0" y="${i*2*(cell+gap)+cell}" fill="${p.ink3}" font-family="JetBrains Mono" font-size="10">${d}</text>`; });
+        for (let i = 0; i < totalDays; i++) {
+          const day = new Date(startMon); day.setUTCDate(day.getUTCDate() + i);
+          if (day < sinceD || day > untilD) continue;
+          const iso = day.toISOString().slice(0, 10), kwh = byDay[iso] || 0;
+          const intensity = maxKwh > 0 ? kwh / maxKwh : 0;
+          const x = 30 + Math.floor(i/7) * (cell + gap), y = (i % 7) * (cell + gap);
+          let fill = p.line;
+          if (intensity > 0) { const tt = Math.min(1, Math.max(0.15, intensity)); fill = `color-mix(in srgb, ${p.orange} ${Math.round(tt*100)}%, ${p.line})`; }
+          svg += `<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${fill}"><title>${iso} · ${kwh.toFixed(1)} kWh</title></rect>`;
+        }
+        svg += `</svg>`;
+        document.getElementById('heatmap').innerHTML = svg;
+        document.getElementById('heatmap_legend').textContent = maxKwh > 0
+          ? {{ t("peak") | tojson }} + ' ' + maxKwh.toFixed(1) + ' kWh · ' + Object.keys(byDay).length + ' ' + {{ t("charging days") | tojson }}
+          : {{ t("no charging sessions yet") | tojson }};
+      }
+
+      // ── Idle drains table ───────────────────────────────────────────────
+      const dr = await (await fetch('/api/idle-drain?days=' + days)).json();
       document.getElementById('drain_total').textContent =
-        `${dr.count} events · ≈ ${dr.total_kwh.toFixed(1)} kWh lost`;
+        `${dr.count} ` + {{ t("events") | tojson }} + ` · ≈ ${dr.total_kwh.toFixed(1)} kWh`;
       document.querySelector('#drain_tbl tbody').innerHTML = dr.items.map(d => `
         <tr style="border-top:1px solid var(--ujh-line)">
           <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
@@ -385,6 +407,7 @@
           <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)}</td>
         </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
     }
+
     async function safeLoad() {
       try { await load(); }
       catch (e) {
@@ -397,6 +420,7 @@
     }
     function start() { if (window.Chart) safeLoad(); else setTimeout(start, 100); }
     window.addEventListener('load', start);
+    document.getElementById('days_sel').addEventListener('change', safeLoad);
     // Reload on theme toggle so chart colors track the palette.
     window.addEventListener('themechange', () => location.reload());
   </script>

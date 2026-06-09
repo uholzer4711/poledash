@@ -856,4 +856,93 @@ TRANSLATIONS_DE: dict[str, str] = {
         "≈ {kwh} kWh gemessen · {nom} kWh nominal · {n} Messungen",
     "Battery health %": "Batterie-Gesundheit %",
     "Timeline": "Zeitachse",
+    # --- Insights redesign: UI ---
+    "What the data": "Was die Daten",
+    "tells you": "verraten",
+    "Last 90 days": "Letzte 90 Tage",
+    "Last 180 days": "Letzte 180 Tage",
+    "Last year": "Letztes Jahr",
+    "Bottom line": "Fazit",
+    "What is the car costing me?": "Was kostet mich das Auto?",
+    "Cost · monthly": "Kosten · monatlich",
+    "Cost per 100 km": "Kosten pro 100 km",
+    "Forecast · km / month": "Prognose · km / Monat",
+    "How efficiently am I driving?": "Wie effizient fahre ich?",
+    "Energy · kWh / month": "Energie · kWh / Monat",
+    "How healthy is the battery?": "Wie gesund ist die Batterie?",
+    "Range at 100%": "Reichweite bei 100 %",
+    "Am I wasting energy?": "Verschwende ich Energie?",
+    "Impact & patterns": "Umwelt & Muster",
+    "CO₂ saved vs petrol": "CO₂ gespart vs Benziner",
+    "SOH": "SOH",
+    "Trend on Battery & Charging": "Verlauf unter Batterie & Laden",
+    "blended from sessions": "gemischt aus Ladungen",
+    "app default": "App-Standard",
+    "source": "Quelle",
+    "day": "Tag",
+    "vs petrol · ": "vs Benziner · ",
+    "implied from SoC + range": "abgeleitet aus SoC + Reichweite",
+    "Need trips with a known average speed.":
+        "Braucht Fahrten mit bekannter Durchschnittsgeschwindigkeit.",
+    "charging days": "Ladetage",
+    "no charging sessions yet": "noch keine Ladevorgänge",
+    "events": "Ereignisse",
+    # --- Insights redesign: settings (petrol comparison) ---
+    "Petrol comparison": "Benzin-Vergleich",
+    "for Insights": "für Insights",
+    "Price (€/l)": "Preis (€/l)",
+    "l / 100 km": "l / 100 km",
+    "CO₂ g/km": "CO₂ g/km",
+    "The reference petrol car used on Insights for the cost and CO₂ comparison. "
+    "Defaults: a typical car at ~7 l/100 km, €1.75/l, ~150 g CO₂/km.":
+        "Das Referenz-Benzinauto auf Insights für den Kosten- und CO₂-Vergleich. "
+        "Standard: typisches Auto mit ~7 l/100 km, €1,75/l, ~150 g CO₂/km.",
+    # --- Insights redesign: narrative sentences ---
+    "Charging costs ~€{ev}/100 km — a comparable petrol car ~€{petrol}. "
+    "You save ~€{save}/month.":
+        "Laden kostet ~€{ev}/100 km — ein vergleichbarer Benziner ~€{petrol}. "
+        "Du sparst ~€{save}/Monat.",
+    "{pct}% cheaper per 100 km than the previous 30 days.":
+        "{pct}% günstiger pro 100 km als die vorigen 30 Tage.",
+    "{pct}% more expensive per 100 km than the previous 30 days.":
+        "{pct}% teurer pro 100 km als die vorigen 30 Tage.",
+    "Cost per 100 km is steady vs the previous 30 days.":
+        "Kosten pro 100 km stabil gegenüber den vorigen 30 Tagen.",
+    "Slow AC charging ~{ac}¢/kWh vs fast DC ~{dc}¢/kWh.":
+        "Langsames AC-Laden ~{ac}¢/kWh vs schnelles DC ~{dc}¢/kWh.",
+    "Your average is {v} kWh/100 km.": "Dein Schnitt liegt bei {v} kWh/100 km.",
+    "Below 5 °C consumption is ~{pct}% higher than in mild weather "
+    "(~{cold} vs ~{mild} Wh/km).":
+        "Unter 5 °C ist der Verbrauch ~{pct}% höher als bei mildem Wetter "
+        "(~{cold} vs ~{mild} Wh/km).",
+    "Most efficient around {low}–{high} km/h (~{wh} Wh/km); a highway pace "
+    "costs ~{hpct}% more.":
+        "Am sparsamsten bei ~{low}–{high} km/h (~{wh} Wh/km); Autobahntempo "
+        "kostet ~{hpct}% mehr.",
+    "Most efficient around {low}–{high} km/h (~{wh} Wh/km).":
+        "Am sparsamsten bei ~{low}–{high} km/h (~{wh} Wh/km).",
+    "Estimated battery health ~{pct}% (~{kwh} kWh usable). The car reports "
+    "no SoH — this is computed from charge/drive energy.":
+        "Geschätzte Batterie-Gesundheit ~{pct}% (~{kwh} kWh nutzbar). Das Auto "
+        "meldet keinen SoH — berechnet aus Lade-/Fahrenergie.",
+    "Range at 100 % is steady at ~{now} km.":
+        "Reichweite bei 100 % stabil bei ~{now} km.",
+    "Range at 100 % is ~{now} km, ~{pct}% below earlier in the window "
+    "(~{then} km).":
+        "Reichweite bei 100 % ~{now} km, ~{pct}% unter dem Anfang des Zeitraums "
+        "(~{then} km).",
+    "Range at 100 % rose to ~{now} km (from ~{then} km) — warmer weather.":
+        "Reichweite bei 100 % stieg auf ~{now} km (von ~{then} km) — wärmeres Wetter.",
+    "Below 5 °C the car throttles charging to ~{cold} kW (vs ~{warm} kW warm) "
+    "— preconditioning before a fast charge helps.":
+        "Unter 5 °C drosselt das Auto das Laden auf ~{cold} kW (vs ~{warm} kW "
+        "warm) — Vorklimatisieren vor dem Schnellladen hilft.",
+    "~{kwh} kWh (~€{eur}) lost to standby / pre-conditioning across "
+    "{events} events.":
+        "~{kwh} kWh (~€{eur}) durch Standby / Vorklimatisierung verloren, über "
+        "{events} Ereignisse.",
+    "~{saved} kg CO₂ saved vs a petrol car ({g} g/km on your grid mix).":
+        "~{saved} kg CO₂ gespart vs Benziner ({g} g/km bei deinem Netz-Mix).",
+    "Biggest efficiency lever: cold weather (+{pct}% below 5 °C).":
+        "Größter Effizienz-Hebel: Kälte (+{pct}% unter 5 °C).",
 }

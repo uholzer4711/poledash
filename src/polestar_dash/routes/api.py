@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
@@ -44,9 +45,11 @@ from ..insights_extras import (
     compute_co2,
     compute_forecast,
     compute_range_factor,
+    compute_soh,
     compute_temp_scatter,
     compute_trip_cost,
 )
+from ..insights_narrative import build_narrative
 from ..journey_import import (
     calibrate_battery_kwh,
     geo_label_for,
@@ -79,6 +82,7 @@ def _session_to_dict(cs: ChargeSession, default_price: float) -> dict:
     return d
 
 router = APIRouter(prefix="/api", tags=["api"])
+log = logging.getLogger(__name__)
 
 ALLOWED_FIELDS = {
     "soc_percent",
@@ -395,6 +399,19 @@ def app_settings_set_loss_factor(value: float = Query(..., ge=1.0, le=1.5)) -> d
     set_charging_loss_factor(value)
     _recalc_session_energy()
     return {"charging_loss_factor": get_charging_loss_factor()}
+
+
+@router.post("/app-settings/petrol")
+def app_settings_set_petrol(
+    price_eur_per_l: float | None = Query(None, ge=0, le=10),
+    l_per_100km: float | None = Query(None, ge=0, le=30),
+    co2_g_per_km: float | None = Query(None, ge=0, le=500),
+) -> dict:
+    """Petrol-car reference for the Insights ICE comparison (cost + CO2)."""
+    from ..app_settings import get_petrol_params, set_petrol_params
+
+    set_petrol_params(price_eur_per_l, l_per_100km, co2_g_per_km)
+    return get_petrol_params()
 
 
 @router.get("/app-settings/language")
@@ -773,6 +790,25 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
         r["km"] = round(r["km"], 1)
         r["eur_per_100km"] = round(r["cost_eur"] / r["km"] * 100, 2) if r["km"] > 0 else None
 
+    # Compute the heavy pieces once, then feed them to the narrative engine so
+    # it produces plain-language sentences without re-querying.
+    forecast = compute_forecast(days=min(days, 30))
+    temp_scatter = compute_temp_scatter(days=days)
+    co2 = compute_co2(days=days)
+    trip_cost = compute_trip_cost(days=days)
+    charge_temp_scatter = compute_charge_temp_scatter(days=days)
+    soh = compute_soh()
+    try:
+        narrative = build_narrative(
+            days=days, vin=vin, forecast=forecast, trip_cost=trip_cost, co2=co2,
+            soh=soh, scatter=scatter, temp_scatter=temp_scatter,
+            charge_temp_scatter=charge_temp_scatter,
+        )
+    except Exception:  # noqa: BLE001 — a narrative glitch must not break the page
+        log.exception("insights narrative build failed")
+        narrative = {"summary": [], "cost": [], "efficiency": [], "battery": [],
+                     "waste": [], "impact": []}
+
     return {
         "default_price_ct_per_kwh": default_price,
         "trips_total": len(scatter),
@@ -780,16 +816,18 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
         "weekday": weekday,
         "by_hour": by_hour,
         "cost_by_week": cost_rows,
-        "forecast": compute_forecast(days=min(days, 30)),
+        "forecast": forecast,
         "range_factor": compute_range_factor(days=days),
         "charge_heatmap": compute_charge_heatmap(days=365),
-        "temp_scatter": compute_temp_scatter(days=days),
-        "co2": compute_co2(days=days),
-        "trip_cost": compute_trip_cost(days=days),
+        "temp_scatter": temp_scatter,
+        "co2": co2,
+        "trip_cost": trip_cost,
         "battery_trend": compute_battery_trend(),
-        "charge_temp_scatter": compute_charge_temp_scatter(days=days),
+        "charge_temp_scatter": charge_temp_scatter,
         "air_exposure": compute_air_exposure(days=days),
         "c3_env_timeline": compute_c3_env_timeline(days=min(days, 60)),
+        "soh": soh,
+        "narrative": narrative,
     }
 
 

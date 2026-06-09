@@ -162,6 +162,43 @@
     }
   </script>
 
+  <div class="card mb-6">
+    <div class="card-label">{{ t("Petrol comparison") }} <span class="muted">· {{ t("for Insights") }}</span></div>
+    <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="min-width:120px">
+        <label>{{ t("Price (€/l)") }}</label>
+        <input id="petrol_price" type="number" min="0" max="10" step="0.01" value="{{ "%.2f"|format(petrol.price_eur_per_l) }}">
+      </div>
+      <div class="field" style="min-width:120px">
+        <label>{{ t("l / 100 km") }}</label>
+        <input id="petrol_l" type="number" min="0" max="30" step="0.1" value="{{ "%g"|format(petrol.l_per_100km) }}">
+      </div>
+      <div class="field" style="min-width:120px">
+        <label>{{ t("CO₂ g/km") }}</label>
+        <input id="petrol_co2" type="number" min="0" max="500" step="1" value="{{ petrol.co2_g_per_km }}">
+      </div>
+      <button class="btn accent" onclick="savePetrol()">{{ t("Save") }} <span class="arrow">→</span></button>
+      <span id="petrol_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">{{ t("saved") }}</span>
+    </div>
+    <div class="stat-sub mt-4">
+      {{ t("The reference petrol car used on Insights for the cost and CO₂ comparison. Defaults: a typical car at ~7 l/100 km, €1.75/l, ~150 g CO₂/km.") }}
+    </div>
+  </div>
+  <script>
+    async function savePetrol() {
+      const q = new URLSearchParams({
+        price_eur_per_l: document.getElementById('petrol_price').value,
+        l_per_100km: document.getElementById('petrol_l').value,
+        co2_g_per_km: document.getElementById('petrol_co2').value,
+      });
+      const r = await fetch('/api/app-settings/petrol?' + q.toString(), {method:'POST'});
+      if (!r.ok) return alert({{ t("save failed: ") | tojson }} + r.status);
+      const el = document.getElementById('petrol_saved');
+      el.style.opacity = 1;
+      setTimeout(() => { el.style.opacity = 0; }, 1500);
+    }
+  </script>
+
   <div class="section-head mt-8">
     <div class="num-tag">{{ t("06.3 / LOCATIONS & TRIPS") }}</div>
     <h1>{{ t("Locations &") }} <em class="accent">{{ t("trips") }}</em></h1>

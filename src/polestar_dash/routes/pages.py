@@ -324,6 +324,7 @@ def settings_page(request: Request):
         all_alert_configs,
         get_charging_loss_factor,
         get_default_price_ct,
+        get_petrol_params,
     )
     from ..automations import all_automation_configs
     from ..journey_import import get_address_geofences, get_address_labels
@@ -358,6 +359,7 @@ def settings_page(request: Request):
             "integrations": integrations,
             "default_price_ct": get_default_price_ct(),
             "charging_loss_factor": get_charging_loss_factor(),
+            "petrol": get_petrol_params(),
             "alert_configs": all_alert_configs(),
             "automation_configs": all_automation_configs(),
         },
