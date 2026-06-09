@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -11,11 +11,18 @@ from apscheduler.triggers.date import DateTrigger
 from sqlmodel import Session
 
 from .anomalies import run_anomaly_checks
-from .backup import run_backup
 from .automations import run_automations
+from .backup import run_backup
 from .c3_anomalies import check_rain_windows, run_c3_anomaly_checks
 from .config import get_settings
-from .db.models import C3Snapshot, FetchError, RawC3Snapshot, RawSnapshot, VehicleSnapshot
+from .db.models import (
+    C3Snapshot,
+    FetchError,
+    LogEntry,
+    RawC3Snapshot,
+    RawSnapshot,
+    VehicleSnapshot,
+)
 from .db.session import get_engine
 from .digest import weekly_digest
 from .i18n import t
@@ -440,6 +447,17 @@ def _prune_raw_snapshots() -> None:
     log.info("Pruned %s RawSnapshot + %s RawC3Snapshot rows older than %s days",
              getattr(result, "rowcount", "?"), getattr(result_c3, "rowcount", "?"),
              RAW_RETENTION_DAYS)
+    # Activity-log history — its own (usually longer) retention window.
+    try:
+        log_cutoff = utcnow() - timedelta(days=get_settings().log_retention_days)
+        with Session(get_engine()) as s:
+            r_log = s.execute(LogEntry.__table__.delete().where(LogEntry.ts < log_cutoff))
+            s.commit()
+        if getattr(r_log, "rowcount", 0):
+            log.info("Pruned %s LogEntry rows older than %s days",
+                     r_log.rowcount, get_settings().log_retention_days)
+    except Exception:  # noqa: BLE001
+        log.exception("LogEntry retention prune failed")
     # Also sweep stale one-tap confirm tokens (short-lived; never accumulate).
     try:
         from .pending_actions import sweep_pending
@@ -474,6 +492,44 @@ def _enrich_c3_env() -> None:
         log.exception("C3 session enrichment failed")
 
 
+def _persist_logs() -> None:
+    """Flush the in-memory activity-log ring to the LogEntry table.
+
+    Runs every ``log_persist_interval_min``. The ring (last 2000 lines) is the
+    live tail; this is what makes the /log history durable across restarts and
+    beyond the ring's size. On a write failure the batch is re-queued so the
+    next tick retries instead of dropping lines."""
+    from .logbuffer import drain_pending, requeue_pending
+
+    pending = drain_pending()
+    if not pending:
+        return
+    rows = [
+        LogEntry(
+            # Store naive-UTC to match utcnow() used everywhere else in the DB.
+            ts=datetime.fromtimestamp(r["ts"], tz=UTC).replace(tzinfo=None),
+            level=r["level"],
+            levelno=r["levelno"],
+            logger=r["logger"],
+            msg=r["msg"],
+            exc=r["exc"],
+        )
+        for r in pending
+    ]
+    try:
+        with Session(get_engine()) as s:
+            s.add_all(rows)
+            s.commit()
+    except Exception:  # noqa: BLE001
+        requeue_pending(pending)
+        log.exception("LogEntry flush failed (%s rows re-queued)", len(pending))
+
+
+def flush_logs_now() -> None:
+    """Best-effort synchronous flush, for graceful shutdown."""
+    _persist_logs()
+
+
 def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOScheduler:
     global _SCHEDULER
     s = get_settings()
@@ -502,6 +558,15 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
         _prune_raw_snapshots,
         CronTrigger(hour=3, minute=45),
         id="raw-retention",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # Flush the activity-log ring to the DB so /log history survives restarts.
+    sched.add_job(
+        _persist_logs,
+        CronTrigger(minute=f"*/{s.log_persist_interval_min}"),
+        id="log-persist",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

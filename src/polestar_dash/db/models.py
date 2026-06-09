@@ -94,6 +94,21 @@ class FetchError(SQLModel, table=True):
     message: str
 
 
+class LogEntry(SQLModel, table=True):
+    """Persisted copy of the in-memory activity log (``logbuffer`` ring) so the
+    /log tab can show history beyond the last 2000 lines and across restarts.
+    Flushed in batches by the scheduler (``_persist_logs``) and pruned by
+    retention (``log_retention_days``)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    ts: datetime = Field(index=True)
+    level: str
+    levelno: int = Field(index=True)
+    logger: str
+    msg: str
+    exc: str | None = None
+
+
 class ChargeSession(SQLModel, table=True):
     """A contiguous charging episode, detected from snapshot transitions."""
 

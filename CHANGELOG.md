@@ -3,6 +3,28 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.24.0] — 2026-06-09
+
+### Added — durable log history
+
+- **Activity log is now persisted to the DB**, not just the in-memory ring. A
+  new `LogEntry` table is flushed in batches by a `log-persist` scheduler job
+  (every `LOG_PERSIST_INTERVAL_MIN`, default 2 min) and on graceful shutdown,
+  so log history survives restarts and reaches far beyond the ring's last-2000
+  lines. The ring stays the live tail; a separate unbounded-until-flushed
+  pending queue guarantees no line is lost to the ring's `maxlen`.
+- **"Load older" paging on the /log tab** — a new `GET /api/log/history`
+  endpoint serves older entries from the DB (by timestamp, level-filtered), and
+  the page pulls one page of history on load plus on demand via the button.
+  History merges seamlessly into the same hour/day grouping.
+- **Retention**: `LOG_RETENTION_DAYS` (default 90) prunes old `LogEntry` rows in
+  the existing daily retention job, keyed separately from the raw-snapshot
+  window.
+
+### Fixed
+
+- Import ordering in `scheduler.py` (ruff `I`); the tree is `ruff check`-clean.
+
 ## [1.23.0] — 2026-06-09
 
 ### Changed — Log tab: consolidated, collapsible, with a column header

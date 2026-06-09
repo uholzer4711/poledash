@@ -55,6 +55,13 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         sched.shutdown(wait=False)
+        # Persist any log lines still in the ring so a restart loses nothing.
+        try:
+            from .scheduler import flush_logs_now
+
+            flush_logs_now()
+        except Exception:
+            log.exception("final log flush on shutdown failed")
 
 
 def create_app() -> FastAPI:

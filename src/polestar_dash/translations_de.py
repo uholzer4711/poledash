@@ -825,4 +825,6 @@ TRANSLATIONS_DE: dict[str, str] = {
     "By day": "Nach Tag",
     "Flat (live)": "Flach (live)",
     "entries": "Einträge",
+    "Load older": "Ältere laden",
+    "no older entries": "keine älteren Einträge",
 }

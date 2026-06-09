@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     # --- Persistence ---
     data_dir: Path = Path("/data")
     backup_keep_days: int = Field(default=14, ge=1, le=3650)
+    # Activity-log history: the in-memory ring (last 2000 lines) is flushed to
+    # the LogEntry table every N minutes and pruned after this many days.
+    log_persist_interval_min: int = Field(default=2, ge=1, le=60)
+    log_retention_days: int = Field(default=90, ge=1, le=3650)
 
     # --- ntfy.sh ---
     ntfy_url: str = "https://ntfy.sh"

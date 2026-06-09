@@ -44,13 +44,21 @@
     </div>
   </div>
 
+  <div class="mt-4 no-print" style="text-align:center">
+    <button class="btn ghost" type="button" id="log_older">{{ t("Load older") }} →</button>
+    <span class="mono-xs muted" id="log_older_meta"></span>
+  </div>
+
   <script>
     (function () {
-      var lastId = 0, paused = false;
-      var records = [];                 // client store, oldest-first (capped 2000)
+      var MAXREC = 20000;               // client store cap (history + live tail)
+      var lastId = 0, paused = false, loadingOlder = false;
+      var records = [];                 // client store, oldest-first
       var openKeys = new Set();         // group keys the user (or auto) has open
       var knownKeys = new Set();        // groups we've already auto-opened once
       var groups = document.getElementById('log_groups');
+      var olderBtn = document.getElementById('log_older');
+      var olderMeta = document.getElementById('log_older_meta');
       var levelSel = document.getElementById('log_level');
       var groupSel = document.getElementById('log_group');
       var meta = document.getElementById('log_meta');
@@ -60,7 +68,8 @@
         pause: {{ t("Pause") | tojson }},
         resume: {{ t("Resume") | tojson }},
         empty: {{ t("no log entries yet") | tojson }},
-        entries: {{ t("entries") | tojson }}
+        entries: {{ t("entries") | tojson }},
+        noOlder: {{ t("no older entries") | tojson }}
       };
       function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>]/g,
@@ -150,7 +159,7 @@
           if (j.records && j.records.length) {
             lastId = j.last_id;
             records = records.concat(j.records);
-            if (records.length > 2000) records = records.slice(records.length - 2000);
+            if (records.length > MAXREC) records = records.slice(records.length - MAXREC);
             render();
           } else if (!groups.children.length) {
             render();
@@ -158,12 +167,36 @@
           meta.textContent = TXT.update + ': ' + new Date().toLocaleTimeString();
         } catch (e) { meta.textContent = TXT.neterr + e; }
       }
+      // Page backwards through the persisted LogEntry history (DB) — fetch the
+      // batch strictly older than the oldest record we currently hold.
+      async function loadOlder() {
+        if (loadingOlder) return;
+        loadingOlder = true; olderBtn.disabled = true; olderMeta.textContent = ' …';
+        try {
+          var before = records.length ? records[0].ts : null;
+          var url = '/api/log/history?level=' + encodeURIComponent(levelSel.value) +
+            '&limit=500' + (before != null ? '&before_ts=' + before : '');
+          var j = await (await fetch(url)).json();
+          if (j.records && j.records.length) {
+            records = j.records.concat(records);
+            if (records.length > MAXREC) records = records.slice(0, MAXREC);
+            render();
+            olderMeta.textContent = '';
+          } else {
+            olderMeta.textContent = ' ' + TXT.noOlder;
+          }
+          if (!j.has_more) olderBtn.style.display = 'none';
+        } catch (e) { olderMeta.textContent = ' ' + TXT.neterr + e; }
+        finally { loadingOlder = false; olderBtn.disabled = false; }
+      }
       function reset() {
         lastId = 0; records = []; openKeys.clear(); knownKeys.clear();
-        groups.innerHTML = ''; poll();
+        groups.innerHTML = ''; olderBtn.style.display = ''; olderMeta.textContent = '';
+        poll().then(loadOlder);
       }
       levelSel.addEventListener('change', reset);
       groupSel.addEventListener('change', render);   // regroup client-side, no refetch
+      olderBtn.addEventListener('click', loadOlder);
       document.getElementById('log_pause').addEventListener('click', function () {
         paused = !paused;
         this.textContent = paused ? TXT.resume : TXT.pause;
@@ -171,7 +204,7 @@
       document.getElementById('log_clear').addEventListener('click', function () {
         records = []; groups.innerHTML = emptyHtml();
       });
-      poll();
+      poll().then(loadOlder);   // live tail first, then pull one page of history
       setInterval(poll, 4000);
     })();
   </script>

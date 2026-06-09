@@ -90,6 +90,8 @@ def _ensure_columns(engine) -> None:
         ("ix_chargesession_vin_started", "chargesession", "vin, started_at"),
         ("ix_chargesession_is_complete", "chargesession", "is_complete"),
         ("ix_vehiclesnapshot_vin_fetched", "vehiclesnapshot", "vin, fetched_at"),
+        ("ix_logentry_ts", "logentry", "ts"),
+        ("ix_logentry_levelno_ts", "logentry", "levelno, ts"),
     ]
     with engine.begin() as conn:
         for name, table, cols in index_plan:

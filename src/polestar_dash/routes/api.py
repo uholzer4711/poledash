@@ -446,6 +446,47 @@ def api_log(
     return {"records": recs, "last_id": recs[-1]["id"] if recs else since_id}
 
 
+@router.get("/log/history")
+def api_log_history(
+    before_ts: float | None = Query(None),
+    level: str = Query("INFO"),
+    limit: int = Query(500, ge=1, le=2000),
+) -> dict:
+    """Older activity-log records from the persisted `LogEntry` table, for the
+    /log tab's "load older" paging. Returns rows strictly before `before_ts`
+    (epoch seconds; omit for the most recent), oldest-first to match the live
+    feed's client store. `has_more` signals another page is available."""
+    import logging as _logging
+    from datetime import UTC
+
+    from ..db.models import LogEntry
+
+    lvl = _logging.getLevelName((level or "INFO").upper())
+    if not isinstance(lvl, int):
+        lvl = _logging.INFO
+    with Session(get_engine()) as s:
+        q = select(LogEntry).where(LogEntry.levelno >= lvl)
+        if before_ts is not None:
+            cutoff = datetime.fromtimestamp(before_ts, tz=UTC).replace(tzinfo=None)
+            q = q.where(LogEntry.ts < cutoff)
+        q = q.order_by(LogEntry.ts.desc(), LogEntry.id.desc()).limit(limit)
+        rows = s.exec(q).all()
+    recs = [
+        {
+            "id": r.id,
+            "ts": r.ts.replace(tzinfo=UTC).timestamp(),  # stored naive-UTC
+            "level": r.level,
+            "levelno": r.levelno,
+            "logger": r.logger,
+            "msg": r.msg,
+            "exc": r.exc,
+        }
+        for r in rows
+    ]
+    recs.reverse()  # DB gave newest-first; client store is oldest-first
+    return {"records": recs, "has_more": len(rows) == limit}
+
+
 @router.get("/app-settings/alerts")
 def app_settings_alerts() -> dict:
     """Per-alert config (enable + quiet-hour window) for the settings frame."""
