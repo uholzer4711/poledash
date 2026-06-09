@@ -193,6 +193,32 @@ def _current_installed(
     return chg.software_version, chg.software_version_ts, chg.vin
 
 
+C3_SW_SEEN_PREFIX = "c3sw_first_seen:"
+
+
+def c3_software_seen(version: str | None) -> datetime | None:
+    """First time we observed a given C3-reported software version.
+
+    The Polestar/C3 API gives no release or install date, so this stamps
+    ``utcnow()`` the first time a version string is seen and returns the same
+    value forever after (write-once, idempotent). Lets the /software card show
+    "since <date>" for whatever software the car is currently announcing —
+    captured from the moment this build starts watching, going forward.
+    """
+    v = (version or "").strip()
+    if not v:
+        return None
+    key = C3_SW_SEEN_PREFIX + v
+    raw = get_setting(key)
+    if raw:
+        with contextlib.suppress(ValueError):
+            return datetime.fromisoformat(raw)
+        return None
+    now = utcnow()
+    set_setting(key, now.isoformat())
+    return now
+
+
 def _latest_snapshot_vin() -> str | None:
     with Session(get_engine()) as s:
         return s.exec(

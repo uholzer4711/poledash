@@ -13,11 +13,13 @@
     <div class="card-label">{{ t("Software update") }} <span class="muted">· {{ t("reported by the car") }}</span></div>
     <div class="stat num mt-2"><em class="accent" id="c3_sw_ver">—</em></div>
     <div class="stat-sub" id="c3_sw_state">—</div>
+    <div class="mono-xs muted mt-1" id="c3_sw_since" style="display:none"></div>
     <div class="mono-xs muted mt-2" id="c3_sw_notes" style="white-space:pre-line"></div>
   </div>
   <script>
     (function () {
       function esc(s) { return String(s == null ? '—' : s); }
+      var SINCE = {{ t("first seen") | tojson }};
       async function loadCarUpdate() {
         try {
           var r = await fetch('/api/c3/latest?live=1');
@@ -26,6 +28,11 @@
           if (!sw || !sw.new_version) return;
           document.getElementById('c3_sw_ver').textContent = esc(sw.new_version);
           document.getElementById('c3_sw_state').textContent = esc(sw.state);
+          if (sw.first_seen) {
+            var el = document.getElementById('c3_sw_since');
+            el.textContent = SINCE + ' ' + new Date(sw.first_seen).toLocaleDateString();
+            el.style.display = 'block';
+          }
           document.getElementById('c3_sw_notes').textContent = sw.notes || '';
           document.getElementById('c3_sw_card').style.display = 'block';
         } catch (e) { /* leave hidden on any error */ }

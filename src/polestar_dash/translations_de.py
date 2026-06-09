@@ -837,4 +837,5 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Export": "Export",
     "Error logged in {source}": "Fehler protokolliert in {source}",
     "{n} error(s) this hour. First:": "{n} Fehler in dieser Stunde. Erster:",
+    "first seen": "erstmals gesehen",
 }

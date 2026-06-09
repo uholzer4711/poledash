@@ -194,6 +194,9 @@
         // Wait for Leaflet (deferred) to be ready.
         document.addEventListener('DOMContentLoaded', () => {
           if (typeof L === 'undefined') { setTimeout(arguments.callee, 80); return; }
+          // Escape any geocoder/user string before it lands in popup HTML.
+          const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g,
+            (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
           const trips = [
             {% for j in mappable %}
               {
@@ -227,10 +230,10 @@
               color: colorFor(t.per100), weight: 4, opacity: 0.85,
             }).addTo(map);
             const popup = `<b>${new Date(/Z|[+\-]\d{2}:?\d{2}$/.test(t.at) ? t.at : t.at + 'Z').toLocaleString()}</b><br>` +
-                          `${t.start_addr.split(',')[0]} → ${t.end_addr.split(',')[0]}<br>` +
+                          `${escHtml(t.start_addr.split(',')[0])} → ${escHtml(t.end_addr.split(',')[0])}<br>` +
                           `${t.km.toFixed(1)} km · ${t.kwh.toFixed(2)} kWh` +
                           (t.per100 != null ? ` · <b>${t.per100} kWh/100km</b>` : '') +
-                          (t.comment ? `<br><i>${t.comment}</i>` : '');
+                          (t.comment ? `<br><i>${escHtml(t.comment)}</i>` : '');
             line.bindPopup(popup);
             L.circleMarker(t.start, {radius: 4, color: ink2, fillColor: ink2, fillOpacity: 1, weight: 0}).addTo(map);
             L.circleMarker(t.end,   {radius: 5, color: accent, fillColor: accent, fillOpacity: 1, weight: 0}).addTo(map).bindPopup(popup);
@@ -270,7 +273,7 @@
               color: accent, weight: 2,
               fillColor: accent, fillOpacity: 0.55,
             }).addTo(map);
-            const headline = c.addr ? c.addr : `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
+            const headline = c.addr ? escHtml(c.addr) : `${c.lat.toFixed(4)}, ${c.lng.toFixed(4)}`;
             const tip = `<b>${headline}</b><br>` +
                         `${c.count} charge${c.count===1?'':'s'} · <b>${c.kwh.toFixed(1)} kWh</b>` +
                         (c.cost > 0 ? ` · €${c.cost.toFixed(2)}` : '') +

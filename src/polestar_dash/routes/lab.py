@@ -187,6 +187,12 @@ def proto_catalog():
 
 
 # ---------- GraphQL probe ----------
+# A probe field is interpolated into a GraphQL document, so it is whitelisted to
+# a single identifier with an optional brace-wrapped sub-selection of identifiers
+# ("name" or "name { sub1 sub2 }"). This blocks GraphQL injection (arguments,
+# directives, aliases, extra operations) via the field input.
+_FIELD_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\s*\{\s*[A-Za-z_][A-Za-z0-9_\s]*\})?$")
+
 _PARENT_QUERIES: dict[str, str] = {
     # how to wrap a sub-field test under each parent type
     "BatteryV2": "query Q($v:[String!]!){{carTelematicsV2(vins:$v){{battery{{vin {field}}}}}}}",
@@ -242,6 +248,16 @@ async def graphql_probe(request: Request, body: dict = Body(...)):
         raise HTTPException(400, f"parent must be one of: {sorted(_PARENT_QUERIES)}")
     if not isinstance(fields, list) or not fields:
         raise HTTPException(400, "fields must be a non-empty list")
+    # Validate input up-front (before touching the client): each field is
+    # interpolated into a GraphQL document, so allow ONLY a bare identifier with
+    # an optional brace-wrapped sub-selection ("name" or "name { sub1 sub2 }").
+    # This blocks GraphQL injection (arguments, directives, aliases, extra
+    # operations) via the field input.
+    for f in fields:
+        if not isinstance(f, str) or not _FIELD_RE.match(f):
+            raise HTTPException(
+                400, f"invalid field name {f!r}: only 'name' or 'name {{ a b }}' allowed"
+            )
 
     client = request.app.state.client
     if not client or not getattr(client, "_api", None):
@@ -255,7 +271,6 @@ async def graphql_probe(request: Request, body: dict = Body(...)):
 
     results = []
     for f in fields:
-        # Field can be "name" or "name { sub1 sub2 }" — we pass it through as-is.
         q = template.format(field=f)
         variables = {"v": [vin]} if needs_vin else None
         results.append({"field": f, **await _exec_probe(api, q, variables)})

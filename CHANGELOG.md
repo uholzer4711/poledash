@@ -3,6 +3,33 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.26.0] — 2026-06-09
+
+### Added — software "since" date
+
+- **The /software "reported by the car" card now shows a date** ("first seen
+  …"). The Polestar/C3 API exposes no release or install date, so we stamp the
+  first time each car-reported version is observed (write-once in an
+  `AppSetting`, set from the C3 poll and on first page load) and display it.
+  Captured going forward — existing versions get today's date once this build
+  starts watching.
+
+### Security
+
+- **#11 GraphQL injection in the Lab probe is closed.** `POST /api/lab/probe`
+  now validates each field against a strict allowlist (`name` or
+  `name { sub1 sub2 }`) *before* touching the client, so a crafted field can no
+  longer break out into arguments/directives/aliases/extra operations.
+- **#12 Leaflet popup XSS surface hardened.** The tripbook map escapes all
+  geocoder/user strings (addresses, comments) with an `escHtml()` helper before
+  building popup HTML.
+
+### Notes
+
+- **SoH stays unavailable from the car** — confirmed the C3 library exposes no
+  state-of-health/capacity field, so a headline value would have to be computed
+  (and that estimate does *not* require 100 % charges). Not built.
+
 ## [1.25.0] — 2026-06-09
 
 ### Added — log search/filter/export, error alerts, richer /health

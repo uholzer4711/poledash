@@ -316,7 +316,14 @@ def _maybe_notify_c3_software(vin: str, data: dict) -> None:
     Deduped per version via the notify() NotificationLog."""
     sw = data.get("software") or {}
     version = sw.get("new_version")
-    if not version or sw.get("state_code") not in SW_PENDING_STATES:
+    if not version:
+        return
+    # Stamp the first time we ever see this version so /software can show
+    # "since <date>" — independent of whether it's a pending update or not.
+    from .software import c3_software_seen
+
+    c3_software_seen(version)
+    if sw.get("state_code") not in SW_PENDING_STATES:
         return
     notes = (sw.get("notes") or "").strip()
     notify(

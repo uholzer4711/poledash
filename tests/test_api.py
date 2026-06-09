@@ -104,3 +104,23 @@ def test_log_history_filter_and_export(tmp_db):
     resp = client.get("/api/log/export?level=DEBUG")
     assert "attachment" in resp.headers["content-disposition"]
     assert "Stored snapshot" in resp.text
+
+
+def test_lab_probe_rejects_graphql_injection(tmp_db):
+    from polestar_dash.routes import lab
+
+    app = FastAPI()
+    app.include_router(lab.router)
+    app.state.client = None  # validation must happen before this is dereferenced
+    client = TestClient(app)
+
+    # Injection attempts must be rejected up-front with 400 (before any client
+    # work), so a malicious field never reaches template.format().
+    for bad in ["name) { x } evil(", 'a"b', "name @skip", "x: y", "name(a:1)"]:
+        r = client.post("/api/lab/probe", json={"parent": "BatteryV2", "fields": [bad]})
+        assert r.status_code == 400, (bad, r.status_code)
+
+    # A legitimate field shape passes validation (then 503 — no client wired in
+    # this bare test app — which proves it got past the allowlist).
+    r = client.post("/api/lab/probe", json={"parent": "BatteryV2", "fields": ["name { a b }"]})
+    assert r.status_code == 503
