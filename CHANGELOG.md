@@ -3,6 +3,37 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.28.0] — 2026-06-09
+
+### Added — SoH persisted + trend chart, log filters remembered
+
+- **Battery State-of-Health is now persisted** (`SohSnapshot`, one row/day,
+  written by a daily scheduler job + seeded ~30 s after start) and **charted on
+  Battery & Charging** (`/api/soh-history`, line chart, theme-aware, with the
+  same "estimate" caveat as the dashboard card).
+- **The Log tab remembers your toolbar choices** (level, source, search, group,
+  range, errors-only) across visits via `localStorage`, like the theme/view
+  toggles.
+
+### Fixed / polish (UI review follow-ups)
+
+- **Dashboard SoH wording** no longer reads as a confusing ratio
+  ("≈ 90.9 kWh measured · 78 kWh nominal · 7 samples").
+- **Mobile browser-chrome colour follows the theme** (`<meta name=theme-color>`
+  updates on toggle + load).
+- **No emoji in the UI**: dropped the `⚠` glyph in the settings address-label
+  warning (the orange `.accent` already signals it).
+- **Chart colours read from tokens**: session-detail tooltip (`#000` →
+  `--ujh-bg-3` + token text colours) and the Lab probe status colours
+  (`--ujh-ok`/`--ujh-alert`) — no more hardcoded hex, light-theme-safe.
+- **Two more tables fold into cards on mobile** (software version history,
+  insights idle-drains) via `class="index"` + per-cell `data-label`.
+- **Accessibility**: `aria-label` on the tripbook timeline scrubber.
+
+## [1.27.1] — 2026-06-09
+
+- **Log tab defaults to "By day"** grouping (hourly/flat still one click away).
+
 ## [1.27.0] — 2026-06-09
 
 ### Added — battery State-of-Health estimate on the dashboard

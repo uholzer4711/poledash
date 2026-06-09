@@ -104,7 +104,7 @@
       <div class="card-label">{{ t("Idle drains") }} <span class="muted">· {{ t("pre-conditioning / standheizung / vampire") }}</span></div>
       <div class="mono-xs" id="drain_total">—</div>
     </div>
-    <table class="mono-xs mt-4" style="width:100%;border-collapse:collapse" id="drain_tbl">
+    <table class="index mono-xs mt-4" style="width:100%;border-collapse:collapse" id="drain_tbl">
       <thead><tr>
         <th style="text-align:left;padding:4px 8px">{{ t("Started") }}</th>
         <th>{{ t("Duration") }}</th><th>{{ t("SoC drop") }}</th><th>≈ kWh</th>
@@ -379,10 +379,10 @@
         `${dr.count} events · ≈ ${dr.total_kwh.toFixed(1)} kWh lost`;
       document.querySelector('#drain_tbl tbody').innerHTML = dr.items.map(d => `
         <tr style="border-top:1px solid var(--ujh-line)">
-          <td style="padding:6px 8px">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
-          <td style="text-align:right">${fmtDur(d.duration_min)}</td>
-          <td style="text-align:right">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
-          <td style="text-align:right">${d.kwh.toFixed(2)}</td>
+          <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
+          <td style="text-align:right" data-label="{{ t('Duration') }}">${fmtDur(d.duration_min)}</td>
+          <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
+          <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)}</td>
         </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
     }
     async function safeLoad() {

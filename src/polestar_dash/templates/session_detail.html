@@ -52,6 +52,7 @@
         ink3:   cssVar('--ujh-ink-3')  || '#8a8d93',
         line:   cssVar('--ujh-line')   || '#2a2c30',
         line2:  cssVar('--ujh-line-2') || '#36393e',
+        bg:     cssVar('--ujh-bg-3')   || '#1d1e21',
       };
     }
 
@@ -127,7 +128,7 @@
           interaction: { mode: 'index', intersect: false },
           plugins: {
             legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } },
-            tooltip: { backgroundColor: '#000', borderColor: p.line2, borderWidth: 1, titleFont: { family: 'JetBrains Mono', size: 10 }, bodyFont: { family: 'Inter Tight' } },
+            tooltip: { backgroundColor: p.bg, titleColor: p.ink, bodyColor: p.ink, borderColor: p.line2, borderWidth: 1, titleFont: { family: 'JetBrains Mono', size: 10 }, bodyFont: { family: 'Inter Tight' } },
           },
           scales: {
             x: {

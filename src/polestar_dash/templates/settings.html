@@ -249,7 +249,7 @@
     </div>
     {% if label_warnings %}
       <div class="card alert mb-4" style="border-left:3px solid var(--ujh-orange)">
-        <div class="mono-xs" style="margin-bottom:6px"><span class="accent">⚠ {{ t("Too-broad patterns") }}</span></div>
+        <div class="mono-xs" style="margin-bottom:6px"><span class="accent">{{ t("Too-broad patterns") }}</span></div>
         {% for label, pats in label_warnings.items() %}
           {% for pat, n in pats.items() %}
             <div class="mono-xs muted">{{ t("Pattern <code class=\"accent\">{pattern}</code> under <code>{label}</code> matches {n} different addresses — it collapses distinct places into one label.", pattern=pat, label=label, n=n)|safe }}</div>
@@ -533,7 +533,7 @@
     </div>
     <div class="flex gap-4 mb-4" style="flex-wrap:wrap;align-items:center">
       <button id="tf_play" class="btn" type="button" onclick="tfTogglePlay()">▶ {{ t("Play") }}</button>
-      <input id="tf_scrub" type="range" min="0" max="1000" value="1000" step="1" style="flex:1;min-width:160px" oninput="tfSeek(this.value)">
+      <input id="tf_scrub" type="range" min="0" max="1000" value="1000" step="1" aria-label="{{ t('Timeline') }}" style="flex:1;min-width:160px" oninput="tfSeek(this.value)">
       <span id="tf_clock" class="mono-xs muted" style="min-width:130px">—</span>
       <label class="mono-xs" style="display:flex;gap:6px;align-items:center">
         <select id="tf_speed" class="mono-xs" style="background:var(--ujh-bg-elev);color:var(--ujh-ink);border:1px solid var(--ujh-line)">

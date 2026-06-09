@@ -29,6 +29,7 @@ from ..db.models import (
     ChargingStation,
     JourneyImport,
     LogEntry,
+    SohSnapshot,
     VehicleSnapshot,
 )
 from ..db.session import get_engine
@@ -548,6 +549,31 @@ def api_log_export(
         body,
         headers={"Content-Disposition": "attachment; filename=polestar-log.txt"},
     )
+
+
+@router.get("/soh-history")
+def api_soh_history() -> dict:
+    """Persisted battery State-of-Health trend for the Battery & Charging chart.
+    Falls back to a single live point if nothing is stored yet (fresh deploy)."""
+    with Session(get_engine()) as s:
+        rows = list(
+            s.exec(select(SohSnapshot).order_by(SohSnapshot.computed_at.asc())).all()
+        )
+    points = [
+        {"t": r.computed_at.isoformat(), "soh": r.soh_pct, "kwh": r.implied_kwh}
+        for r in rows
+    ]
+    if not points:
+        from ..insights_extras import compute_soh
+
+        live = compute_soh()
+        if live.get("enough_data"):
+            points = [{
+                "t": utcnow().isoformat(),
+                "soh": live["soh_pct"],
+                "kwh": live["implied_kwh"],
+            }]
+    return {"points": points}
 
 
 @router.get("/app-settings/alerts")

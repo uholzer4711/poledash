@@ -635,7 +635,7 @@
           counts[rr.status] = (counts[rr.status] || 0) + 1;
           const tr = document.createElement('tr');
           tr.style.borderBottom = '1px solid var(--ujh-line)';
-          const color = {ok: 'var(--ujh-orange)', undefined: 'var(--ujh-ink-3)', shape_hint: '#a3e635', error: '#f87171'}[rr.status] || 'inherit';
+          const color = {ok: 'var(--ujh-orange)', undefined: 'var(--ujh-ink-3)', shape_hint: 'var(--ujh-ok)', error: 'var(--ujh-alert)'}[rr.status] || 'inherit';
           const w = rr.status === 'ok' ? '600' : '400';
           const detail = rr.status === 'ok'
             ? `<code style="color:var(--ujh-orange)">${escHtml(JSON.stringify(rr.result))}</code>`

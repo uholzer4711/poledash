@@ -46,6 +46,14 @@
   <div class="card-label mb-4">{{ t("Daily driving") }}</div>
   <div class="card mb-6"><canvas id="dailyChart" height="100"></canvas></div>
 
+  <div id="sohWrap" style="display:none">
+    <div class="card-label mb-4">{{ t("Battery health") }} <span class="muted">· {{ t("estimate") }}</span></div>
+    <div class="card mb-6">
+      <canvas id="sohChart" height="100"></canvas>
+      <div class="mono-xs muted mt-3">{{ t("The car reports no SoH, so this is estimated from charge & drive energy vs the SoC change. AC charging losses bias it high, so a healthy pack reads ~100% until real degradation appears.") }}</div>
+    </div>
+  </div>
+
   <div id="sessions" class="section-head" style="margin-top:48px">
     <div class="num-tag">{{ t("03 / SESSIONS") }}</div>
     <h1>{{ t("Charging sessions")|safe }}</h1>
@@ -240,7 +248,7 @@
   </script>
 
   <script>
-    let chart, daily;
+    let chart, daily, sohChart;
     function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
     // Resolved fresh on every refresh() so a theme toggle re-colors the charts.
     let ORANGE, INK3, LINE, INK;
@@ -308,7 +316,34 @@
         }
       });
     }
-    function refresh() { load(); loadDaily(); }
+    async function loadSoh() {
+      readTheme();
+      const wrap = document.getElementById('sohWrap');
+      let j;
+      try { j = await (await fetch('/api/soh-history')).json(); }
+      catch (e) { wrap.style.display = 'none'; return; }
+      if (!j.points || !j.points.length) { wrap.style.display = 'none'; return; }
+      wrap.style.display = '';
+      if (sohChart) sohChart.destroy();
+      sohChart = new Chart(document.getElementById('sohChart'), {
+        type: 'line',
+        data: { datasets: [{
+          label: {{ t("Battery health %") | tojson }},
+          data: j.points.map(p => ({ x: p.t, y: p.soh })),
+          borderColor: INK, backgroundColor: 'rgba(232,232,234,.06)',
+          fill: true, tension: 0, pointRadius: 2, borderWidth: 1.5,
+        }] },
+        options: {
+          responsive: true,
+          scales: {
+            x: { type: 'time', ticks: { color: INK3, font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: LINE } },
+            y: { suggestedMin: 70, max: 100, ticks: { color: INK3, font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: LINE } },
+          },
+          plugins: { legend: { labels: { color: INK, font: { family: 'JetBrains Mono', size: 10 } } } },
+        },
+      });
+    }
+    function refresh() { load(); loadDaily(); loadSoh(); }
     document.getElementById('field').addEventListener('change', load);
     document.getElementById('days').addEventListener('change', refresh);
     window.addEventListener('load', () => setTimeout(refresh, 200));

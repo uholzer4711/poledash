@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from .anomalies import run_anomaly_checks
 from .automations import run_automations
@@ -21,6 +21,7 @@ from .db.models import (
     LogEntry,
     RawC3Snapshot,
     RawSnapshot,
+    SohSnapshot,
     VehicleSnapshot,
 )
 from .db.session import get_engine
@@ -573,6 +574,34 @@ def flush_logs_now() -> None:
     _persist_logs()
 
 
+def _persist_soh() -> None:
+    """Store today's battery State-of-Health estimate for the trend chart on
+    Battery & Charging. At most one row per day (updates today's in place);
+    no-op until there's enough data."""
+    from .insights_extras import compute_soh
+
+    soh = compute_soh()
+    if not soh.get("enough_data") or soh.get("soh_pct") is None:
+        return
+    today = utcnow().date()
+    midnight = datetime(today.year, today.month, today.day)
+    with Session(get_engine()) as s:
+        row = s.exec(
+            select(SohSnapshot).where(SohSnapshot.computed_at >= midnight)
+        ).first()
+        if row is None:
+            row = SohSnapshot(computed_at=utcnow(), soh_pct=soh["soh_pct"],
+                              implied_kwh=soh["implied_kwh"],
+                              nominal_kwh=soh["nominal_kwh"], samples=soh["samples"])
+        else:
+            row.soh_pct = soh["soh_pct"]
+            row.implied_kwh = soh["implied_kwh"]
+            row.nominal_kwh = soh["nominal_kwh"]
+            row.samples = soh["samples"]
+        s.add(row)
+        s.commit()
+
+
 def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOScheduler:
     global _SCHEDULER
     s = get_settings()
@@ -610,6 +639,24 @@ def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOSchedul
         _persist_logs,
         CronTrigger(minute=f"*/{s.log_persist_interval_min}"),
         id="log-persist",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    # Battery State-of-Health: seed one point shortly after start (so the chart
+    # isn't blank right after deploy) then refresh once a day.
+    sched.add_job(
+        _persist_soh,
+        DateTrigger(run_date=utcnow() + timedelta(seconds=30)),
+        id="soh-seed",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    sched.add_job(
+        _persist_soh,
+        CronTrigger(hour=3, minute=30),
+        id="soh-daily",
         max_instances=1,
         coalesce=True,
         replace_existing=True,

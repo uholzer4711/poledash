@@ -272,12 +272,33 @@
       }
       var qTimer = null;
       function resetDebounced() { clearTimeout(qTimer); qTimer = setTimeout(reset, 300); }
-      levelSel.addEventListener('change', reset);
-      sourceSel.addEventListener('change', reset);
-      rangeSel.addEventListener('change', reset);
-      errorsOnly.addEventListener('change', reset);
-      qInput.addEventListener('input', resetDebounced);
-      groupSel.addEventListener('change', render);   // regroup client-side, no refetch
+      // Persist the toolbar choices across visits (like the theme/view toggles).
+      var LS_KEY = 'log.filters', savedSource = null;
+      function saveState() {
+        try {
+          localStorage.setItem(LS_KEY, JSON.stringify({
+            level: levelSel.value, source: sourceSel.value, q: qInput.value,
+            group: groupSel.value, range: rangeSel.value, errors: errorsOnly.checked,
+          }));
+        } catch (e) { /* private mode / quota — non-fatal */ }
+      }
+      (function restoreState() {
+        try {
+          var st = JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+          if (st.level) levelSel.value = st.level;
+          if (st.group) groupSel.value = st.group;
+          if (st.range) rangeSel.value = st.range;
+          if (typeof st.errors === 'boolean') errorsOnly.checked = st.errors;
+          if (st.q) qInput.value = st.q;
+          if (st.source) savedSource = st.source;  // applied once the loggers load
+        } catch (e) { /* ignore corrupt state */ }
+      })();
+      levelSel.addEventListener('change', function () { saveState(); reset(); });
+      sourceSel.addEventListener('change', function () { saveState(); reset(); });
+      rangeSel.addEventListener('change', function () { saveState(); reset(); });
+      errorsOnly.addEventListener('change', function () { saveState(); reset(); });
+      qInput.addEventListener('input', function () { saveState(); resetDebounced(); });
+      groupSel.addEventListener('change', function () { saveState(); render(); });
       olderBtn.addEventListener('click', loadOlder);
       document.getElementById('log_pause').addEventListener('click', function () {
         paused = !paused;
@@ -293,6 +314,8 @@
           opt.value = o.value; opt.textContent = o.label;
           sourceSel.appendChild(opt);
         });
+        // Re-apply a saved Source once its option exists, then refetch with it.
+        if (savedSource) { sourceSel.value = savedSource; if (sourceSel.value === savedSource) reset(); }
       }).catch(function () {});
       updateExport();
       poll().then(loadOlder);   // live tail first, then pull one page of history

@@ -21,7 +21,7 @@
           <div style="height:8px;background:var(--ujh-bg-3);border:1px solid var(--ujh-line)">
             <div style="height:100%;width:{{ soh.soh_pct }}%;background:var(--ujh-ink-3)"></div>
           </div>
-          <div class="stat-sub mt-2">{{ t("≈ {kwh} kWh usable of {nom} kWh · {n} measurements", kwh="%g"|format(soh.implied_kwh), nom="%g"|format(soh.nominal_kwh), n=soh.samples) }}</div>
+          <div class="stat-sub mt-2">{{ t("≈ {kwh} kWh measured · {nom} kWh nominal · {n} samples", kwh="%g"|format(soh.implied_kwh), nom="%g"|format(soh.nominal_kwh), n=soh.samples) }}</div>
         </div>
       </div>
       <div class="mono-xs muted mt-3">{{ t("The car reports no SoH, so this is estimated from charge & drive energy vs the SoC change. AC charging losses bias it high, so a healthy pack reads ~100% until real degradation appears.") }}</div>

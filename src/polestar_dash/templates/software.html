@@ -104,7 +104,7 @@
   <div class="card-label mb-4">{{ t("Installed-version history") }}</div>
   <div class="card mb-6">
     {% if history %}
-    <table style="width:100%;border-collapse:collapse">
+    <table class="index" style="width:100%;border-collapse:collapse">
       <thead>
         <tr class="mono-xs" style="text-align:left;color:var(--ujh-ink-3)">
           <th style="padding:8px 0">{{ t("Detected") }}</th>
@@ -115,9 +115,9 @@
       <tbody>
         {% for c in history %}
         <tr style="border-top:1px solid var(--ujh-line)">
-          <td style="padding:8px 0">{{ c.detected_at|localtime }}</td>
-          <td style="padding:8px 0"><strong>{{ c.software_version }}</strong></td>
-          <td style="padding:8px 0;color:var(--ujh-ink-3)">{{ c.previous_version or '—' }}</td>
+          <td style="padding:8px 0" data-label="{{ t('Detected') }}">{{ c.detected_at|localtime }}</td>
+          <td style="padding:8px 0" data-label="{{ t('Version') }}"><strong>{{ c.software_version }}</strong></td>
+          <td style="padding:8px 0;color:var(--ujh-ink-3)" data-label="{{ t('Previous') }}">{{ c.previous_version or '—' }}</td>
         </tr>
         {% endfor %}
       </tbody>

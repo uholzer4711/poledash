@@ -852,4 +852,8 @@ TRANSLATIONS_DE: dict[str, str] = {
         "zeigt ein gesunder Akku ~100 %, bis echte Degradation auftritt.",
     "Needs a few charges or trips with a noticeable SoC change.":
         "Braucht ein paar Ladungen oder Fahrten mit merklicher SoC-Änderung.",
+    "≈ {kwh} kWh measured · {nom} kWh nominal · {n} samples":
+        "≈ {kwh} kWh gemessen · {nom} kWh nominal · {n} Messungen",
+    "Battery health %": "Batterie-Gesundheit %",
+    "Timeline": "Zeitachse",
 }

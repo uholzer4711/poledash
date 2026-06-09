@@ -82,6 +82,13 @@
     {% include "partials/bottom_nav.html" %}
   </div>
   <script>
+    // Keep the mobile browser-chrome colour in sync with the active palette.
+    function syncThemeColor(){
+      const m = document.querySelector('meta[name="theme-color"]');
+      if (!m) return;
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--ujh-bg').trim();
+      if (bg) m.setAttribute('content', bg);
+    }
     (function(){
       const savedTheme = localStorage.getItem('theme');
       if (savedTheme) document.documentElement.dataset.theme = savedTheme;
@@ -101,6 +108,7 @@
       localStorage.setItem('theme', next);
       window.dispatchEvent(new Event('themechange'));
       applyThemeLabel();
+      syncThemeColor();
     }
     async function setLang(v){
       try { await fetch('/api/app-settings/language?value=' + encodeURIComponent(v), { method: 'POST' }); }
@@ -136,6 +144,7 @@
     });
     setViewClasses();
     applyThemeLabel();
+    window.addEventListener('load', syncThemeColor);
     const LIVE_LABELS = {{ {"idle": t("IDLE"), "charging": t("CHARGING"), "plugged": t("PLUGGED"), "km": t("KM")} | tojson }};
     async function pollLive() {
       try {

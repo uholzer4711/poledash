@@ -102,6 +102,9 @@ def _ensure_columns(engine) -> None:
         if "logentry" in tables:
             for stale in ("ix_logentry_levelno", "ix_logentry_levelno_ts"):
                 conn.execute(text(f"DROP INDEX IF EXISTS {stale}"))
+        # Redundant with the model's Field(index=True) → ix_sohsnapshot_computed_at.
+        if "sohsnapshot" in tables:
+            conn.execute(text("DROP INDEX IF EXISTS ix_sohsnapshot_computed"))
 
 
 def _relax_chargingstation_gps(engine) -> None:

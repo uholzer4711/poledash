@@ -94,6 +94,19 @@ class FetchError(SQLModel, table=True):
     message: str
 
 
+class SohSnapshot(SQLModel, table=True):
+    """Daily snapshot of the estimated battery State-of-Health, so Battery &
+    Charging can chart the trend. Computed by the scheduler (``compute_soh``);
+    at most one row per day (the daily job updates today's row in place)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    computed_at: datetime = Field(index=True)
+    soh_pct: int
+    implied_kwh: float
+    nominal_kwh: float
+    samples: int
+
+
 class LogEntry(SQLModel, table=True):
     """Persisted copy of the in-memory activity log (``logbuffer`` ring) so the
     /log tab can show history beyond the last 2000 lines and across restarts.
