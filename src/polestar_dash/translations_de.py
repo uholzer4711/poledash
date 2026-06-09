@@ -820,4 +820,9 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Resume": "Fortsetzen",
     "last update": "letzte Aktualisierung",
     "no log entries yet": "noch keine Log-Einträge",
+    "Group": "Gruppieren",
+    "By hour": "Nach Stunde",
+    "By day": "Nach Tag",
+    "Flat (live)": "Flach (live)",
+    "entries": "Einträge",
 }

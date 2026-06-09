@@ -3,6 +3,22 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.23.0] — 2026-06-09
+
+### Changed — Log tab: consolidated, collapsible, with a column header
+
+- **The Log tab now loads the full in-memory buffer** (up to 2000 lines, was a
+  500-line fetch) instead of just the newest handful, so the whole activity
+  history is visible.
+- **Consolidation by hour / day** — a new *Group* selector buckets entries into
+  collapsible `<details>` groups (default *By hour*; also *By day* or *Flat
+  (live)*). Each group header shows the bucket time, entry count, and per-level
+  WARN/ERR tallies (orange/red). The newest bucket auto-expands as it appears;
+  expand/collapse state survives the live 4 s refresh. Regrouping happens
+  client-side — no refetch.
+- **Sticky column header** (Time / Level / Source / Message) above the stream,
+  with sticky group headers underneath it; hidden on mobile where rows stack.
+
 ## [1.22.0] — 2026-06-09
 
 ### Changed — Raw / Lab / Test consolidated into one Lab tab

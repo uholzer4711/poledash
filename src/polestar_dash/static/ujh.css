@@ -616,10 +616,42 @@ html.view-mobile .lab-acc-body { padding: var(--ujh-s-4); }
 .log-ERROR .loglvl, .log-ERROR .logmsg,
 .log-CRITICAL .loglvl, .log-CRITICAL .logmsg { color: var(--ujh-alert); }
 .logexc { margin-top: 4px; color: var(--ujh-alert); white-space: pre-wrap; font-size: 11px; }
+/* Sticky column header */
+.loghead {
+  display: grid; grid-template-columns: 74px 64px 116px 1fr; gap: var(--ujh-s-3);
+  padding: 9px var(--ujh-s-5); border-bottom: 1px solid var(--ujh-line-2);
+  position: sticky; top: 0; z-index: 3; background: var(--ujh-bg-2);
+  font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ujh-ink-3);
+}
+/* Collapsible hour/day groups */
+.loggroup { border-bottom: 1px solid var(--ujh-line); }
+.loggroup:last-child { border-bottom: 0; }
+.loggroup > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; gap: var(--ujh-s-3); align-items: baseline;
+  padding: 8px var(--ujh-s-5); background: var(--ujh-bg-3);
+  font: 500 12px/1.4 var(--ujh-mono);
+  position: sticky; top: 28px; z-index: 2;
+}
+.loggroup > summary::-webkit-details-marker { display: none; }
+.loggroup[open] > summary { border-bottom: 1px solid var(--ujh-line); }
+.lggrp-caret { color: var(--ujh-ink-4); display: inline-block; transition: transform .12s; }
+.loggroup[open] > summary .lggrp-caret { transform: rotate(90deg); }
+.lggrp-time { color: var(--ujh-ink); }
+.lggrp-count { color: var(--ujh-ink-4); margin-left: auto; }
+.lggrp-warn { color: var(--ujh-orange); }
+.lggrp-err { color: var(--ujh-alert); }
 @media (max-width: 640px) {
   .logrow { grid-template-columns: 1fr; gap: 2px; padding: 8px var(--ujh-s-4); }
   .loglogger { display: none; }
+  .loghead { display: none; }
+  .loggroup > summary { position: static; }
 }
+html.view-mobile .logrow { grid-template-columns: 1fr; gap: 2px; padding: 8px var(--ujh-s-4); }
+html.view-mobile .loglogger { display: none; }
+html.view-mobile .loghead { display: none; }
+html.view-mobile .loggroup > summary { position: static; }
 
 /* ---------- Field ---------- */
 .field {
