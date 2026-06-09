@@ -103,8 +103,11 @@ class LogEntry(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     ts: datetime = Field(index=True)
     level: str
-    levelno: int = Field(index=True)
-    logger: str
+    # No standalone index on levelno: the history query orders by ts and the
+    # level filter (≥ INFO) matches almost every row, so ix_logentry_ts carries
+    # it. A levelno index would only add write cost.
+    levelno: int
+    logger: str = Field(index=True)
     msg: str
     exc: str | None = None
 

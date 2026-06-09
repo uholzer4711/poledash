@@ -29,11 +29,12 @@ _buf: deque[dict] = deque(maxlen=_MAX)
 _pending: deque[dict] = deque(maxlen=_PENDING_MAX)
 _lock = Lock()
 _seq = 0
+_dropped = 0   # pending lines evicted before a flush could persist them
 
 
 class RingBufferHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
-        global _seq
+        global _seq, _dropped
         try:
             msg = record.getMessage()
         except Exception:  # noqa: BLE001 — a bad format string must not crash logging
@@ -56,6 +57,11 @@ class RingBufferHandler(logging.Handler):
                 "exc": exc,
             }
             _buf.append(rec)
+            # A full pending deque evicts its oldest on append — count that so
+            # the flush job can warn. (Must NOT log here: we're inside a log
+            # handler; re-entering logging would loop.)
+            if len(_pending) == _PENDING_MAX:
+                _dropped += 1
             _pending.append(rec)
 
 
@@ -75,6 +81,22 @@ def requeue_pending(records: list[dict]) -> None:
     so the next flush retries them (oldest-first preserved)."""
     with _lock:
         _pending.extendleft(reversed(records))
+
+
+def pending_size() -> int:
+    """How many log records are awaiting DB persistence (for /health)."""
+    with _lock:
+        return len(_pending)
+
+
+def take_dropped() -> int:
+    """Return and reset the count of pending records evicted before a flush
+    could persist them. Called by the flush job to warn on overflow."""
+    global _dropped
+    with _lock:
+        n = _dropped
+        _dropped = 0
+    return n
 
 
 def get_records(*, limit: int = 300, min_level: int = 0, since_id: int = 0) -> list[dict]:

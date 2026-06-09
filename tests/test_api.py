@@ -23,7 +23,12 @@ def _app():
 
 def test_health(tmp_db):
     client = TestClient(_app())
-    assert client.get("/health").json() == {"status": "ok"}
+    body = client.get("/health").json()
+    # Liveness contract: always 200 + status ok; extra observability fields
+    # (version, log_pending, …) may be present.
+    assert body["status"] == "ok"
+    assert "version" in body
+    assert body["log_pending"] >= 0
 
 
 def test_latest_404_when_empty(tmp_db):
@@ -56,3 +61,46 @@ def test_latest_and_history(tmp_db):
 
     bad = client.get("/api/history?field=secret_field&days=1")
     assert bad.status_code == 400
+
+
+def test_log_history_filter_and_export(tmp_db):
+    from polestar_dash.db.models import LogEntry
+
+    now = datetime.utcnow()
+    rows = [
+        ("polestar_dash.scheduler", "INFO", 20, "Stored snapshot for VIN X", 0),
+        ("polestar_dash.scheduler", "WARNING", 30, "slow fetch", 1),
+        ("polestar_dash.notify", "ERROR", 40, "ntfy send failed", 2),
+    ]
+    with Session(get_engine()) as s:
+        for logger, level, levelno, msg, age in rows:
+            s.add(LogEntry(ts=now - timedelta(minutes=age), level=level,
+                           levelno=levelno, logger=logger, msg=msg))
+        s.commit()
+
+    client = TestClient(_app())
+
+    # Level floor: ERROR returns only the error row.
+    recs = client.get("/api/log/history?level=ERROR").json()["records"]
+    assert [r["level"] for r in recs] == ["ERROR"]
+
+    # Text search on the message.
+    recs = client.get("/api/log/history?level=DEBUG&q=snapshot").json()["records"]
+    assert len(recs) == 1 and "snapshot" in recs[0]["msg"]
+
+    # Exact logger filter.
+    recs = client.get("/api/log/history?level=DEBUG&logger=polestar_dash.notify").json()["records"]
+    assert len(recs) == 1 and recs[0]["logger"] == "polestar_dash.notify"
+
+    # Oldest-first ordering for the client store.
+    recs = client.get("/api/log/history?level=DEBUG").json()["records"]
+    assert [r["ts"] for r in recs] == sorted(r["ts"] for r in recs)
+
+    # Distinct loggers, short labels.
+    labels = {o["label"] for o in client.get("/api/log/loggers").json()["loggers"]}
+    assert {"scheduler", "notify"} <= labels
+
+    # Plain-text export, chronological, attachment.
+    resp = client.get("/api/log/export?level=DEBUG")
+    assert "attachment" in resp.headers["content-disposition"]
+    assert "Stored snapshot" in resp.text

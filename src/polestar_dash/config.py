@@ -55,6 +55,10 @@ class Settings(BaseSettings):
 
     notify_door_open: bool = True
     notify_unlocked: bool = True
+    # Opt-in: send a notification when the app logs an ERROR/CRITICAL. Deduped
+    # to at most one per logger per hour so a recurring fault can't spam. Off by
+    # default — most users watch the /log tab instead.
+    notify_log_errors: bool = False
     # Optional URL to a real Polestar 2 image shown on the dashboard vehicle
     # card (e.g. an official press/gallery render). Empty ⇒ the built-in
     # recolorable SVG top-view is used. Kept as config (not committed) so we

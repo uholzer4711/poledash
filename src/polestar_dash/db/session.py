@@ -91,12 +91,17 @@ def _ensure_columns(engine) -> None:
         ("ix_chargesession_is_complete", "chargesession", "is_complete"),
         ("ix_vehiclesnapshot_vin_fetched", "vehiclesnapshot", "vin, fetched_at"),
         ("ix_logentry_ts", "logentry", "ts"),
-        ("ix_logentry_levelno_ts", "logentry", "levelno, ts"),
+        ("ix_logentry_logger", "logentry", "logger"),
     ]
     with engine.begin() as conn:
         for name, table, cols in index_plan:
             if table in tables:
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
+        # Forward-only: drop log indexes an earlier build created that the query
+        # planner doesn't use (levelno is a low-selectivity range filter).
+        if "logentry" in tables:
+            for stale in ("ix_logentry_levelno", "ix_logentry_levelno_ts"):
+                conn.execute(text(f"DROP INDEX IF EXISTS {stale}"))
 
 
 def _relax_chargingstation_gps(engine) -> None:

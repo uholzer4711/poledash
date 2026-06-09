@@ -9,7 +9,7 @@
 
   <div class="card mb-6 no-print">
     <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
-      <div class="field" style="min-width:150px">
+      <div class="field" style="min-width:120px">
         <label>{{ t("Level") }}</label>
         <select id="log_level">
           <option value="DEBUG">{{ t("All") }}</option>
@@ -18,7 +18,15 @@
           <option value="ERROR">ERROR</option>
         </select>
       </div>
-      <div class="field" style="min-width:150px">
+      <div class="field" style="min-width:130px">
+        <label>{{ t("Source") }}</label>
+        <select id="log_source"><option value="">{{ t("All") }}</option></select>
+      </div>
+      <div class="field" style="flex:1;min-width:160px">
+        <label>{{ t("Search") }}</label>
+        <input type="search" id="log_q" placeholder="{{ t('filter message…') }}">
+      </div>
+      <div class="field" style="min-width:120px">
         <label>{{ t("Group") }}</label>
         <select id="log_group">
           <option value="hour" selected>{{ t("By hour") }}</option>
@@ -26,8 +34,23 @@
           <option value="none">{{ t("Flat (live)") }}</option>
         </select>
       </div>
+      <div class="field" style="min-width:120px">
+        <label>{{ t("Time range") }}</label>
+        <select id="log_range">
+          <option value="live" selected>{{ t("Live") }}</option>
+          <option value="24h">{{ t("Last 24 h") }}</option>
+          <option value="7d">{{ t("Last 7 days") }}</option>
+          <option value="30d">{{ t("Last 30 days") }}</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-4 mt-3" style="align-items:center;flex-wrap:wrap">
+      <label class="mono-xs" style="display:flex;gap:6px;align-items:center;cursor:pointer">
+        <input type="checkbox" id="log_errors_only"> {{ t("Errors only") }}
+      </label>
       <button class="btn ghost" type="button" id="log_pause">{{ t("Pause") }}</button>
       <button class="btn ghost" type="button" id="log_clear">{{ t("Clear") }}</button>
+      <a class="btn ghost" id="log_export" href="#" download>{{ t("Export") }} ↓</a>
       <span class="mono-xs muted" id="log_meta" style="margin-left:auto">—</span>
     </div>
   </div>
@@ -51,16 +74,23 @@
 
   <script>
     (function () {
-      var MAXREC = 20000;               // client store cap (history + live tail)
+      var MAXREC = 8000;                // client store cap (history + live tail)
       var lastId = 0, paused = false, loadingOlder = false;
       var records = [];                 // client store, oldest-first
+      var seen = new Set();             // content keys, to de-dup live∪history
       var openKeys = new Set();         // group keys the user (or auto) has open
       var knownKeys = new Set();        // groups we've already auto-opened once
+      var stream = document.getElementById('log_stream');
       var groups = document.getElementById('log_groups');
       var olderBtn = document.getElementById('log_older');
       var olderMeta = document.getElementById('log_older_meta');
       var levelSel = document.getElementById('log_level');
+      var sourceSel = document.getElementById('log_source');
+      var qInput = document.getElementById('log_q');
       var groupSel = document.getElementById('log_group');
+      var rangeSel = document.getElementById('log_range');
+      var errorsOnly = document.getElementById('log_errors_only');
+      var exportLink = document.getElementById('log_export');
       var meta = document.getElementById('log_meta');
       var TXT = {
         update: {{ t("last update") | tojson }},
@@ -68,6 +98,7 @@
         pause: {{ t("Pause") | tojson }},
         resume: {{ t("Resume") | tojson }},
         empty: {{ t("no log entries yet") | tojson }},
+        entry: {{ t("entry") | tojson }},
         entries: {{ t("entries") | tojson }},
         noOlder: {{ t("no older entries") | tojson }}
       };
@@ -76,6 +107,25 @@
           function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; });
       }
       function fmtTs(sec) { try { return new Date(sec * 1000).toLocaleTimeString(); } catch (e) { return ''; } }
+      function recKey(r) { return r.ts.toFixed(3) + '|' + r.logger + '|' + r.msg; }
+      // The level actually sent to the server: "Errors only" floors it at WARNING.
+      function effLevel() {
+        if (errorsOnly.checked) return levelSel.value === 'ERROR' ? 'ERROR' : 'WARNING';
+        return levelSel.value;
+      }
+      function sinceTs() {
+        var map = { '24h': 86400, '7d': 604800, '30d': 2592000 };
+        var span = map[rangeSel.value];
+        return span ? (Date.now() / 1000 - span) : null;
+      }
+      function filterQS() {
+        var p = 'level=' + encodeURIComponent(effLevel());
+        if (sourceSel.value) p += '&logger=' + encodeURIComponent(sourceSel.value);
+        if (qInput.value.trim()) p += '&q=' + encodeURIComponent(qInput.value.trim());
+        var since = sinceTs();
+        if (since != null) p += '&since_ts=' + since;
+        return p;
+      }
       function rowHtml(r) {
         var exc = r.exc ? '<pre class="logexc">' + esc(r.exc) + '</pre>' : '';
         var logger = (r.logger || '').replace(/^polestar_dash\.?/, '') || 'app';
@@ -88,7 +138,6 @@
       function emptyHtml() {
         return '<div class="logrow"><span class="logmsg muted">' + esc(TXT.empty) + '</span></div>';
       }
-      // Floor a timestamp to its hour/day bucket; returns epoch-ms (also the key).
       function floorTs(sec, mode) {
         var d = new Date(sec * 1000);
         if (mode === 'day') d.setHours(0, 0, 0, 0); else d.setMinutes(0, 0, 0);
@@ -102,19 +151,17 @@
         return d.toLocaleDateString([], { day: '2-digit', month: 'short' }) + ' ' +
           d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       }
-      // Auto-open each newly-appearing newest bucket exactly once; the user can
-      // then collapse it and it stays collapsed (knownKeys remembers it).
       function ensureDefaults(keysDesc) {
         if (keysDesc.length && !knownKeys.has(keysDesc[0])) openKeys.add(keysDesc[0]);
         keysDesc.forEach(function (k) { knownKeys.add(k); });
       }
-      function render() {
+      function countLabel(n) { return n + ' ' + (n === 1 ? TXT.entry : TXT.entries); }
+      function buildHtml() {
         var mode = groupSel.value;
         if (mode === 'none') {
           var flat = '';
           for (var i = records.length - 1; i >= 0; i--) flat += rowHtml(records[i]);
-          groups.innerHTML = flat || emptyHtml();
-          return;
+          return flat || emptyHtml();
         }
         var map = new Map();
         for (var j = 0; j < records.length; j++) {
@@ -125,13 +172,13 @@
           if (r.levelno >= 40) g.err++; else if (r.levelno >= 30) g.warn++;
         }
         var arr = Array.from(map.values());
-        arr.sort(function (a, b) { return b.ms - a.ms; });   // newest bucket first
+        arr.sort(function (a, b) { return b.ms - a.ms; });
         ensureDefaults(arr.map(function (g) { return g.key; }));
         var html = '';
         for (var a = 0; a < arr.length; a++) {
           var grp = arr[a], rows = '';
           for (var b = grp.items.length - 1; b >= 0; b--) rows += rowHtml(grp.items[b]);
-          var counts = '<span class="lggrp-count">' + grp.items.length + ' ' + esc(TXT.entries) + '</span>';
+          var counts = '<span class="lggrp-count">' + countLabel(grp.items.length) + '</span>';
           if (grp.warn) counts += ' <span class="lggrp-warn">' + grp.warn + ' WARN</span>';
           if (grp.err) counts += ' <span class="lggrp-err">' + grp.err + ' ERR</span>';
           html += '<details class="loggroup" data-key="' + grp.key + '"' +
@@ -141,60 +188,95 @@
             counts + '</summary>' +
             '<div class="loggroup-body">' + rows + '</div></details>';
         }
-        groups.innerHTML = html || emptyHtml();
+        return html || emptyHtml();
       }
-      // <details> toggle does not bubble — listen in the capture phase so the
-      // open/closed state survives the next full re-render.
+      // Rebuild the stream, keeping the viewport anchored: stay pinned to the
+      // newest row when already at the top, otherwise hold the user's place as
+      // older rows are spliced in above.
+      function render() {
+        var atTop = stream.scrollTop <= 4;
+        var prevH = stream.scrollHeight, prevTop = stream.scrollTop;
+        groups.innerHTML = buildHtml();
+        stream.scrollTop = atTop ? 0 : prevTop + (stream.scrollHeight - prevH);
+      }
+      // <details> toggle does not bubble — capture phase so open state survives.
       groups.addEventListener('toggle', function (e) {
         var d = e.target;
         if (!d.classList || !d.classList.contains('loggroup')) return;
         if (d.open) openKeys.add(d.dataset.key); else openKeys.delete(d.dataset.key);
       }, true);
+      function mergeNew(incoming, atFront) {
+        var fresh = [];
+        for (var i = 0; i < incoming.length; i++) {
+          var key = recKey(incoming[i]);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          fresh.push(incoming[i]);
+        }
+        if (!fresh.length) return 0;
+        records = atFront ? fresh.concat(records) : records.concat(fresh);
+        if (records.length > MAXREC) {
+          records = atFront ? records.slice(0, MAXREC) : records.slice(records.length - MAXREC);
+        }
+        return fresh.length;
+      }
       async function poll() {
         if (paused) return;
         try {
           var r = await fetch('/api/log?since_id=' + lastId +
-            '&level=' + encodeURIComponent(levelSel.value) + '&limit=2000');
+            '&level=' + encodeURIComponent(effLevel()) + '&limit=2000');
           var j = await r.json();
           if (j.records && j.records.length) {
             lastId = j.last_id;
-            records = records.concat(j.records);
-            if (records.length > MAXREC) records = records.slice(records.length - MAXREC);
-            render();
+            // Honour source/search/range client-side for the live tail (the
+            // live endpoint only filters by level).
+            var src = sourceSel.value, qq = qInput.value.trim().toLowerCase(), since = sinceTs();
+            var keep = j.records.filter(function (x) {
+              if (src && x.logger !== src) return false;
+              if (qq && x.msg.toLowerCase().indexOf(qq) < 0) return false;
+              if (since != null && x.ts < since) return false;
+              return true;
+            });
+            if (mergeNew(keep, false)) render();
+            else if (!groups.children.length) render();
           } else if (!groups.children.length) {
             render();
           }
           meta.textContent = TXT.update + ': ' + new Date().toLocaleTimeString();
         } catch (e) { meta.textContent = TXT.neterr + e; }
       }
-      // Page backwards through the persisted LogEntry history (DB) — fetch the
-      // batch strictly older than the oldest record we currently hold.
+      // Page backwards through the persisted LogEntry history (DB).
       async function loadOlder() {
         if (loadingOlder) return;
         loadingOlder = true; olderBtn.disabled = true; olderMeta.textContent = ' …';
         try {
           var before = records.length ? records[0].ts : null;
-          var url = '/api/log/history?level=' + encodeURIComponent(levelSel.value) +
-            '&limit=500' + (before != null ? '&before_ts=' + before : '');
+          var url = '/api/log/history?' + filterQS() + '&limit=500' +
+            (before != null ? '&before_ts=' + before : '');
           var j = await (await fetch(url)).json();
-          if (j.records && j.records.length) {
-            records = j.records.concat(records);
-            if (records.length > MAXREC) records = records.slice(0, MAXREC);
-            render();
-            olderMeta.textContent = '';
-          } else {
-            olderMeta.textContent = ' ' + TXT.noOlder;
-          }
+          var added = (j.records && j.records.length) ? mergeNew(j.records, true) : 0;
+          if (added) { render(); olderMeta.textContent = ''; }
+          else olderMeta.textContent = ' ' + TXT.noOlder;
           if (!j.has_more) olderBtn.style.display = 'none';
         } catch (e) { olderMeta.textContent = ' ' + TXT.neterr + e; }
         finally { loadingOlder = false; olderBtn.disabled = false; }
       }
+      function updateExport() {
+        exportLink.href = '/api/log/export?' + filterQS();
+      }
       function reset() {
-        lastId = 0; records = []; openKeys.clear(); knownKeys.clear();
+        lastId = 0; records = []; seen.clear(); openKeys.clear(); knownKeys.clear();
         groups.innerHTML = ''; olderBtn.style.display = ''; olderMeta.textContent = '';
+        updateExport();
         poll().then(loadOlder);
       }
+      var qTimer = null;
+      function resetDebounced() { clearTimeout(qTimer); qTimer = setTimeout(reset, 300); }
       levelSel.addEventListener('change', reset);
+      sourceSel.addEventListener('change', reset);
+      rangeSel.addEventListener('change', reset);
+      errorsOnly.addEventListener('change', reset);
+      qInput.addEventListener('input', resetDebounced);
       groupSel.addEventListener('change', render);   // regroup client-side, no refetch
       olderBtn.addEventListener('click', loadOlder);
       document.getElementById('log_pause').addEventListener('click', function () {
@@ -202,8 +284,17 @@
         this.textContent = paused ? TXT.resume : TXT.pause;
       });
       document.getElementById('log_clear').addEventListener('click', function () {
-        records = []; groups.innerHTML = emptyHtml();
+        records = []; seen.clear(); groups.innerHTML = emptyHtml();
       });
+      // Populate the source dropdown from the persisted loggers.
+      fetch('/api/log/loggers').then(function (r) { return r.json(); }).then(function (j) {
+        (j.loggers || []).forEach(function (o) {
+          var opt = document.createElement('option');
+          opt.value = o.value; opt.textContent = o.label;
+          sourceSel.appendChild(opt);
+        });
+      }).catch(function () {});
+      updateExport();
       poll().then(loadOlder);   // live tail first, then pull one page of history
       setInterval(poll, 4000);
     })();

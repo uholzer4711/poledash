@@ -3,6 +3,34 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.25.0] — 2026-06-09
+
+### Added — log search/filter/export, error alerts, richer /health
+
+- **/log filtering**: full-text **search** over the message, a **Source**
+  dropdown (distinct loggers via `GET /api/log/loggers`), an **Errors only**
+  toggle (floors the level at WARNING), and a **Time range** selector (Live /
+  24 h / 7 d / 30 d) that bounds history paging.
+- **Plain-text export** of the persisted log honouring the active filters
+  (`GET /api/log/export`, chronological, downloadable from the toolbar).
+- **Opt-in error notifications** (`NOTIFY_LOG_ERRORS`, default off): an
+  ERROR/CRITICAL log line fires a notification, deduped to one per source per
+  hour via `NotificationLog`.
+- **/health is now observable**: returns `version`, `last_poll_age_s`,
+  `log_rows`, `log_pending` (flush backlog) and `db_bytes` — always 200 so the
+  container healthcheck stays green.
+
+### Changed / Fixed
+
+- **No scroll-jump on the /log feed**: the stream stays pinned to the newest
+  row at the top, or holds your place when you've scrolled into history and new
+  lines arrive (fixes a regression from the grouped rewrite).
+- **Gap-free history paging**: the page boundary is inclusive and the client
+  de-duplicates by content key, so entries sharing a timestamp at the edge are
+  never skipped. Singular/plural group counts ("1 entry" vs "N entries").
+- **Leaner log indexes**: dropped the low-selectivity `levelno` index, added a
+  `logger` index for the new Source filter (forward-only migration).
+
 ## [1.24.0] — 2026-06-09
 
 ### Added — durable log history

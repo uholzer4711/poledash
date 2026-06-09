@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
@@ -28,6 +28,7 @@ from ..db.models import (
     ChargeSession,
     ChargingStation,
     JourneyImport,
+    LogEntry,
     VehicleSnapshot,
 )
 from ..db.session import get_engine
@@ -446,31 +447,48 @@ def api_log(
     return {"records": recs, "last_id": recs[-1]["id"] if recs else since_id}
 
 
+def _log_level_no(level: str | None) -> int:
+    import logging as _logging
+
+    lvl = _logging.getLevelName((level or "INFO").upper())
+    return lvl if isinstance(lvl, int) else _logging.INFO
+
+
+def _log_filter_stmt(level, q, logger, since_ts, before_ts):  # noqa: ANN001
+    """Shared WHERE-builder for the log history + export endpoints."""
+    stmt = select(LogEntry).where(LogEntry.levelno >= _log_level_no(level))
+    # Boundary is INCLUSIVE (`<=`): same-microsecond ties at the page edge are
+    # returned again and de-duplicated on the client by content key, so paging
+    # never drops a line that shares the boundary timestamp.
+    if before_ts is not None:
+        stmt = stmt.where(LogEntry.ts <= datetime.fromtimestamp(before_ts, tz=UTC).replace(tzinfo=None))
+    if since_ts is not None:
+        stmt = stmt.where(LogEntry.ts >= datetime.fromtimestamp(since_ts, tz=UTC).replace(tzinfo=None))
+    if logger:
+        stmt = stmt.where(LogEntry.logger == logger)
+    if q:
+        stmt = stmt.where(LogEntry.msg.ilike(f"%{q}%"))
+    return stmt
+
+
 @router.get("/log/history")
 def api_log_history(
     before_ts: float | None = Query(None),
+    since_ts: float | None = Query(None),
     level: str = Query("INFO"),
+    q: str | None = Query(None),
+    logger: str | None = Query(None),
     limit: int = Query(500, ge=1, le=2000),
 ) -> dict:
     """Older activity-log records from the persisted `LogEntry` table, for the
-    /log tab's "load older" paging. Returns rows strictly before `before_ts`
-    (epoch seconds; omit for the most recent), oldest-first to match the live
-    feed's client store. `has_more` signals another page is available."""
-    import logging as _logging
-    from datetime import UTC
-
-    from ..db.models import LogEntry
-
-    lvl = _logging.getLevelName((level or "INFO").upper())
-    if not isinstance(lvl, int):
-        lvl = _logging.INFO
+    /log tab's "load older" paging and filtering. Filters: `level` (min),
+    `q` (substring of message), `logger` (exact source), `since_ts`/`before_ts`
+    (epoch-second window). Returns oldest-first to match the live feed's client
+    store; `has_more` signals another page is available."""
+    stmt = _log_filter_stmt(level, q, logger, since_ts, before_ts)
+    stmt = stmt.order_by(LogEntry.ts.desc(), LogEntry.id.desc()).limit(limit)
     with Session(get_engine()) as s:
-        q = select(LogEntry).where(LogEntry.levelno >= lvl)
-        if before_ts is not None:
-            cutoff = datetime.fromtimestamp(before_ts, tz=UTC).replace(tzinfo=None)
-            q = q.where(LogEntry.ts < cutoff)
-        q = q.order_by(LogEntry.ts.desc(), LogEntry.id.desc()).limit(limit)
-        rows = s.exec(q).all()
+        rows = s.exec(stmt).all()
     recs = [
         {
             "id": r.id,
@@ -485,6 +503,51 @@ def api_log_history(
     ]
     recs.reverse()  # DB gave newest-first; client store is oldest-first
     return {"records": recs, "has_more": len(rows) == limit}
+
+
+@router.get("/log/loggers")
+def api_log_loggers() -> dict:
+    """Distinct logger/source names in the persisted log, for the filter
+    dropdown. `value` is the exact stored name (for the filter query); `label`
+    is the short display name with the `polestar_dash.` prefix stripped."""
+    with Session(get_engine()) as s:
+        rows = s.exec(select(LogEntry.logger).distinct()).all()
+    out = [
+        {"value": r, "label": (r or "").replace("polestar_dash.", "") or "app"}
+        for r in rows
+        if r
+    ]
+    out.sort(key=lambda o: o["label"])
+    return {"loggers": out}
+
+
+@router.get("/log/export")
+def api_log_export(
+    level: str = Query("INFO"),
+    q: str | None = Query(None),
+    logger: str | None = Query(None),
+    since_ts: float | None = Query(None),
+    before_ts: float | None = Query(None),
+    limit: int = Query(100_000, ge=1, le=1_000_000),
+) -> PlainTextResponse:
+    """Plain-text export of the persisted log (chronological, oldest-first),
+    honouring the same filters as the history view (`logger` is the exact
+    stored name from /api/log/loggers). Downloadable from /log."""
+    stmt = _log_filter_stmt(level, q, logger, since_ts, before_ts)
+    stmt = stmt.order_by(LogEntry.ts.asc(), LogEntry.id.asc()).limit(limit)
+    with Session(get_engine()) as s:
+        rows = s.exec(stmt).all()
+    lines = [
+        f"{r.ts.isoformat(sep=' ', timespec='seconds')}  {r.level:<8} "
+        f"{(r.logger or '').replace('polestar_dash.', '') or 'app':<22} {r.msg}"
+        + (f"\n{r.exc}" if r.exc else "")
+        for r in rows
+    ]
+    body = "\n".join(lines) + ("\n" if lines else "")
+    return PlainTextResponse(
+        body,
+        headers={"Content-Disposition": "attachment; filename=polestar-log.txt"},
+    )
 
 
 @router.get("/app-settings/alerts")

@@ -499,7 +499,12 @@ def _persist_logs() -> None:
     live tail; this is what makes the /log history durable across restarts and
     beyond the ring's size. On a write failure the batch is re-queued so the
     next tick retries instead of dropping lines."""
-    from .logbuffer import drain_pending, requeue_pending
+    from .logbuffer import drain_pending, requeue_pending, take_dropped
+
+    dropped = take_dropped()
+    if dropped:
+        log.warning("Activity-log pending queue overflowed: %s lines lost before "
+                    "flush (raise log_persist_interval cadence?)", dropped)
 
     pending = drain_pending()
     if not pending:
@@ -523,6 +528,37 @@ def _persist_logs() -> None:
     except Exception:  # noqa: BLE001
         requeue_pending(pending)
         log.exception("LogEntry flush failed (%s rows re-queued)", len(pending))
+        return
+    _maybe_notify_log_errors(pending)
+
+
+def _maybe_notify_log_errors(pending: list[dict]) -> None:
+    """Opt-in: alert on freshly-logged ERROR/CRITICAL lines. Deduped to one per
+    logger per hour via the NotificationLog so a recurring fault can't spam."""
+    if not get_settings().notify_log_errors:
+        return
+    errors = [r for r in pending if r["levelno"] >= 40]
+    if not errors:
+        return
+    # One alert per (logger, hour) bucket, summarising that logger's errors.
+    by_logger: dict[str, list[dict]] = {}
+    for r in errors:
+        by_logger.setdefault(r["logger"], []).append(r)
+    for logger_name, recs in by_logger.items():
+        hour = datetime.fromtimestamp(recs[-1]["ts"], tz=UTC).strftime("%Y-%m-%dT%H")
+        short = logger_name.replace("polestar_dash.", "") or "app"
+        first = recs[0]["msg"].splitlines()[0][:200]
+        try:
+            notify(
+                kind="log_error",
+                key=f"{logger_name}-{hour}",
+                title=t("Error logged in {source}", source=short),
+                body=(t("{n} error(s) this hour. First:", n=len(recs)) + f"\n{first}"),
+                priority="high",
+                tags=["warning"],
+            )
+        except Exception:  # noqa: BLE001
+            log.exception("log-error notification failed")
 
 
 def flush_logs_now() -> None:
