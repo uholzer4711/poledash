@@ -3,21 +3,21 @@ air quality, weather, extended health). Read-only, isolated from the poll loop.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..polestar.c3 import get_c3_snapshot
-from ..polestar.c3_control import COMMAND_META, run_command
-from ..templating import make_templates
+from ..polestar.c3_control import run_command
 
-templates = make_templates()
 router = APIRouter()
 
 
-@router.get("/test", response_class=HTMLResponse)
-def test_page(request: Request):
-    return templates.TemplateResponse(request, "test.html", {"commands": COMMAND_META})
+@router.get("/test")
+def test_page():
+    # The live C3 view + control panel now live on the consolidated Lab tab.
+    # Keep the old URL working via redirect.
+    return RedirectResponse(url="/lab#frame-live", status_code=307)
 
 
 @router.get("/api/test/c3")

@@ -41,9 +41,18 @@ def email_send(
     msg["Message-ID"] = make_msgid(domain=sender.rsplit("@", 1)[-1])
 
     try:
-        with smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=15) as srv:
+        # Port 465 = implicit TLS (SMTPS): the socket is TLS from the first byte,
+        # so we must use SMTP_SSL and must NOT issue STARTTLS. Port 587 (and any
+        # other non-25 port) = explicit TLS via STARTTLS on a plain connection.
+        # Port 25 = plaintext. Treating 465 like 587 (the old code) made every
+        # 465 send fail.
+        if s.smtp_port == 465:
+            conn = smtplib.SMTP_SSL(s.smtp_host, s.smtp_port, timeout=15)
+        else:
+            conn = smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=15)
+        with conn as srv:
             srv.ehlo()
-            if s.smtp_port != 25:
+            if s.smtp_port not in (25, 465):
                 srv.starttls()
                 srv.ehlo()
             if s.smtp_username and s.smtp_password:

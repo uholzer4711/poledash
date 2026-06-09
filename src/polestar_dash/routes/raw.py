@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import json
-
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlmodel import Session, select
 
 from ..db.models import RawSnapshot
 from ..db.session import get_engine
-from ..templating import make_templates
 
 router = APIRouter()
-templates = make_templates()
 
 
 def _latest(vin: str | None) -> RawSnapshot | None:
@@ -32,14 +28,8 @@ def raw_json(vin: str | None = None):
     )
 
 
-@router.get("/raw", response_class=HTMLResponse)
-def raw_html(request: Request, vin: str | None = None):
-    row = _latest(vin)
-    pretty = (
-        json.dumps(row.payload, indent=2, ensure_ascii=False, default=str) if row else None
-    )
-    return templates.TemplateResponse(
-        request,
-        "raw.html",
-        {"row": row, "pretty": pretty},
-    )
+@router.get("/raw")
+def raw_html():
+    # The raw payload now lives in a collapsible frame on the consolidated Lab
+    # tab (it lazy-loads /raw.json). Keep the old URL working via redirect.
+    return RedirectResponse(url="/lab#frame-raw", status_code=307)

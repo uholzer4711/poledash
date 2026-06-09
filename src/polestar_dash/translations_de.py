@@ -2,6 +2,26 @@
 from __future__ import annotations
 
 TRANSLATIONS_DE: dict[str, str] = {
+    # --- Consolidated Lab tab (lab.html: live C3 + raw + control + discovery) ---
+    "08 / LAB": "08 / LABOR",
+    "& diagnostics": "& Diagnose",
+    "Consolidated developer view: live C3 state, the raw API payload, write "
+    "controls and field-discovery tooling — one section per frame.":
+        "Konsolidierte Entwickler-Ansicht: Live-C3-Status, die rohe API-Antwort, "
+        "Schreibbefehle und Felderkennungs-Werkzeuge — ein Abschnitt je Frame.",
+    "Open a section to load it — nothing is fetched until you expand a frame.":
+        "Abschnitt öffnen, um ihn zu laden — vor dem Aufklappen wird nichts abgerufen.",
+    "Live status (C3)": "Live-Status (C3)",
+    "Live, read-only — GPS, doors/locks, climate, cabin air, on-car weather. Not persisted.":
+        "Live, nur lesend — GPS, Türen/Schlösser, Klima, Kabinenluft, Wetter am Auto. "
+        "Nicht gespeichert.",
+    "These commands move real hardware. Nothing runs until you click; sensitive "
+    "actions ask for confirmation first.":
+        "Diese Befehle bewegen echte Hardware. Es passiert nichts, bis du klickst; "
+        "kritische Aktionen fragen vorher nach Bestätigung.",
+    "latest API response": "letzte API-Antwort",
+    "Full pypolestar response from the most recent successful poll.":
+        "Vollständige pypolestar-Antwort des letzten erfolgreichen Abrufs.",
     # --- Raw page (raw.html) ---
     "08 / RAW": "08 / ROHDATEN",
     "API response": "API-Antwort",

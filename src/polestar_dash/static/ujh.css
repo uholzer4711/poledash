@@ -390,6 +390,29 @@ html.view-mobile #c3_map, html.view-mobile #tst_map { height: 300px !important; 
 .meta-row { display: flex; gap: var(--ujh-s-3); align-items: baseline; color: var(--ujh-ink-3); }
 .meta-row .mono-xs { color: var(--ujh-ink-4); }
 
+/* ---------- Lab accordion (consolidated Raw/Lab/Test frames) ---------- */
+/* A .card whose <summary> is the clickable header; body holds the payload.
+   Collapsed by default; a typographic +/− stands in for an icon (no icons). */
+.lab-acc { padding: 0; }
+.lab-acc + .lab-acc { margin-top: var(--ujh-s-4); }
+.lab-acc > summary {
+  cursor: pointer; list-style: none; display: flex;
+  align-items: baseline; gap: var(--ujh-s-3);
+  padding: var(--ujh-s-4) var(--ujh-s-5);
+}
+.lab-acc > summary::-webkit-details-marker { display: none; }
+.lab-acc-title { font: 500 15px/1.2 var(--ujh-sans); letter-spacing: -0.01em; color: var(--ujh-ink); }
+.lab-acc-meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lab-acc-mark { font: 400 18px/1 var(--ujh-mono); color: var(--ujh-ink-3); transition: color var(--ujh-t-base); }
+.lab-acc-mark::before { content: "+"; }
+.lab-acc[open] > summary .lab-acc-mark::before { content: "\2212"; }
+.lab-acc > summary:hover .lab-acc-mark { color: var(--ujh-orange); }
+.lab-acc[open] > summary { border-bottom: 1px solid var(--ujh-line); }
+.lab-acc-body { padding: var(--ujh-s-5); }
+html.view-mobile .lab-acc > summary { padding: var(--ujh-s-3) var(--ujh-s-4); }
+html.view-mobile .lab-acc-title { font-size: 14px; }
+html.view-mobile .lab-acc-body { padding: var(--ujh-s-4); }
+
 /* ---------- Badge ---------- */
 .badge {
   display: inline-flex; align-items: center; gap: 6px;

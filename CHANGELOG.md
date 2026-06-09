@@ -3,6 +3,27 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.22.0] — 2026-06-09
+
+### Changed — Raw / Lab / Test consolidated into one Lab tab
+
+- **Raw, Lab and Test are now a single `/lab` tab** with collapsible,
+  lazy-loading frames (live C3 status, raw API payload, write controls, field
+  discovery) — one section per frame, nothing fetched until you expand it. The
+  old `/raw` and `/test` URLs **307-redirect** to the matching frame
+  (`/lab#frame-raw`, `/lab#frame-live`) so existing links keep working.
+- **Nav slimmed accordingly** — top nav and the mobile bottom-nav "More" sheet
+  drop the separate Raw/Test entries and keep only Lab (still demo-aware).
+- German catalog covers the new consolidated-Lab strings; the standalone
+  `raw.html` / `test.html` templates are removed.
+
+### Fixed
+
+- **Port-465 email (implicit TLS / SMTPS) now works.** `email_notify` treated
+  465 like 587 — plain socket + `STARTTLS` — which made every 465 send fail.
+  It now uses `SMTP_SSL` for 465 (TLS from the first byte, no `STARTTLS`),
+  keeps `STARTTLS` for 587/other non-25 ports, and plaintext for 25.
+
 ## [1.21.0] — 2026-06-08
 
 ### Added — mobile-first overhaul + Mobil⇄Web switch

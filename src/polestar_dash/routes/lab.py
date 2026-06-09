@@ -19,6 +19,7 @@ from gql import gql
 from gql.transport.exceptions import TransportQueryError
 
 from ..config import get_settings
+from ..polestar.c3_control import COMMAND_META
 from ..templating import make_templates
 
 templates = make_templates()
@@ -27,10 +28,10 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# ---------- Lab page ----------
+# ---------- Lab page (consolidated: live C3 + raw + control + field discovery) ----------
 @router.get("/lab", response_class=HTMLResponse)
 def lab_page(request: Request):
-    return templates.TemplateResponse(request, "lab.html", {})
+    return templates.TemplateResponse(request, "lab.html", {"commands": COMMAND_META})
 
 
 # ---------- Notes log (markdown, persisted in /data) ----------
