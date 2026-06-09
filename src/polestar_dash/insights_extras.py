@@ -218,6 +218,64 @@ def compute_battery_trend(min_soc_drop: int = 4, min_bucket_drop: int = 30) -> d
     return {"points": points, "enough_data": len(points) >= 3}
 
 
+def compute_soh(min_soc_span: int = 12, window: int = 12) -> dict:
+    """Estimate battery State-of-Health (%).
+
+    The Polestar/C3 API exposes **no** SoH or capacity field, so this is the
+    TeslaMate-style estimate: every charge implies a usable pack capacity
+    ``energy_kwh / (ΔSoC/100)`` and every month of driving the same from
+    consumption. We take the median of the most recent ``window`` implied
+    samples — each needs a SoC span ≥ ``min_soc_span`` % so the 1 %-resolution
+    rounding noise stays small — and express it against the nominal new-pack
+    capacity, capped at 100 %.
+
+    Caveats (why this is an *estimate*, surfaced in the UI): AC charging losses
+    inflate the charge-derived samples, so a healthy/near-new pack reads ~100 %;
+    the indicator only drops once real degradation exceeds that bias. It does
+    **not** need 100 % charges — just a decent SoC span per sample.
+    """
+    from .sessions import DEFAULT_BATTERY_KWH
+
+    nominal = DEFAULT_BATTERY_KWH
+    samples: list[tuple[datetime, float]] = []
+    with Session(get_engine()) as s:
+        charges = list(
+            s.exec(
+                select(ChargeSession)
+                .where(ChargeSession.is_complete.is_(True))  # noqa: E712
+                .where(ChargeSession.energy_kwh.is_not(None))
+                .where(ChargeSession.soc_start.is_not(None))
+                .where(ChargeSession.soc_end.is_not(None))
+            ).all()
+        )
+    for c in charges:
+        span = (c.soc_end or 0) - (c.soc_start or 0)
+        if span >= min_soc_span and c.energy_kwh and c.energy_kwh > 0:
+            samples.append((c.started_at, c.energy_kwh / (span / 100.0)))
+    # Monthly driving aggregate (no charging losses → a cleaner second source).
+    for pt in compute_battery_trend(min_soc_drop=4, min_bucket_drop=min_soc_span)["points"]:
+        samples.append((datetime.strptime(pt["month"], "%Y-%m"), float(pt["kwh"])))
+
+    # Drop implausible samples (bad ΔSoC / partial sessions).
+    samples = [(t, k) for (t, k) in samples if 0.4 * nominal <= k <= 1.25 * nominal]
+    if len(samples) < 3:
+        return {
+            "soh_pct": None, "implied_kwh": None, "nominal_kwh": round(nominal, 1),
+            "samples": len(samples), "enough_data": False,
+        }
+    samples.sort(key=lambda x: x[0])
+    recent = sorted(k for _, k in samples[-window:])
+    n = len(recent)
+    implied = recent[n // 2] if n % 2 else (recent[n // 2 - 1] + recent[n // 2]) / 2
+    return {
+        "soh_pct": min(100, round(implied / nominal * 100)),
+        "implied_kwh": round(implied, 1),
+        "nominal_kwh": round(nominal, 1),
+        "samples": len(samples),
+        "enough_data": True,
+    }
+
+
 def compute_charge_temp_scatter(days: int = 365) -> list[dict]:
     """Peak charging power vs on-car temperature per completed session.
 

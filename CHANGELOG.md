@@ -3,6 +3,29 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.27.0] — 2026-06-09
+
+### Added — battery State-of-Health estimate on the dashboard
+
+- **A "Battery health" card on the dashboard.** The Polestar/C3 API exposes no
+  SoH field, so it's the TeslaMate-style estimate: each charge implies a usable
+  pack capacity (`energy_kwh / ΔSoC`), each month of driving the same from
+  consumption; we take the median of recent samples (SoC span ≥ 12 % to limit
+  rounding noise) against the nominal 78 kWh pack, **capped at 100 %**. Computed
+  at page load (not on the 30 s card refresh), failure-isolated. Clearly
+  labelled an estimate — AC charging losses bias it high, so a healthy pack
+  reads ~100 % until real degradation appears. Shows "collecting data" until a
+  few qualifying charges/trips exist. (Note: this does **not** require 100 %
+  charges.)
+
+### Fixed / Cleanup
+
+- **#16** — settings.html no longer hardcodes `#1a1c20` (7 Grafana cards); uses
+  `var(--ujh-bg-3)`, which also fixes the wrong shade under the light theme.
+- **#17** — `co2_g_per_kwh(when)` no longer defaults `when` to "now": the
+  argument is required (every call site passes the event timestamp), so a row's
+  CO2 stamp is deterministic regardless of when it's computed.
+
 ## [1.26.0] — 2026-06-09
 
 ### Added — software "since" date

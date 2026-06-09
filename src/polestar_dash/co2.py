@@ -17,15 +17,18 @@ from __future__ import annotations
 import os
 from datetime import datetime
 
-from .util import utcnow
-
 _AT_MONTHLY_G_PER_KWH = {
     1: 220, 2: 200, 3: 150, 4: 120, 5: 100, 6: 90,
     7: 100, 8: 110, 9: 130, 10: 160, 11: 200, 12: 230,
 }
 
 
-def co2_g_per_kwh(when: datetime | None = None) -> int:
+def co2_g_per_kwh(when: datetime) -> int:
+    """Grid CO2 intensity (g/kWh) for the month of ``when``.
+
+    ``when`` is required — every call site has a concrete event timestamp
+    (session/trip start). A defaulted "now" used to make this non-deterministic
+    (the same row could be stamped differently depending on when it ran)."""
     raw = os.environ.get("CO2_INTENSITY")
     if raw:
         try:
@@ -40,8 +43,7 @@ def co2_g_per_kwh(when: datetime | None = None) -> int:
             return int(float(override))
     except Exception:  # noqa: BLE001
         pass
-    month = (when or utcnow()).month
-    return _AT_MONTHLY_G_PER_KWH.get(month, 150)
+    return _AT_MONTHLY_G_PER_KWH.get(when.month, 150)
 
 
 def backfill_charge_sessions() -> int:

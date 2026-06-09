@@ -838,4 +838,18 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Error logged in {source}": "Fehler protokolliert in {source}",
     "{n} error(s) this hour. First:": "{n} Fehler in dieser Stunde. Erster:",
     "first seen": "erstmals gesehen",
+    # --- Battery health (SoH) on the dashboard ---
+    "Battery health": "Batterie-Gesundheit",
+    "estimate": "Schätzung",
+    "Collecting data": "Daten werden gesammelt",
+    "≈ {kwh} kWh usable of {nom} kWh · {n} measurements":
+        "≈ {kwh} kWh nutzbar von {nom} kWh · {n} Messungen",
+    "The car reports no SoH, so this is estimated from charge & drive energy vs "
+    "the SoC change. AC charging losses bias it high, so a healthy pack reads "
+    "~100% until real degradation appears.":
+        "Das Auto meldet keinen SoH-Wert; geschätzt aus Lade- & Fahrenergie "
+        "gegen die SoC-Änderung. AC-Ladeverluste verzerren nach oben, daher "
+        "zeigt ein gesunder Akku ~100 %, bis echte Degradation auftritt.",
+    "Needs a few charges or trips with a noticeable SoC change.":
+        "Braucht ein paar Ladungen oder Fahrten mit merklicher SoC-Änderung.",
 }

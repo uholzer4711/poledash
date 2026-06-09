@@ -124,3 +124,27 @@ def test_lab_probe_rejects_graphql_injection(tmp_db):
     # this bare test app — which proves it got past the allowlist).
     r = client.post("/api/lab/probe", json={"parent": "BatteryV2", "fields": ["name { a b }"]})
     assert r.status_code == 503
+
+
+def test_soh_estimate(tmp_db):
+    from polestar_dash.db.models import ChargeSession
+    from polestar_dash.insights_extras import compute_soh
+
+    # Too little data → no estimate, "collecting".
+    assert compute_soh()["enough_data"] is False
+
+    now = datetime.utcnow()
+    with Session(get_engine()) as s:
+        for i in range(5):
+            # ~75 kWh implied (30 kWh over a 40% SoC span) — a healthy pack.
+            s.add(ChargeSession(
+                vin="VIN1", started_at=now - timedelta(days=i),
+                soc_start=30, soc_end=70, energy_kwh=30.0, is_complete=True,
+            ))
+        s.commit()
+
+    soh = compute_soh()
+    assert soh["enough_data"] is True
+    assert soh["samples"] >= 3
+    assert soh["soh_pct"] is not None and 0 < soh["soh_pct"] <= 100  # never > 100
+    assert soh["implied_kwh"] == 75.0
