@@ -49,17 +49,16 @@ Update: `git pull && docker compose up -d --build`. Or add
 
 | Path | Purpose |
 |---|---|
-| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info, plus a **C3 vehicle-state** section: a top-view of the car with each open door/window/frunk/boot/sunroof highlighted (uses your uploaded vehicle image with an orange open-overlay + status chips, or a built-in green/red SVG diagram as fallback), lock/climate/cabin-air/weather cards, and a satellite mini-map with the live GPS pin + trail. The vehicle-state section reads **live** from the C3 backend so it matches the Test page. A **vehicle control panel** (lock/unlock, windows, climate incl. seat/wheel heating, pre-cleaning, flash/honk, wake) sits beside the diagram — every command shows **verified feedback** (sending → re-reads the car → ✓ verified / ✗ not confirmed) |
-| `/history` | **Battery & Charging** — telemetry time-series + charging sessions, plus a **charging control panel** (start/stop, amp limit, target SoC) |
+| `/` | Live dashboard with charging hero (animated battery bar, VU gauges for power + voltage), SoC, range, vehicle info, a compact **SOH** (battery-health estimate) card that expands on click, plus a **C3 vehicle-state** section: a top-view of the car with each open door/window/frunk/boot/sunroof highlighted (uses your uploaded vehicle image with an orange open-overlay + status chips, or a built-in green/red SVG diagram as fallback), lock/climate/cabin-air/weather cards, and a satellite mini-map with the live GPS pin + trail. The vehicle-state section reads **live** from the C3 backend. A **vehicle control panel** (lock/unlock, windows, climate incl. seat/wheel heating, pre-cleaning, flash/honk, wake) sits beside the diagram — every command shows **verified feedback** (sending → re-reads the car → ✓ verified / ✗ not confirmed) |
+| `/history` | **Battery & Charging** — telemetry time-series + charging sessions, the **battery-health (SoH) trend**, plus a **charging control panel** (start/stop, amp limit, target SoC) |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
-| `/insights` | Wh/km vs outside temperature, weekly €/100 km, **cabin air & on-car temperature (daily, from C3)**, range factor, idle-drain detector, real trip cost, **CO₂ footprint**, **usable-battery-capacity trend** |
-| `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available; plus the **car-reported pending update** when the car announces one |
-| `/log` | **Activity log** — everything the app's loggers emit (polls, sessions, notifications, automations, errors). Live tail in memory, auto-refreshing & level-filterable, consolidated into collapsible hour/day groups; persisted to the DB (`LOG_RETENTION_DAYS`) so you can page back through history with "Load older" |
+| `/insights` | **Answer-first** efficiency & cost page: five themed sections (*What is the car costing me? · How efficiently am I driving? · How healthy is the battery? · Am I wasting energy? · Impact & patterns*), each with a headline number, **auto-generated plain-language insight sentences** (cold-weather penalty, most-efficient speed band, EV-vs-petrol saving, range trend, idle losses, CO₂ saved…) and the charts demoted to collapsible evidence. A *Bottom line* band + a 30/90/180/365-day time-range selector |
+| `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available; plus the **car-reported pending update** (with a *first-seen* date) when the car announces one |
+| `/log` | **Activity log** — everything the app's loggers emit (polls, sessions, notifications, automations, errors). Live tail in memory, auto-refreshing, **search / source / level / time-range filters** + plain-text export, consolidated into collapsible hour/day groups; persisted to the DB (`LOG_RETENTION_DAYS`) so you can page back through history with "Load older" |
 | `/routes` | Repeated routes aggregated from imported trips, with a most/least-efficient leaderboard |
-| `/test` | Raw C3 debug surface: live GPS map + the full decoded snapshot. The useful bits are now surfaced in the normal UI — extended health (12V battery, washer fluid, per-bulb diagnosis) on the dashboard, live V/A/W + Connector in the charging hero, the car-reported pending update on `/software`, and the control buttons on the dashboard + Battery & Charging — so `/test` is just the raw read-out |
-| `/lab` | Live API field discovery, gRPC proto dump, upstream tracker |
-| `/settings` `/errors` `/raw` | Settings (address labels + **geofence labels**, a **Trip-flow map**, an **alerts frame** to toggle each notification + set its quiet-hour window, and **automations** — per-rule, opt-in), recent errors, raw API dump. Language (DE/EN), the light/dark theme toggle and a **Mobil ⇄ Web** view switch live in the topbar; on phones a bottom tab bar replaces the top nav and wide tables fold into readable cards |
+| `/lab` | **Consolidated developer tab** — live C3 state, the raw API payload, the write-control panel, and live field discovery / gRPC proto dump, in collapsible lazy-loading frames. The old `/raw` and `/test` URLs redirect here |
+| `/settings` `/errors` | Settings (electricity price + charging-loss factor, **petrol comparison** for Insights, address labels + **geofence labels**, a **Trip-flow map**, an **alerts frame** to toggle each notification + set its quiet-hour window, and **automations** — per-rule, opt-in), recent errors. Language (DE/EN), the light/dark theme toggle and a **Mobil ⇄ Web** view switch live in the topbar; on phones a bottom tab bar replaces the top nav and wide tables fold into readable cards |
 | `/api/*` | JSON for everything above + `/export.csv` + `/tripbook.ics` |
 | `/metrics` | Prometheus exposition |
 
@@ -113,6 +112,7 @@ See [`.env.example`](.env.example). Most useful:
 | `NIGHT_POLL_INTERVAL_MIN` / `C3_NIGHT_POLL_INTERVAL_MIN` | `30` / `30` | Main / C3 cadence during the night window |
 | `IDLE_POLL_INTERVAL_MIN` / `C3_IDLE_POLL_INTERVAL_MIN` | `20` / `15` | Main / C3 cadence when locked & parked during the day |
 | `NOTIFY_DOOR_OPEN` / `NOTIFY_UNLOCKED` | `true` | Seed default for the C3 door-open / unlocked alerts (each alert is then toggled + time-windowed on `/settings`) |
+| `NOTIFY_LOG_ERRORS` | `false` | Opt-in: notify when the app logs an ERROR/CRITICAL (deduped to 1 per source per hour) |
 | `PUBLIC_BASE_URL` | — | External URL (e.g. `https://poledash.example.com`) for the one-tap confirm links in automation *suggest*-mode pushes; empty ⇒ text hint only |
 | `CAR_IMAGE_URL` | — | Optional vehicle image (an upload on `/settings` overrides it) |
 | `SMTP_HOST` | — | SMTP server (e.g. `smtp.gmail.com`) |
@@ -124,6 +124,8 @@ See [`.env.example`](.env.example). Most useful:
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | — | Bot push |
 | `MQTT_HOST` | — | Enables MQTT + HA discovery |
 | `BACKUP_KEEP_DAYS` | `14` | Daily SQLite backups |
+| `LOG_PERSIST_INTERVAL_MIN` / `LOG_RETENTION_DAYS` | `2` / `90` | Activity-log: flush the in-memory ring to the DB every N min; prune persisted rows after N days |
+| `PETROL_PRICE_EUR_PER_L` / `PETROL_L_PER_100KM` / `PETROL_CO2_G_PER_KM` | `1.75` / `7.0` / `150` | Reference petrol car for the Insights cost & CO₂ comparison (also editable on `/settings`) |
 | `SOFTWARE_MANUAL_URL` | *(Polestar 2 MY2027 manual)* | Page scraped 2×/day for the latest software version |
 
 Language: the UI and all notification/alert messages are available in
@@ -205,6 +207,15 @@ returns `software_version: null` for many cars (incl. MY2026), so enter the
 version read in-car (*Settings → System → Software update*) once via the form
 on the page — auto-detection takes over if the API ever reports it.
 
+Battery health (SoH): the Polestar/C3 API exposes **no** state-of-health value,
+so poledash estimates it (TeslaMate-style): each charge implies a usable pack
+capacity `energy_kwh ÷ ΔSoC`, each month of driving the same from consumption;
+the median of recent samples is shown against the nominal 78 kWh pack, capped at
+100 %. It is an **estimate** — AC charging losses bias it high, so a healthy pack
+reads ~100 % until real degradation appears, and it does *not* need 100 %
+charges. A compact card sits on the dashboard; a daily snapshot (`SohSnapshot`)
+feeds the trend chart on Battery & Charging.
+
 ## Reverse proxy (Caddy)
 
 ```caddyfile
@@ -231,8 +242,11 @@ longer intervals.
 `pypolestar` does OAuth/PKCE login with your account, discovers your VINs,
 and queries Polestar's GraphQL + gRPC endpoints every tick. Each poll
 writes one typed row (`VehicleSnapshot`) and one full JSON dump
-(`RawSnapshot`) to SQLite. Everything else — dashboard, MQTT, Prometheus,
-notifications, sessions, tripbook — reads from there.
+(`RawSnapshot`) to SQLite; the separate C3 loop adds `C3Snapshot` /
+`RawC3Snapshot`. Everything else — dashboard, MQTT, Prometheus, notifications,
+sessions, tripbook, insights — reads from there. Scheduler jobs maintain it:
+adaptive polling, daily backup + retention, software-update scrape, log flush,
+and the daily SoH snapshot.
 
 ## Acknowledgements
 
