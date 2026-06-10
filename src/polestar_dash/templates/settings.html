@@ -861,6 +861,9 @@
       </div>
     </form>
   </div>
+
+  {% include "partials/journey_import_modal.html" %}
+
   <script>
     async function uploadJourney(ev) {
       ev.preventDefault();
@@ -869,8 +872,8 @@
       out.textContent = {{ t("uploading…") | tojson }};
       const r = await fetch('/api/journey-import', { method: 'POST', body: fd });
       if (!r.ok) { out.textContent = {{ t("error: ") | tojson }} + r.status + ' ' + (await r.text()); return false; }
-      const j = await r.json();
-      out.textContent = {{ t("parsed") | tojson }} + ` ${j.parsed}, ` + {{ t("inserted") | tojson }} + ` ${j.inserted}, ` + {{ t("skipped") | tojson }} + ` ${j.skipped}`;
+      out.textContent = '';
+      openJourneyImportModal(await r.json());
       return false;
     }
   </script>

@@ -180,6 +180,14 @@ Imported journey log: the Polestar-app CSV carries more than energy and
 addresses. `/tripbook`'s imported-trips table surfaces each trip's **category**
 and **comments**, and an **odometer gap** check flags kilometres driven between
 logged trips that the app never recorded (a missing-trip / untracked-km signal).
+The importer (`/settings`) auto-detects both the **delimiter** (official
+Polestar-app comma export vs. tab-delimited CarStatsViewer-style export) and
+the **consumption unit** — some exports mislabel Wh as kWh, sometimes mixing
+both per row, which the importer corrects per-cell. Implausible or
+inconclusive files are rejected rather than guessed at, and re-importing a
+file repairs previously-stored bad values instead of skipping them. A
+**result popup** summarises what was imported, corrected, and enriched
+(battery calibration, CO₂, C3 on-car temp/PM2.5, weather).
 
 Address labels: friendly names (`Home`, `Work`, …) for frequent destinations
 shown on `/tripbook` and `/routes`. Multiple addresses can hang off one label

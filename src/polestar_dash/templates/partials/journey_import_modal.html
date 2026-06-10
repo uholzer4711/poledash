@@ -1,0 +1,78 @@
+{# Journey-import summary modal: what came in + what it enriched + the benefit.
+   Self-contained component — include once, then call
+   openJourneyImportModal(response) with the /api/journey-import JSON.
+   Closes via the ✕ button, the Done button, a backdrop click or Escape. #}
+<div id="ji_modal" class="modal-backdrop" hidden onclick="if(event.target===this)closeJourneyModal()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="jim_title">
+    <div class="modal-head">
+      <div>
+        <div class="mono-xs">{{ t("JOURNEY-LOG IMPORT") }}</div>
+        <h2 id="jim_title">{{ t("Import complete") | safe }}</h2>
+      </div>
+      <button class="btn ghost modal-close" type="button" onclick="closeJourneyModal()" aria-label="{{ t('Close') }}">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="openings-grid modal-stats">
+        <div><div class="v" id="jim_parsed">–</div><div class="k mono-xs">{{ t("rows read") }}</div></div>
+        <div><div class="v" id="jim_inserted">–</div><div class="k mono-xs">{{ t("new trips") }}</div></div>
+        <div><div class="v" id="jim_skipped">–</div><div class="k mono-xs">{{ t("duplicates") }}</div></div>
+      </div>
+
+      <div id="jim_note" class="modal-note" hidden>
+        {{ t("The consumption column was in <b>Wh</b> — automatically converted to kWh on import. (Some Polestar exports mislabel the unit; storing it raw would have been a 1000× error.)") | safe }}
+      </div>
+
+      <div class="mono-xs mb-2">{{ t("What we added") }}</div>
+      <ul class="modal-rows">
+        <li><span class="lbl">{{ t("Battery capacity calibrated (sessions recalculated)") }}</span><span class="val" id="jim_calib">–</span></li>
+        <li><span class="lbl">{{ t("Existing trips corrected (unit fix)") }}</span><span class="val" id="jim_updated">–</span></li>
+        <li><span class="lbl">{{ t("CO₂ intensity tagged (grid mix)") }}</span><span class="val" id="jim_co2">–</span></li>
+        <li><span class="lbl">{{ t("On-car temp + cabin PM2.5 (C3)") }}</span><span class="val" id="jim_c3">–</span></li>
+        <li><span class="lbl">{{ t("Outside weather (Open-Meteo)") }}</span><span class="val" id="jim_weather">–</span></li>
+      </ul>
+
+      <div class="mono-xs mb-2">{{ t("What this improves") }}</div>
+      <ul class="modal-benefit">
+        <li>{{ t("<b>Real per-trip kWh</b> + official addresses on the <a href=\"/tripbook\">tripbook</a> — ground truth we can't get from polling.") | safe }}</li>
+        <li>{{ t("A <b>calibrated battery capacity</b> makes every charge-session energy and the State-of-Health estimate more accurate across the whole app.") | safe }}</li>
+        <li>{{ t("<a href=\"/insights\">Insights</a> gain real consumption (Wh/km), the cold-weather curve, CO₂ footprint, energy cost and cabin air quality.") | safe }}</li>
+        <li>{{ t("<a href=\"/routes\">Repeated-route</a> stats and pre-C3 charge-session locations get filled in.") | safe }}</li>
+      </ul>
+    </div>
+    <div class="modal-foot">
+      <button class="btn accent" type="button" onclick="closeJourneyModal()">{{ t("Done") }} <span class="arrow">→</span></button>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    const modal = document.getElementById('ji_modal');
+    const dash = '–';
+    function setVal(id, v) { document.getElementById(id).textContent = (v ?? dash); }
+    function fmtEnrich(o) {
+      if (!o || typeof o !== 'object') return dash;
+      const u = o.updated ?? o.enriched ?? 0;
+      return {{ t("{u} of {c}") | tojson }}.replace('{u}', u).replace('{c}', o.checked ?? 0);
+    }
+    window.closeJourneyModal = function () { modal.hidden = true; };
+    window.openJourneyImportModal = function (j) {
+      setVal('jim_parsed', j.parsed);
+      setVal('jim_inserted', j.inserted);
+      setVal('jim_skipped', j.skipped);
+      // Only claim a conversion when it actually changed stored rows —
+      // an all-duplicates re-import must not pretend the DB was fixed.
+      document.getElementById('jim_note').hidden =
+        !(j.consumption_scaled && (j.inserted > 0 || j.updated > 0));
+      setVal('jim_calib', j.calibrated_battery_kwh != null ? `${j.calibrated_battery_kwh} kWh` : null);
+      setVal('jim_updated', j.updated > 0 ? j.updated : null);
+      setVal('jim_co2', j.co2_tagged);
+      setVal('jim_c3', fmtEnrich(j.c3_enriched));
+      setVal('jim_weather', fmtEnrich(j.weather));
+      modal.hidden = false;
+      modal.querySelector('.modal-foot .btn').focus();
+    };
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !modal.hidden) window.closeJourneyModal();
+    });
+  })();
+</script>

@@ -323,6 +323,7 @@ html.view-mobile #c3_map, html.view-mobile #tst_map { height: 300px !important; 
 .mt-7 { margin-top: var(--ujh-s-7); }
 .mt-8 { margin-top: var(--ujh-s-8); }
 .mt-9 { margin-top: var(--ujh-s-9); }
+.mb-2 { margin-bottom: var(--ujh-s-2); }
 .mb-4 { margin-bottom: var(--ujh-s-4); }
 .mb-6 { margin-bottom: var(--ujh-s-6); }
 
@@ -1071,3 +1072,76 @@ canvas { background: transparent; }
   letter-spacing: 0.02em;
 }
 body[data-demo="1"] { padding-top: 0; }
+
+/* ── Modal (sharp UJH dialog) ─────────────────────────────────────────────
+   Used for the journey-import summary. No rounded corners, no shadow. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--ujh-s-7) var(--ujh-s-4);
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.62);
+}
+.modal-backdrop[hidden] { display: none; }
+.modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--ujh-bg-2);
+  border: 1px solid var(--ujh-line-2);
+  color: var(--ujh-ink);
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ujh-s-4);
+  padding: var(--ujh-s-5) var(--ujh-s-5) var(--ujh-s-4);
+  border-bottom: 1px solid var(--ujh-line);
+}
+.modal-head h2 { margin: var(--ujh-s-1) 0 0; font-size: 22px; line-height: 1.2; }
+/* Size modifier on .btn.ghost — the close button stays a design-system button. */
+.modal-close { flex: none; padding: var(--ujh-s-2) var(--ujh-s-3); font: 500 14px/1 var(--ujh-mono); }
+.modal-body { padding: var(--ujh-s-5); }
+.modal-foot {
+  padding: var(--ujh-s-4) var(--ujh-s-5);
+  border-top: 1px solid var(--ujh-line);
+  display: flex;
+  justify-content: flex-end;
+}
+/* Counter strip: composes .openings-grid (the shared 1px-gap tile grid) in
+   markup; this class only fixes the column count and adds the cell layout. */
+.modal-stats {
+  grid-template-columns: repeat(3, 1fr);
+  margin-bottom: var(--ujh-s-5);
+}
+.modal-stats > div { background: var(--ujh-bg-2); padding: var(--ujh-s-4); }
+.modal-stats .v { font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; }
+.modal-stats .k { margin-top: var(--ujh-s-2); }
+/* Wh→kWh conversion note — thin orange contour, signal use only */
+.modal-note {
+  border-left: 2px solid var(--ujh-orange);
+  padding: var(--ujh-s-3) var(--ujh-s-4);
+  background: var(--ujh-bg-3);
+  margin-bottom: var(--ujh-s-5);
+  font-size: 14px;
+}
+/* Enrichment + benefit rows */
+.modal-rows { list-style: none; padding: 0; margin: 0 0 var(--ujh-s-5); }
+.modal-rows li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ujh-s-4);
+  padding: var(--ujh-s-3) 0;
+  border-bottom: 1px solid var(--ujh-line);
+}
+.modal-rows li:last-child { border-bottom: 0; }
+.modal-rows .lbl { color: var(--ujh-ink-2); }
+.modal-rows .val { font-family: var(--ujh-mono); font-size: 13px; color: var(--ujh-ink); text-align: right; }
+.modal-benefit { font-size: 14px; line-height: 1.55; color: var(--ujh-ink-2); }
+.modal-benefit li { margin: 0 0 var(--ujh-s-2) 1.1em; }
+html.view-mobile .modal-backdrop { padding: var(--ujh-s-4) var(--ujh-s-2); }
+html.view-mobile .modal-stats .v { font-size: 22px; }

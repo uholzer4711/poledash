@@ -3,6 +3,34 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.30.0] — 2026-06-10
+
+### Added — Journey-log import: format/unit auto-detection + result popup
+
+- **The journey-log importer now auto-detects both the CSV delimiter and the
+  consumption unit.** Besides the official Polestar app export (comma,
+  `Consumption in Kwh` decimals), it now accepts CarStatsViewer-style exports
+  (tab-delimited). Those sometimes mislabel the consumption column as kWh
+  while it's actually **Wh** — and, in the wild, **mix units per row**:
+  integer cells are Wh, decimal cells are already kWh. The importer detects
+  the file-level unit from the implied kWh/km over trips with usable distance,
+  then converts **only the integer-valued cells**, leaving already-correct
+  decimals untouched. Each row is stamped with a new `consumption_scaled`
+  column for provenance.
+- **Re-importing a file now repairs bad data instead of skipping it**: a
+  duplicate trip (same start/end timestamps) whose stored consumption differs
+  from the freshly parsed value is corrected in place. `/api/journey-import`
+  now returns `inserted` / `updated` / `skipped` counts.
+- **Implausible or inconclusive files are rejected (HTTP 400)** instead of
+  silently guessing: fewer than 5 km of trips with both distance and
+  consumption, or any single trip exceeding 150 kWh after normalisation,
+  aborts the import with an explanatory error.
+- **New "Import complete" popup on `/settings`** after a journey-log upload,
+  summarising what was parsed/inserted/corrected/skipped, whether a Wh→kWh
+  unit fix was applied, and what got enriched as a result (battery
+  calibration, CO₂ tagging, C3 on-car temperature + cabin PM2.5, weather) —
+  extracted as a reusable partial (`partials/journey_import_modal.html`).
+
 ## [1.29.0] — 2026-06-09
 
 ### Changed — Insights: answer-first redesign

@@ -962,12 +962,16 @@ async def journey_import(
         chunks.append(chunk)
     content = b"".join(chunks)
     try:
-        records = parse_csv(content, tz_offset_hours=tz_offset_hours)
+        records, parse_meta = parse_csv(content, tz_offset_hours=tz_offset_hours)
     except UnicodeDecodeError:
         raise HTTPException(400, "file is not UTF-8 text") from None
+    except ValueError as e:
+        # Unit detection refused to guess (or found implausible values) —
+        # rejecting beats silently storing 1000×-wrong energies.
+        raise HTTPException(400, str(e)) from None
     if not records:
         raise HTTPException(400, "no parseable rows — wrong format?")
-    inserted, skipped = upsert(records, vin=vin)
+    inserted, updated, skipped = upsert(records, vin=vin)
     calibrated = calibrate_battery_kwh()
     if calibrated is not None:
         from ..app_settings import CALIBRATED_BATTERY_KEY, set_setting
@@ -983,11 +987,13 @@ async def journey_import(
     return {
         "parsed": len(records),
         "inserted": inserted,
+        "updated": updated,
         "skipped": skipped,
         "calibrated_battery_kwh": calibrated,
         "co2_tagged": co2_tagged,
         "c3_enriched": c3_enriched,
         "weather": weather,
+        "consumption_scaled": parse_meta["consumption_scaled"],
     }
 
 

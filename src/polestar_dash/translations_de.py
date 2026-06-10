@@ -407,7 +407,6 @@ TRANSLATIONS_DE: dict[str, str] = {
     "ical": "ical",
     "implied range at 100%": "implizierte Reichweite bei 100%",
     "in {n} days": "in {n} Tagen",
-    "inserted": "eingefügt",
     "installed": "installiert",
     "integrations": "Integrationen",
     "kWh (est)": "kWh (gesch.)",
@@ -428,7 +427,6 @@ TRANSLATIONS_DE: dict[str, str] = {
     "only maps ~13 of the proto's 26 fields. The full": "bildet nur ~13 der 26 Proto-Felder ab. Der vollständige",
     "only unassigned within 500&nbsp;m of a labeled point": "nur nicht zugewiesene innerhalb von 500&nbsp;m eines gelabelten Punkts",
     "or a nested shape like": "oder eine verschachtelte Form wie",
-    "parsed": "geparst",
     "pattern (stored as substring)": "Muster (als Teilstring gespeichert)",
     "pattern empty": "Muster leer",
     "peak": "Spitze",
@@ -447,7 +445,6 @@ TRANSLATIONS_DE: dict[str, str] = {
     "session not found": "Ladevorgang nicht gefunden",
     "show 500&nbsp;m radius": "500&nbsp;m-Radius anzeigen",
     "since": "seit",
-    "skipped": "übersprungen",
     "some": "einige",
     "status": "Status",
     "telemetry": "Telemetrie",
@@ -945,4 +942,45 @@ TRANSLATIONS_DE: dict[str, str] = {
         "~{saved} kg CO₂ gespart vs Benziner ({g} g/km bei deinem Netz-Mix).",
     "Biggest efficiency lever: cold weather (+{pct}% below 5 °C).":
         "Größter Effizienz-Hebel: Kälte (+{pct}% unter 5 °C).",
+    # Journey-import summary modal
+    "JOURNEY-LOG IMPORT": "JOURNEY-LOG IMPORT",
+    # Accent heading: whole-phrase key (see TRANSLATIONS_EN in i18n.py)
+    "Import complete": 'Import <em class="accent">abgeschlossen</em>',
+    "Close": "Schließen",
+    "rows read": "Zeilen gelesen",
+    "new trips": "neue Fahrten",
+    "duplicates": "Duplikate",
+    "The consumption column was in <b>Wh</b> — automatically converted to kWh "
+    "on import. (Some Polestar exports mislabel the unit; storing it raw would "
+    "have been a 1000× error.)":
+        "Die Verbrauchsspalte war in <b>Wh</b> — beim Import automatisch nach "
+        "kWh umgerechnet. (Manche Polestar-Exporte labeln die Einheit falsch; "
+        "der Rohwert wäre ein 1000×-Fehler gewesen.)",
+    "What we added": "Was wir ergänzt haben",
+    "Battery capacity calibrated (sessions recalculated)":
+        "Batteriekapazität kalibriert (Ladevorgänge neu berechnet)",
+    "Existing trips corrected (unit fix)":
+        "Bestehende Fahrten korrigiert (Einheiten-Fix)",
+    "CO₂ intensity tagged (grid mix)": "CO₂-Intensität getaggt (Netz-Mix)",
+    "On-car temp + cabin PM2.5 (C3)": "Außentemp + Kabinen-PM2.5 (C3)",
+    "Outside weather (Open-Meteo)": "Außenwetter (Open-Meteo)",
+    "What this improves": "Was sich verbessert",
+    "<b>Real per-trip kWh</b> + official addresses on the "
+    "<a href=\"/tripbook\">tripbook</a> — ground truth we can't get from polling.":
+        "<b>Echte kWh pro Fahrt</b> + offizielle Adressen im "
+        "<a href=\"/tripbook\">Fahrtenbuch</a> — Ground Truth, die wir aus dem "
+        "Polling nicht bekommen.",
+    "A <b>calibrated battery capacity</b> makes every charge-session energy and "
+    "the State-of-Health estimate more accurate across the whole app.":
+        "Eine <b>kalibrierte Batteriekapazität</b> macht jede Ladevorgang-Energie "
+        "und die State-of-Health-Schätzung app-weit genauer.",
+    "<a href=\"/insights\">Insights</a> gain real consumption (Wh/km), the "
+    "cold-weather curve, CO₂ footprint, energy cost and cabin air quality.":
+        "<a href=\"/insights\">Insights</a> bekommen echten Verbrauch (Wh/km), "
+        "die Kälte-Kurve, CO₂-Fußabdruck, Energiekosten und Luftqualität.",
+    "<a href=\"/routes\">Repeated-route</a> stats and pre-C3 charge-session "
+    "locations get filled in.":
+        "<a href=\"/routes\">Routen-Statistik</a> und Ladevorgang-Orte vor C3 "
+        "werden ergänzt.",
+    "{u} of {c}": "{u} von {c}",
 }

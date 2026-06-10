@@ -199,6 +199,10 @@ class JourneyImport(SQLModel, table=True):
     end_lng: float | None = None
     distance_km: float | None = None
     consumption_kwh: float | None = None
+    # True if the importer auto-converted this row's consumption from a
+    # Wh-mislabelled export to kWh; NULL on rows imported before the flag
+    # existed. Keeps the unit conversion auditable after the fact.
+    consumption_scaled: bool | None = None
     start_odometer_km: float | None = None
     end_odometer_km: float | None = None
     soc_start: int | None = None

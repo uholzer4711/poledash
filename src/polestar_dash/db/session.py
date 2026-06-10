@@ -63,6 +63,7 @@ def _ensure_columns(engine) -> None:
             ("journeyimport", "weather_code", "INTEGER"),
             ("journeyimport", "co2_g_per_kwh", "INTEGER"),
             ("journeyimport", "air_pm25", "FLOAT"),
+            ("journeyimport", "consumption_scaled", "BOOLEAN"),
         ]
     if "chargingstation" in tables:
         plan += [

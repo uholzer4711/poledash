@@ -169,10 +169,90 @@ def _to_int(s: str | None) -> int | None:
     return int(v) if v is not None else None
 
 
-def parse_csv(content: bytes, tz_offset_hours: float = 0.0) -> list[dict]:
-    """Parse the journey-log CSV. Returns dicts ready for JourneyImport(**d)."""
+# Unit-detection guardrails. Real EV use is ~0.1–0.4 kWh/km, so an implied
+# energy-per-km above _WH_RATIO_THRESHOLD (≈10× the worst real case) can only
+# mean the column is Wh. Below _MIN_EVIDENCE_KM the ratio is one odd trip
+# (heavy HVAC on a 600 m hop can legitimately exceed 2 kWh/km), not evidence —
+# we refuse to guess. _MAX_TRIP_KWH: no single trip can consume more than the
+# whole pack (~80 kWh); anything above it after normalisation means mixed or
+# garbage data.
+_WH_RATIO_THRESHOLD = 2.0
+_MIN_EVIDENCE_KM = 5.0
+_MAX_TRIP_KWH = 150.0
+
+
+def _normalize_consumption_unit(rows: list[dict]) -> bool:
+    """Detect & fix Wh-valued exports mislabeled as kWh, in place.
+
+    The column header is always "Consumption in Kwh", but some journey exports
+    put **Wh** integers there (e.g. ``4253`` for a 27 km trip) instead of kWh
+    decimals (``4.253``). Storing Wh into ``consumption_kwh`` is a silent
+    1000× error that wrecks battery calibration, CO₂, cost and Wh/km insights.
+
+    Detection is file-level over trips with usable distance, but scaling is
+    per-row: Wh-valued exports mix units within one file — integer cells are
+    Wh (``4253``) while decimal cells are already kWh (``1.55`` for a 13 km
+    trip, cross-checked against the official export of the same trips). So in
+    a Wh-verdict file only integral values are divided; decimals pass through.
+    Each row is stamped with ``consumption_scaled`` so the DB keeps provenance
+    of the conversion. Returns True if the file needed converting.
+
+    Raises ValueError instead of guessing when the file has consumption values
+    but not enough distance evidence, or when a value stays implausible after
+    normalisation — rejecting the import beats silently storing wrong energies.
+    """
+    total_e = 0.0
+    total_km = 0.0
+    has_energy = False
+    for r in rows:
+        e, d = r.get("consumption_kwh"), r.get("distance_km")
+        if e:
+            has_energy = True
+        if e is not None and d and d > 0.5:
+            total_e += e
+            total_km += d
+    scaled = False
+    if has_energy:
+        if total_km < _MIN_EVIDENCE_KM:
+            raise ValueError(
+                "cannot tell whether consumption is in kWh or Wh: the file has "
+                f"less than {_MIN_EVIDENCE_KM:g} km of trips with both distance "
+                "and consumption — import aborted instead of guessing"
+            )
+        scaled = (total_e / total_km) > _WH_RATIO_THRESHOLD
+    for r in rows:
+        e = r.get("consumption_kwh")
+        if e is None:
+            r["consumption_scaled"] = None
+            continue
+        row_scaled = scaled and float(e).is_integer()
+        if row_scaled:
+            e = e / 1000.0
+            r["consumption_kwh"] = e
+        if e > _MAX_TRIP_KWH:
+            raise ValueError(
+                f"implausible consumption of {e:g} kWh on a single trip — "
+                "mixed kWh/Wh data? import aborted"
+            )
+        r["consumption_scaled"] = row_scaled
+    return scaled
+
+
+def parse_csv(content: bytes, tz_offset_hours: float = 0.0) -> tuple[list[dict], dict]:
+    """Parse the journey-log CSV into (records, meta).
+
+    Records are dicts ready for JourneyImport(**d); meta["consumption_scaled"]
+    reports whether the consumption column was auto-converted from Wh to kWh.
+    Raises ValueError when the consumption unit cannot be determined safely
+    (see _normalize_consumption_unit)."""
     text = content.decode("utf-8-sig")  # strips BOM
-    reader = csv.DictReader(io.StringIO(text))
+    # Delimiter auto-detect: the official Polestar app exports comma-separated,
+    # but the CarStatsViewer-style export is tab-separated. Decide from the
+    # header line only — addresses contain commas, so a body-wide comma count
+    # would mislead, but the column names never do.
+    header = text.partition("\n")[0]
+    delimiter = "\t" if header.count("\t") > header.count(",") else ","
+    reader = csv.DictReader(io.StringIO(text), delimiter=delimiter)
     out: list[dict] = []
     offset = timedelta(hours=tz_offset_hours)
     for row in reader:
@@ -204,11 +284,12 @@ def parse_csv(content: bytes, tz_offset_hours: float = 0.0) -> list[dict]:
             "category": (row.get("Category") or None) or None,
             "comments": (row.get("Comments") or None) or None,
         })
-    return out
+    scaled = _normalize_consumption_unit(out)
+    return out, {"consumption_scaled": scaled}
 
 
-def upsert(records: list[dict], vin: str | None = None) -> tuple[int, int]:
-    """Insert records, skipping duplicates on (started_at, ended_at).
+def upsert(records: list[dict], vin: str | None = None) -> tuple[int, int, int]:
+    """Insert records, deduping on (started_at, ended_at).
 
     Dedup is intentionally VIN-agnostic: a trip is uniquely identified by its
     exact start+end timestamps for this single-car app. Keying on VIN too was a
@@ -216,8 +297,14 @@ def upsert(records: list[dict], vin: str | None = None) -> tuple[int, int]:
     three-valued logic never matches ``'VIN' = NULL``) accumulated duplicates.
     ``vin`` is still stored as informational metadata.
 
-    Returns (inserted, skipped)."""
+    A duplicate whose consumption_kwh differs is *corrected* rather than
+    skipped: re-importing a file must be able to repair rows that were stored
+    with a wrong unit before the Wh→kWh auto-detection existed — otherwise a
+    bad import would be permanent.
+
+    Returns (inserted, updated, skipped)."""
     inserted = 0
+    updated = 0
     skipped = 0
     with Session(get_engine()) as s:
         for rec in records:
@@ -225,13 +312,24 @@ def upsert(records: list[dict], vin: str | None = None) -> tuple[int, int]:
                 JourneyImport.started_at == rec["started_at"],
                 JourneyImport.ended_at == rec["ended_at"],
             )
-            if s.exec(stmt).first() is not None:
-                skipped += 1
+            existing = s.exec(stmt).first()
+            if existing is not None:
+                new_e = rec.get("consumption_kwh")
+                if new_e is not None and (
+                    existing.consumption_kwh is None
+                    or abs(existing.consumption_kwh - new_e) > 1e-6
+                ):
+                    existing.consumption_kwh = new_e
+                    existing.consumption_scaled = rec.get("consumption_scaled")
+                    s.add(existing)
+                    updated += 1
+                else:
+                    skipped += 1
                 continue
             s.add(JourneyImport(vin=vin, **rec))
             inserted += 1
         s.commit()
-    return inserted, skipped
+    return inserted, updated, skipped
 
 
 def tag_co2_for_imports() -> int:
