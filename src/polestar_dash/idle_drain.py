@@ -38,7 +38,8 @@ from .util import haversine_km, utcnow
 
 GAP_MINUTES = 360  # 6 h — max gap that still collapses into one drain event
 MOVE_KM = 0.5  # GPS/odometer displacement that means the car drove, not parked
-DRIVE_KW = 8.0  # implied power above this, with no proof of standstill, = a drive
+DRIVE_KW = 8.0  # implied power ceiling: no standing car sustains more (above ⇒
+#                 missed drive or SoC quantization). Applied unconditionally.
 CONDITIONING_KW = 2.0  # parked draw above this = active (battery/thermal) management
 SETTLE_MIN = 30  # a drop within this long of parking is post-drive SoC settling /
 #                  a mid-drive GPS freeze — not a real parked drain
@@ -64,6 +65,11 @@ class IdleDrain:
     # C3 parked-fix timestamp) — parasitic loss shows up hours into a park,
     # conditioning right around departure/arrival.
     parked_for_min: int | None = None
+    # True when the very next snapshot shows the odometer advanced — i.e. the
+    # car drove off right after this SoC fall. With the odometer frozen *during*
+    # the drop, that trailing jump is often the only proof the "drain" was really
+    # the lead-in to (or the start of) a drive whose odometer hadn't refreshed.
+    drove_after: bool = False
 
     @property
     def soc_drop(self) -> int:
@@ -139,6 +145,9 @@ def detect_idle_drains(vin: str | None = None, days: int = 30) -> list[IdleDrain
                 )
         else:
             if cur is not None:
+                # The breaking sample advanced the odometer ⇒ the car drove off
+                # right after the drop (its frozen odometer hid the drive).
+                cur.drove_after = odo_advanced
                 out.append(cur)
                 cur = None
 
@@ -167,17 +176,20 @@ def _classify(drains: list[IdleDrain]) -> list[IdleDrain]:
 
     Decision order, per drain, from the C3 rows in a tight ±10 min window:
 
-    1. **Moved** (GPS displacement > MOVE_KM) → a drive → drop. A continuous
-       drive's arrival fix lands within ±pad of where the SoC stops falling, so
-       the tight window catches it without a greedy look-ahead (which would
-       wrongly absorb a *later, separate* trip).
+    1. **Moved** (GPS displacement > MOVE_KM in window) → a drive → drop.
     2. **C3-active** (climate/air running) → real cabin conditioning, kept
-       regardless of how recently the car parked.
-    3. **No park stamp** (no C3 GPS) → physics backstop: a drive-level implied
-       power is a missed drive (drop); otherwise keep, unattributed.
-    4. **Just parked** (parked_for < SETTLE_MIN) → the SoC is settling after a
-       drive, or the GPS froze mid-drive — not a real parked drain → drop.
-    5. Otherwise a genuine deep-park draw → conditioning (kW-level) / vampire.
+       regardless of how recently the car parked (genuine pre-conditioning).
+    3. **Drove right after** (the trailing odometer jump) → the SoC fall was the
+       lead-in to a drive whose odometer was still frozen → drop. This is what a
+       GPS that also froze at the departure point can't see — and what a *stale*
+       park stamp (frozen at a much earlier park) would otherwise wave through.
+    4. **Implausible power** (implied_kw > DRIVE_KW) → no parked car sustains
+       drive-level draw; it's a missed drive or SoC quantization → drop.
+       Applied *unconditionally* now (a long-looking `parked_for` can be a stale
+       frozen stamp, so it must not buy an exemption).
+    5. **Just parked** (parked_for < SETTLE_MIN) → post-drive SoC settling → drop.
+    6. **No park stamp** (no C3 GPS) → keep, unattributed (cause None).
+    7. Otherwise a genuine deep-park draw → conditioning (kW-level) / vampire.
     """
     if not drains:
         return []
@@ -199,30 +211,34 @@ def _classify(drains: list[IdleDrain]) -> list[IdleDrain]:
             if _moved(rows):
                 continue  # (1) a drive masquerading as a parked drain
 
+            # (2) C3-confirmed cabin conditioning is real even when a drive
+            # follows (the car warms up, then leaves) — keep it.
             if any(
                 r.climate_active or (r.climate_running in _CLIMATE_ACTIVE_STATES)
                 for r in rows
             ):
-                d.cause = "climate"  # (2)
+                d.cause = "climate"
                 d.parked_for_min = _parked_for(rows, d)
                 kept.append(d)
                 continue
             if any(r.air_running for r in rows):
-                d.cause = "air"  # (2)
+                d.cause = "air"
                 d.parked_for_min = _parked_for(rows, d)
                 kept.append(d)
                 continue
 
+            if d.drove_after:
+                continue  # (3) the drop merged into a drive (frozen odometer)
+            if d.implied_kw > DRIVE_KW:
+                continue  # (4) physically impossible for a standing car
+
             parked_for = _parked_for(rows, d)
             if parked_for is None:
-                # (3) No GPS/park stamp to vouch for standstill → trust physics.
-                if d.implied_kw > DRIVE_KW:
-                    continue
-                kept.append(d)  # plausible but unattributable → cause stays None
+                kept.append(d)  # (6) plausible but unattributable → cause None
                 continue
             if parked_for < SETTLE_MIN:
-                continue  # (4) post-drive settling / mid-drive freeze
-            # (5) genuine parked draw
+                continue  # (5) post-drive SoC settling
+            # (7) genuine deep-park draw
             d.parked_for_min = parked_for
             d.cause = "conditioning" if d.implied_kw >= CONDITIONING_KW else "vampire"
             kept.append(d)

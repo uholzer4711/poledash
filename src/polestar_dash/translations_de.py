@@ -1000,4 +1000,8 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Active draw (parked)": "Aktiver Verbrauch (geparkt)",
     "Parasitic standby": "Parasitärer Standby-Verlust",
     "parked for": "geparkt seit",
+    "began after {dur} parked": "begann nach {dur} Standzeit",
+    "How long the loss ran": "Wie lange der Verbrauch lief",
+    "Energy lost · average power": "Verlorene Energie · mittlere Leistung",
+    "Duration is how long the loss ran; the parked time is how long the car had already stood when it began.": "„Duration“ = wie lange der Verbrauch lief; die Standzeit = wie lange das Auto schon geparkt war, als er begann.",
 }

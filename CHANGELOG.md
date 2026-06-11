@@ -3,6 +3,31 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.34.1] — 2026-06-11
+
+### Fixed — idle-drain still leaked a drive (stale park stamp) + clearer table
+
+- A drive home was still showing as "Active draw (parked) · parked for 12 h
+  18 min": the car had sat at one spot all day (so its C3 **park stamp was ~12 h
+  stale**), the SoC fell 4 % in the 20 min before it drove off (odometer frozen
+  at the origin, GPS frozen at the departure point), then the odometer jumped
+  30 km. The stale stamp sailed through the "just parked" settling guard, and
+  the 9.8 kW implied draw bypassed the power ceiling because a (stale) park stamp
+  had been treated as proof of standstill.
+- Two fixes: a drain whose **next snapshot advances the odometer** (`drove_after`)
+  is now rejected — that trailing jump is often the only proof the SoC fall was
+  the lead-in to a drive the frozen odometer hid; and the **drive-level power
+  ceiling is applied unconditionally** (a long-looking `parked_for` can be a
+  stale frozen stamp, so it no longer buys an exemption). C3-confirmed
+  climate/air still counts as real conditioning. With these, the genuine result
+  for this car is that almost every multi-percent SoC fall overlaps a drive — the
+  table is honestly near-empty rather than padded with disguised trips.
+- **Clearer table:** the energy cell reads `3.25 kWh · Ø 9.8 kW` (unit + an
+  explicit *average*), the parked context reads *began after 12 h 18 min parked*
+  (so it can't be mistaken for the loss duration), and a one-line legend spells
+  out that **Duration** is how long the loss ran while the parked time is how
+  long the car had already stood when it began.
+
 ## [1.34.0] — 2026-06-11
 
 ### Changed — idle-drain detection rebuilt (no more drives mislabelled as standby)

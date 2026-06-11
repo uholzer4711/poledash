@@ -124,11 +124,12 @@
     <table class="index mono-xs mt-4" style="width:100%;border-collapse:collapse" id="drain_tbl">
       <thead><tr>
         <th style="text-align:left;padding:4px 8px">{{ t("Started") }}</th>
-        <th>{{ t("Duration") }}</th><th>{{ t("SoC drop") }}</th><th>≈ kWh</th>
+        <th title="{{ t('How long the loss ran') }}">{{ t("Duration") }}</th><th>{{ t("SoC drop") }}</th><th title="{{ t('Energy lost · average power') }}">≈ kWh</th>
         <th>{{ t("Cause") }}</th>
       </tr></thead>
       <tbody></tbody>
     </table>
+    <div class="mono-xs muted mt-2">{{ t("Duration is how long the loss ran; the parked time is how long the car had already stood when it began.") }}</div>
   </div>
 
   {# ── 5 · Umwelt & Muster ───────────────────────────────────────────────── #}
@@ -411,10 +412,14 @@
         conditioning: {{ t("Active draw (parked)") | tojson }},
         vampire: {{ t("Parasitic standby") | tojson }},
       };
-      const PARKED_FOR = {{ t("parked for") | tojson }};
+      // {dur} is filled in JS (fmtDur runs client-side) — phrased so it reads
+      // as "how long it had already stood when the loss began", not the loss
+      // length (which is the Duration column).
+      const BEGAN_AFTER = {{ t("began after {dur} parked") | tojson }};
       const causeCell = (d) => {
         let txt = CAUSE[d.cause] || '—';
-        if (d.parked_for_min != null) txt += ` · ${PARKED_FOR} ${fmtDur(d.parked_for_min)}`;
+        if (d.parked_for_min != null)
+          txt += ` <span class="muted">· ${BEGAN_AFTER.replace('{dur}', fmtDur(d.parked_for_min))}</span>`;
         return txt;
       };
       document.querySelector('#drain_tbl tbody').innerHTML = dr.items.map(d => `
@@ -422,7 +427,7 @@
           <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
           <td style="text-align:right" data-label="{{ t('Duration') }}">${fmtDur(d.duration_min)}</td>
           <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
-          <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)}${d.implied_kw != null ? ` <span class="muted">· ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
+          <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)} kWh${d.implied_kw != null ? ` <span class="muted">· Ø ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
           <td style="text-align:right" data-label="{{ t('Cause') }}">${causeCell(d)}</td>
         </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
     }

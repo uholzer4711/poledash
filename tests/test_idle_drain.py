@@ -126,18 +126,41 @@ def test_drive_level_power_without_gps_is_rejected(tmp_db):
 
 
 def test_drop_right_after_parking_is_settling(tmp_db):
-    """SoC relaxes for a while after a drive (OCV re-estimation). A drop that
-    starts < SETTLE_MIN after the car parked is that settling, not real draw."""
+    """SoC relaxes for a while after a drive (OCV re-estimation). A modest drop
+    that starts < SETTLE_MIN after the car parked is that settling, not draw."""
     from polestar_dash.idle_drain import detect_idle_drains
 
     t0 = utcnow() - timedelta(days=1)
     with Session(get_engine()) as s:
+        # 2% over 25 min ⇒ ~3.9 kW (under the ceiling — so it's the *settling
+        # guard*, not the power cap, that must reject this).
         s.add(_snap(t0, 72))
-        s.add(_snap(t0 + timedelta(minutes=20), 68))
-        # Parked only ~12 min before the drop began, GPS pinned (just arrived).
-        parked = _epoch(t0 - timedelta(minutes=12))
+        s.add(_snap(t0 + timedelta(minutes=25), 70))
+        parked = _epoch(t0 - timedelta(minutes=12))  # just arrived
         s.add(_c3(t0, lat=HOME[0], lng=HOME[1], parked_ts=parked))
-        s.add(_c3(t0 + timedelta(minutes=25), lat=HOME[0], lng=HOME[1], parked_ts=parked))
+        s.add(_c3(t0 + timedelta(minutes=28), lat=HOME[0], lng=HOME[1], parked_ts=parked))
+        s.commit()
+
+    drains = detect_idle_drains(vin="VIN1", days=3)
+    assert drains == []
+
+
+def test_drop_before_drive_with_stale_parkstamp_is_rejected(tmp_db):
+    """The real June-11 bug: the car sat at work all morning (so its C3 park
+    stamp is ~12 h old), the SoC fell 2% just before it drove home (odometer
+    frozen at work, GPS frozen at the departure point), then the odometer jumped.
+    The stale park stamp sails through the settling guard at a plausible ~3 kW —
+    only the trailing odometer jump (`drove_after`) reveals it was a drive."""
+    from polestar_dash.idle_drain import detect_idle_drains
+
+    t0 = utcnow() - timedelta(days=1)
+    stale_park = _epoch(t0 - timedelta(hours=12))
+    with Session(get_engine()) as s:
+        s.add(_snap(t0, 25, odo=2000.0))
+        s.add(_snap(t0 + timedelta(minutes=30), 23, odo=2000.0))  # odo still frozen
+        s.add(_snap(t0 + timedelta(minutes=50), 20, odo=2030.0))  # drove 30 km
+        s.add(_c3(t0, lat=AWAY[0], lng=AWAY[1], parked_ts=stale_park))
+        s.add(_c3(t0 + timedelta(minutes=35), lat=AWAY[0], lng=AWAY[1], parked_ts=stale_park))
         s.commit()
 
     drains = detect_idle_drains(vin="VIN1", days=3)
