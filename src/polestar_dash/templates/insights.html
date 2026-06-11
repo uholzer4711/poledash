@@ -130,6 +130,30 @@
       <tbody></tbody>
     </table>
     <div class="mono-xs muted mt-2">{{ t("Duration is how long the loss ran; the parked time is how long the car had already stood when it began.") }}</div>
+
+    <details class="mt-4">
+      <summary class="mono-xs">{{ t("What does the cause mean?") }}</summary>
+      <ul class="mono-xs muted" style="margin:8px 0 0;padding-left:18px;line-height:1.7">
+        <li><b>{{ t("Pre-conditioning") }}</b> — {{ t("the car ran cabin climate (heating/cooling) while parked — C3 confirmed it.") }}</li>
+        <li><b>{{ t("Air cleaning") }}</b> — {{ t("the car ran cabin air-cleaning while parked — C3 confirmed it.") }}</li>
+        <li><b>{{ t("Active draw (parked)") }}</b> — {{ t("parked with no climate running, but a kW-level draw — most likely battery/thermal management or pre-departure conditioning the climate flag doesn't cover.") }}</li>
+        <li><b>{{ t("Parasitic standby") }}</b> — {{ t("parked, a small steady background loss (the 12V system, keeping the car awake).") }}</li>
+        <li><b>{{ t("Unknown") }}</b> — {{ t("a plausible parked draw, but no C3 GPS for that time to attribute it (e.g. before C3 was enabled).") }}</li>
+      </ul>
+    </details>
+
+    <details class="mt-2">
+      <summary class="mono-xs">{{ t("Diagnostics — every SoC drop and why") }} <span class="muted" id="drain_diag_sum"></span></summary>
+      <div class="mono-xs muted" style="margin:8px 0">{{ t("Most SoC drops are drives the frozen odometer hid — these are the ones the table above excludes, shown here with the reason.") }}</div>
+      <table class="index mono-xs" style="width:100%;border-collapse:collapse" id="drain_diag_tbl">
+        <thead><tr>
+          <th style="text-align:left;padding:4px 8px">{{ t("Started") }}</th>
+          <th>{{ t("SoC drop") }}</th><th>≈ kWh</th><th>{{ t("Place") }}</th>
+          <th style="text-align:right">{{ t("Verdict") }}</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </details>
   </div>
 
   {# ── 5 · Umwelt & Muster ───────────────────────────────────────────────── #}
@@ -430,6 +454,37 @@
           <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)} kWh${d.implied_kw != null ? ` <span class="muted">· Ø ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
           <td style="text-align:right" data-label="{{ t('Cause') }}">${causeCell(d)}</td>
         </tr>`).join('') || '<tr><td colspan="5" class="muted" style="padding:6px 8px">{{ t("No idle drains in this period — parasitic standby stays under the ~2% detection floor, and SoC drops that coincide with a drive are excluded as trips.") }}</td></tr>';
+
+      // ── Diagnostics: every candidate + verdict ─────────────────────────────
+      const VERDICT = {
+        climate: {{ t("Pre-conditioning") | tojson }},
+        air: {{ t("Air cleaning") | tojson }},
+        conditioning: {{ t("Active draw (parked)") | tojson }},
+        vampire: {{ t("Parasitic standby") | tojson }},
+        unknown: {{ t("Unknown") | tojson }},
+        drive: {{ t("Drive (not a drain)") | tojson }},
+        settling: {{ t("Measurement settling") | tojson }},
+        implausible: {{ t("Implausible — over 8 kW") | tojson }},
+      };
+      const L_CHECKED = {{ t("checked") | tojson }},
+            L_KEPT = {{ t("kept") | tojson }},
+            L_EXCLUDED = {{ t("excluded") | tojson }};
+      const diag = dr.diagnostics || [];
+      document.getElementById('drain_diag_sum').textContent =
+        `· ${diag.length} ${L_CHECKED}, ${dr.count} ${L_KEPT}, ${dr.excluded} ${L_EXCLUDED}`;
+      document.querySelector('#drain_diag_tbl tbody').innerHTML = diag.map(d => {
+        const label = VERDICT[d.verdict] || d.verdict;
+        // Kept rows full strength, excluded rows dimmed (no extra colours — the
+        // green/red signal palette is reserved for vehicle state).
+        return `
+        <tr style="border-top:1px solid var(--ujh-line)${d.kept ? '' : ';opacity:.55'}">
+          <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
+          <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
+          <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)}${d.implied_kw != null ? ` <span class="muted">· Ø ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
+          <td style="text-align:right" data-label="{{ t('Place') }}">${d.place ? d.place : '—'}</td>
+          <td style="text-align:right${d.kept ? ';font-weight:600' : ''}" data-label="{{ t('Verdict') }}">${label}</td>
+        </tr>`; }).join('') ||
+        `<tr><td colspan="5" class="muted" style="padding:6px 8px">{{ t("No SoC drops in this period.") }}</td></tr>`;
     }
 
     async function safeLoad() {

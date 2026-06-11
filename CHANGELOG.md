@@ -3,6 +3,33 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.35.0] — 2026-06-11
+
+### Added — idle-drain transparency: every SoC drop, its verdict, and what "cause" means
+
+- The idle-drain table was a black box — and now that it's honestly near-empty,
+  "what's going on?" needed a real answer. Two additions on **Insights →
+  Am I wasting energy?**:
+  - A **"What does the cause mean?"** legend defining each kept cause in plain
+    language: *Pre-conditioning* / *Air cleaning* (C3 saw the cabin HVAC run),
+    *Active draw (parked)* (kW-level battery/thermal management with climate
+    idle), *Parasitic standby* (small steady 12 V background loss), and
+    *Unknown* (plausible but no C3 GPS to attribute it).
+  - A **Diagnostics** view listing *every* candidate SoC fall with its verdict —
+    kept causes plus the exclusion reasons **Drive (not a drain)**,
+    **Measurement settling**, **Implausible — over 8 kW** — the implied kW, and
+    the **place** (resolved against your address geofences, e.g. *Arbeit*). A
+    one-line tally shows *N checked · K kept · X excluded*, so you can see the
+    detector is working and exactly why the table is short. (For this car: of 30
+    SoC drops in a fortnight, all 30 are drives or noise — none a real parked
+    drain.)
+- `/api/idle-drain` now also returns `diagnostics` (every candidate with
+  `verdict`/`place`/`kept`), a `tally`, and an `excluded` count. The detector
+  was refactored to classify *all* candidates with a `verdict`
+  (climate/air/conditioning/vampire/unknown, or drive/settling/implausible) and
+  stamp each with its GPS location; `detect_idle_drains` returns the kept subset
+  (unchanged for existing callers), `diagnose_idle_drains` returns everything.
+
 ## [1.34.1] — 2026-06-11
 
 ### Fixed — idle-drain still leaked a drive (stale park stamp) + clearer table

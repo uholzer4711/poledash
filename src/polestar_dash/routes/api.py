@@ -35,7 +35,7 @@ from ..db.models import (
 )
 from ..db.session import get_engine
 from ..i18n import SUPPORTED_LANGS, get_language, set_language
-from ..idle_drain import detect_idle_drains
+from ..idle_drain import diagnose_idle_drains
 from ..insights_extras import (
     compute_air_exposure,
     compute_battery_trend,
@@ -831,28 +831,43 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
     }
 
 
+def _drain_dict(d) -> dict:
+    return {
+        "started_at": d.started_at.isoformat(),
+        "ended_at": d.ended_at.isoformat(),
+        "duration_min": d.duration_min,
+        "soc_start": d.soc_start,
+        "soc_end": d.soc_end,
+        "soc_drop": d.soc_drop,
+        "kwh": d.kwh,
+        "implied_kw": d.implied_kw,
+        "verdict": d.verdict,
+        "kept": d.kept,
+        "cause": d.cause,
+        "parked_for_min": d.parked_for_min,
+        "place": d.place,
+        "lat": d.lat,
+        "lng": d.lng,
+    }
+
+
 @router.get("/idle-drain")
 def idle_drain(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> dict:
-    drains = detect_idle_drains(vin=vin, days=days)
-    # Newest first — the user cares about recent events, and the C3-attributed
-    # ones (which only exist for recent history) belong at the top.
-    items = [
-        {
-            "started_at": d.started_at.isoformat(),
-            "ended_at": d.ended_at.isoformat(),
-            "duration_min": d.duration_min,
-            "soc_start": d.soc_start,
-            "soc_end": d.soc_end,
-            "soc_drop": d.soc_drop,
-            "kwh": d.kwh,
-            "implied_kw": d.implied_kw,
-            "cause": d.cause,
-            "parked_for_min": d.parked_for_min,
-        }
-        for d in sorted(drains, key=lambda d: d.started_at, reverse=True)
-    ]
-    total_kwh = round(sum(d.kwh for d in drains), 1)
-    return {"items": items, "total_kwh": total_kwh, "count": len(items)}
+    diag = diagnose_idle_drains(vin=vin, days=days)
+    candidates = diag["candidates"]  # already newest-first
+    # `items` stays the kept-only list (unchanged shape for existing callers);
+    # `diagnostics` exposes every candidate with its verdict so the reasoning —
+    # what was kept vs excluded as a drive/settling/noise — is fully inspectable.
+    items = [_drain_dict(d) for d in candidates if d.kept]
+    total_kwh = round(sum(d.kwh for d in candidates if d.kept), 1)
+    return {
+        "items": items,
+        "total_kwh": total_kwh,
+        "count": len(items),
+        "diagnostics": [_drain_dict(d) for d in candidates],
+        "tally": diag["tally"],
+        "excluded": diag["excluded"],
+    }
 
 
 @router.get("/daily")

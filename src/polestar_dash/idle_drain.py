@@ -44,13 +44,23 @@ CONDITIONING_KW = 2.0  # parked draw above this = active (battery/thermal) manag
 SETTLE_MIN = 30  # a drop within this long of parking is post-drive SoC settling /
 #                  a mid-drive GPS freeze — not a real parked drain
 
-# Valid `cause` values (drives are *excluded* from the result, never labelled):
+# Every candidate SoC fall gets a `verdict`. The KEPT ones are genuine
+# non-trip drains; the rest are excluded but still returned by
+# diagnose_idle_drains() so the reasoning is fully inspectable.
+#
+# Kept (real drains):
 #   "climate"      — C3 saw cabin pre-conditioning running
 #   "air"          — C3 saw cabin air-cleaning running
 #   "conditioning" — parked & climate idle, but kW-level draw (battery/thermal
 #                    management or an in-car service), NOT tiny parasitic loss
 #   "vampire"      — parked, low-power parasitic standby loss
-#   None           — no C3 coverage to attribute (e.g. pre-C3 history)
+#   "unknown"      — plausible parked draw but no C3 coverage to attribute it
+# Excluded (not a parked drain):
+#   "drive"        — GPS moved, or the odometer jumped right after ⇒ it was a trip
+#   "implausible"  — implied draw above drive level ⇒ missed drive / SoC noise
+#   "settling"     — drop < SETTLE_MIN after parking ⇒ post-drive SoC re-estimation
+_ATTRIBUTED = {"climate", "air", "conditioning", "vampire"}
+_KEPT = _ATTRIBUTED | {"unknown"}
 
 
 @dataclass
@@ -60,7 +70,6 @@ class IdleDrain:
     soc_start: int
     soc_end: int
     duration_min: int
-    cause: str | None = None
     # Minutes the car had already been parked when the drain started (from the
     # C3 parked-fix timestamp) — parasitic loss shows up hours into a park,
     # conditioning right around departure/arrival.
@@ -70,6 +79,25 @@ class IdleDrain:
     # the drop, that trailing jump is often the only proof the "drain" was really
     # the lead-in to (or the start of) a drive whose odometer hadn't refreshed.
     drove_after: bool = False
+    # Final classification (set by _classify) — see the verdict taxonomy above.
+    verdict: str = "unknown"
+    # Where it happened: the C3 GPS fix in the window + a matching geofence label
+    # (e.g. "Arbeit") — pure diagnostics, so you can see *where* a drop was kept
+    # or excluded.
+    lat: float | None = None
+    lng: float | None = None
+    place: str | None = None
+
+    @property
+    def cause(self) -> str | None:
+        """Attributed cause when this is a real, named drain; None for a
+        kept-but-unattributed ('unknown') or an excluded candidate."""
+        return self.verdict if self.verdict in _ATTRIBUTED else None
+
+    @property
+    def kept(self) -> bool:
+        """True when this counts as a genuine non-trip drain."""
+        return self.verdict in _KEPT
 
     @property
     def soc_drop(self) -> int:
@@ -90,7 +118,9 @@ class IdleDrain:
         return round(self.kwh / hours, 1)
 
 
-def detect_idle_drains(vin: str | None = None, days: int = 30) -> list[IdleDrain]:
+def _candidates(vin: str | None, days: int) -> list[IdleDrain]:
+    """Build raw drain candidates (collapsed ≥2% non-charging SoC falls), before
+    any drive/standby classification. Shared by detect + diagnose."""
     since = utcnow() - timedelta(days=days)
     with Session(get_engine()) as s:
         stmt = (
@@ -158,8 +188,27 @@ def detect_idle_drains(vin: str | None = None, days: int = 30) -> list[IdleDrain
 
     # Drop sub-2% blips: at integer-SoC resolution a 1% step is mostly
     # quantization noise / slow background loss, not a discrete event.
-    candidates = [d for d in out if d.soc_drop >= 2]
-    return _classify(candidates)
+    return [d for d in out if d.soc_drop >= 2]
+
+
+def detect_idle_drains(vin: str | None = None, days: int = 30) -> list[IdleDrain]:
+    """The genuine non-trip drains (drives/settling/noise excluded)."""
+    return [d for d in _classify(_candidates(vin, days)) if d.kept]
+
+
+def diagnose_idle_drains(vin: str | None = None, days: int = 30) -> dict:
+    """Every candidate SoC fall with its verdict + a tally, so the reasoning
+    behind what's kept and what's excluded is fully inspectable."""
+    classified = _classify(_candidates(vin, days))
+    tally: dict[str, int] = {}
+    for d in classified:
+        tally[d.verdict] = tally.get(d.verdict, 0) + 1
+    return {
+        "candidates": sorted(classified, key=lambda d: d.started_at, reverse=True),
+        "tally": tally,
+        "kept": sum(1 for d in classified if d.kept),
+        "excluded": sum(1 for d in classified if not d.kept),
+    }
 
 
 # Climate states that mean "the HVAC is (about to be) doing work" — see
@@ -172,30 +221,34 @@ _CLIMATE_ACTIVE_STATES = {
 
 
 def _classify(drains: list[IdleDrain]) -> list[IdleDrain]:
-    """Reject drives, then fill cause + parked_for_min for the real drains.
+    """Assign every candidate a `verdict` + location and return them ALL (the
+    diagnostics view needs the excluded ones too; detect_idle_drains filters to
+    `.kept`).
 
     Decision order, per drain, from the C3 rows in a tight ±10 min window:
 
-    1. **Moved** (GPS displacement > MOVE_KM in window) → a drive → drop.
-    2. **C3-active** (climate/air running) → real cabin conditioning, kept
-       regardless of how recently the car parked (genuine pre-conditioning).
-    3. **Drove right after** (the trailing odometer jump) → the SoC fall was the
-       lead-in to a drive whose odometer was still frozen → drop. This is what a
-       GPS that also froze at the departure point can't see — and what a *stale*
-       park stamp (frozen at a much earlier park) would otherwise wave through.
-    4. **Implausible power** (implied_kw > DRIVE_KW) → no parked car sustains
-       drive-level draw; it's a missed drive or SoC quantization → drop.
-       Applied *unconditionally* now (a long-looking `parked_for` can be a stale
-       frozen stamp, so it must not buy an exemption).
-    5. **Just parked** (parked_for < SETTLE_MIN) → post-drive SoC settling → drop.
-    6. **No park stamp** (no C3 GPS) → keep, unattributed (cause None).
-    7. Otherwise a genuine deep-park draw → conditioning (kW-level) / vampire.
+    1. **Moved** (GPS displacement > MOVE_KM in window) → "drive".
+    2. **C3-active** (climate/air running) → kept as "climate"/"air", real cabin
+       conditioning even when a drive follows (the car warms up, then leaves).
+    3. **Drove right after** (the trailing odometer jump) → "drive": the SoC fall
+       was the lead-in to a drive whose odometer was still frozen — what a GPS
+       that also froze at the departure point can't see, and what a *stale* park
+       stamp would otherwise wave through.
+    4. **Implausible power** (implied_kw > DRIVE_KW) → "drive"-class noise; no
+       parked car sustains drive-level draw. Applied *unconditionally* (a
+       long-looking `parked_for` can be a stale frozen stamp → no exemption).
+    5. **Just parked** (parked_for < SETTLE_MIN) → "settling" (post-drive SoC
+       re-estimation).
+    6. **No park stamp** (no C3 GPS) → kept as "unknown" (unattributable).
+    7. Otherwise a genuine deep-park draw → "conditioning" (kW-level) / "vampire".
     """
     if not drains:
         return []
 
+    from .journey_import import get_address_geofences
+
     pad = timedelta(minutes=10)
-    kept: list[IdleDrain] = []
+    geofences = get_address_geofences()
 
     with Session(get_engine()) as s:
         for d in drains:
@@ -207,43 +260,43 @@ def _classify(drains: list[IdleDrain]) -> list[IdleDrain]:
                     .order_by(C3Snapshot.fetched_at.asc())
                 ).all()
             )
+            d.parked_for_min = _parked_for(rows, d)
+            _attach_place(d, rows, geofences)
 
             if _moved(rows):
-                continue  # (1) a drive masquerading as a parked drain
-
-            # (2) C3-confirmed cabin conditioning is real even when a drive
-            # follows (the car warms up, then leaves) — keep it.
-            if any(
+                d.verdict = "drive"  # (1)
+            elif any(
                 r.climate_active or (r.climate_running in _CLIMATE_ACTIVE_STATES)
                 for r in rows
             ):
-                d.cause = "climate"
-                d.parked_for_min = _parked_for(rows, d)
-                kept.append(d)
-                continue
-            if any(r.air_running for r in rows):
-                d.cause = "air"
-                d.parked_for_min = _parked_for(rows, d)
-                kept.append(d)
-                continue
+                d.verdict = "climate"  # (2)
+            elif any(r.air_running for r in rows):
+                d.verdict = "air"  # (2)
+            elif d.drove_after:
+                d.verdict = "drive"  # (3) drop merged into a drive (frozen odo)
+            elif d.implied_kw > DRIVE_KW:
+                d.verdict = "implausible"  # (4) impossible for a standing car
+            elif d.parked_for_min is None:
+                d.verdict = "unknown"  # (6) plausible but unattributable
+            elif d.parked_for_min < SETTLE_MIN:
+                d.verdict = "settling"  # (5) post-drive SoC re-estimation
+            else:  # (7) genuine deep-park draw
+                d.verdict = (
+                    "conditioning" if d.implied_kw >= CONDITIONING_KW else "vampire"
+                )
 
-            if d.drove_after:
-                continue  # (3) the drop merged into a drive (frozen odometer)
-            if d.implied_kw > DRIVE_KW:
-                continue  # (4) physically impossible for a standing car
+    return drains
 
-            parked_for = _parked_for(rows, d)
-            if parked_for is None:
-                kept.append(d)  # (6) plausible but unattributable → cause None
-                continue
-            if parked_for < SETTLE_MIN:
-                continue  # (5) post-drive SoC settling
-            # (7) genuine deep-park draw
-            d.parked_for_min = parked_for
-            d.cause = "conditioning" if d.implied_kw >= CONDITIONING_KW else "vampire"
-            kept.append(d)
 
-    return kept
+def _attach_place(d: IdleDrain, rows: list[C3Snapshot], geofences: dict) -> None:
+    """Stamp the drain with the first GPS fix in its window + a geofence label."""
+    from .journey_import import geo_label_for
+
+    fix = next((r for r in rows if r.lat is not None and r.lng is not None), None)
+    if fix is None:
+        return
+    d.lat, d.lng = fix.lat, fix.lng
+    d.place = geo_label_for(fix.lat, fix.lng, geofences)
 
 
 def _moved(rows: list[C3Snapshot]) -> bool:
