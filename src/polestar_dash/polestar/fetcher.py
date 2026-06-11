@@ -6,7 +6,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any
 
-from ..util import utcnow
+from ..util import charge_electrical, utcnow
 from .client import PolestarClient
 
 log = logging.getLogger(__name__)
@@ -218,6 +218,18 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
             snap.charging_status = "Charging"
         elif snap.charger_connection_status == "Connected":
             snap.charging_status = "Idle"
+
+    # The gRPC charging_type enum mislabels ordinary 11 kW 3-phase AC as "DC".
+    # Correct the typed field from physics (low per-phase voltage at modest
+    # power ⇒ AC; high bus voltage / high power ⇒ DC) so History charts and
+    # labels don't read "DC" for an AC charge. The RawSnapshot keeps the
+    # original enum value untouched.
+    elec = charge_electrical(
+        snap.charging_power_w, snap.charging_voltage_v, snap.charging_current_a,
+        api_type=snap.charging_type,
+    )
+    if elec["mode"]:
+        snap.charging_type = elec["mode"]
 
     if grpc_target is not None:
         snap.target_soc_percent = grpc_target.battery_charge_target_level

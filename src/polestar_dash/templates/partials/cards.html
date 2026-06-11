@@ -29,10 +29,18 @@
   <!-- ═══ CHARGING HERO ═══ -->
   <div class="card charge-hero mb-4">
     {% set pct = s.soc_percent or 0 %}
+    {# AC/DC + phase count for the badges below: the Polestar gRPC charging_type
+       enum mislabels 11 kW 3-phase AC as "DC"; C3 is authoritative and the
+       phase count (never exposed by the API) falls out of P ≈ phases·V·I. #}
+    {% set elec = charge_electrical(s.charging_power_w, s.charging_voltage_v,
+                                    s.charging_current_a,
+                                    c3_type=(c3.charging_type if c3 else none),
+                                    api_type=s.charging_type) %}
 
     <div class="charge-header">
       <span class="badge live"><span class="dot"></span>{{ s.charging_status }}</span>
-      {% if s.charging_type %}<span class="badge">{{ s.charging_type }}</span>{% endif %}
+      {% if elec.mode %}<span class="badge">{{ elec.mode }}</span>{% endif %}
+      {% if elec.phases %}<span class="badge">{{ t("{n}-phase", n=elec.phases) }}</span>{% endif %}
     </div>
 
     <!-- Battery bar -->
@@ -98,6 +106,12 @@
             <span class="vu-scale-mid">{{ ((v_min + v_max) / 2)|int }}</span>
             <span>{{ v_max }}</span>
           </div>
+          {% if elec.line_to_line_v %}
+          {# The API reports per-phase (line-to-neutral) volts; show the √3·V
+             line-to-line nominal so 230 V at a 3-phase box reads as the
+             expected ~400 V. #}
+          <div class="mono-xs muted">≈ {{ elec.line_to_line_v }} V {{ t("line-to-line") }}</div>
+          {% endif %}
         </div>
       {% endif %}
     </div>
@@ -125,6 +139,17 @@
         <div class="charge-stat-val num">{{ fmt_min(time_to_show) }}</div>
       </div>
       {% endif %}
+      {# Live AC energy: drawn so far (∫power since plug-in) + self-calibrated
+         projection to target. The stored session energy is only set at close. #}
+      {% if charge_live and charge_live.kwh_so_far is not none %}
+      <div class="charge-stat-item">
+        <div class="mono-xs">{{ t("Charged") }}</div>
+        <div class="charge-stat-val num">{{ "%.1f"|format(charge_live.kwh_so_far) }}<span class="unit">kWh</span></div>
+        {% if charge_live.projected_total %}
+        <div class="mono-xs muted">→ ~{{ "%.0f"|format(charge_live.projected_total) }} kWh</div>
+        {% endif %}
+      </div>
+      {% endif %}
       <div class="charge-stat-item">
         <div class="mono-xs">{{ t("Range") }}</div>
         <div class="charge-stat-val num">{{ s.range_km if s.range_km is not none else "–" }}<span class="unit">km</span></div>
@@ -133,6 +158,11 @@
       <div class="charge-stat-item">
         <div class="mono-xs">{{ t("Current") }}</div>
         <div class="charge-stat-val num">{{ s.charging_current_a }}<span class="unit">A</span></div>
+        {# Headroom: the connection offers more amps than the car's onboard AC
+           charger pulls (11 kW OBC caps a Polestar 2 at 16 A/phase). #}
+        {% if c3 and c3.amp_limit and c3.amp_limit > s.charging_current_a %}
+        <div class="mono-xs muted">{{ t("of {a} A", a=c3.amp_limit|int) }}</div>
+        {% endif %}
       </div>
       {% endif %}
       {% if s.target_soc_percent %}

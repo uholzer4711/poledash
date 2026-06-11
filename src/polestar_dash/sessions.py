@@ -184,6 +184,43 @@ def compute_session_energy_kwh(
     return _soc_estimate_kwh(cs, capacity_kwh)
 
 
+def live_charge_energy(
+    vin: str, soc_now: int | None, target_soc: int | None
+) -> dict | None:
+    """For the dashboard charging hero: AC energy drawn *so far* (power
+    integration over [session start, now]) plus a self-calibrated projection to
+    the target SoC. The stored ``ChargeSession.energy_kwh`` is only computed at
+    close, so nothing else has a live figure.
+
+    Returns ``{"kwh_so_far", "kwh_to_target", "projected_total"}`` or None when
+    no session is open / no power samples exist yet. The projection divides the
+    measured kWh by the SoC span charged so far (the actual, derating-aware
+    rate) and extends it to the target — but only past a few % of span, below
+    which integer-SoC quantization makes the per-% rate too noisy to trust."""
+    from .util import utcnow
+
+    with Session(get_engine()) as s:
+        cs = _open_session(s, vin)
+        if cs is None:
+            return None
+        so_far = _integrate_power_kwh(s, vin, cs.started_at, utcnow())
+        if so_far is None:
+            return None
+        out: dict = {
+            "kwh_so_far": round(so_far, 1),
+            "kwh_to_target": None,
+            "projected_total": None,
+        }
+        span = (soc_now - cs.soc_start) if (soc_now is not None
+                                            and cs.soc_start is not None) else None
+        if span is not None and span >= 3 and target_soc and target_soc > soc_now:
+            per_pct = so_far / span
+            to_target = per_pct * (target_soc - soc_now)
+            out["kwh_to_target"] = round(to_target, 1)
+            out["projected_total"] = round(so_far + to_target, 1)
+        return out
+
+
 def _odo_stationary(a: float | None, b: float | None) -> bool:
     if a is None or b is None:
         # Missing odometer → assume stationary (don't block charge detection).

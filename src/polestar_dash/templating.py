@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from . import __version__
 from .i18n import get_language, t
 from .journey_import import label_for
+from .util import charge_electrical
 
 DISPLAY_TZ = ZoneInfo("Europe/Vienna")
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -55,6 +56,8 @@ def make_templates() -> Jinja2Templates:
         return s.car_image_url or ""
 
     tpl.env.globals["car_image_src"] = car_image_src
+    # Derives AC/DC + phase count for the charging hero (see util docstring).
+    tpl.env.globals["charge_electrical"] = charge_electrical
     # i18n: `t()` for strings, `ui_lang` for <html lang> + the settings toggle.
     # Globals are evaluated per render, and t() reads the live language cache,
     # so a language switch takes effect on the next page load without a rebuild.

@@ -240,6 +240,42 @@ def _reschedule(client: PolestarClient, *, charging: bool) -> None:
 
 
 _SCHEDULER: AsyncIOScheduler | None = None
+# Kept so the C3 loop can pull the main pypolestar poll forward (it needs the
+# client to re-arm poll_once). Set in build_scheduler.
+_CLIENT: PolestarClient | None = None
+
+
+def _nudge_main_poll(*, delay_sec: int = 90) -> None:
+    """Pull the main pypolestar poll forward when the C3 loop just saw a state
+    change the main loop would otherwise miss for a whole (possibly
+    idle-stretched, up to 20 min) interval — chiefly a charge that started
+    mid-interval.
+
+    Only ever moves the job *earlier*, never later. Keeps a ~90 s gap from the
+    C3 fetch that just ran so the two libraries don't hit the shared account
+    rate limit together (firing them simultaneously shows up as
+    'not authorized')."""
+    sched = _SCHEDULER
+    client = _CLIENT
+    if sched is None or client is None:
+        return
+    target = utcnow() + timedelta(seconds=delay_sec)
+    job = sched.get_job(JOB_ID)
+    # APScheduler stores next_run_time tz-aware in UTC; utcnow() is naive UTC.
+    if (job is not None and job.next_run_time is not None
+            and job.next_run_time.replace(tzinfo=None) <= target):
+        return  # already running at least this soon — leave it
+    sched.add_job(
+        poll_once,
+        DateTrigger(run_date=target),
+        args=[client],
+        id=JOB_ID,
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+    log.info("C3 nudged main poll forward to %s (charge state change)",
+             target.isoformat())
 
 
 def _latest_c3(vin: str) -> C3Snapshot | None:
@@ -436,6 +472,15 @@ async def c3_poll_once() -> None:
                 s.expunge(row)
         except Exception:  # noqa: BLE001
             log.exception("C3 persist failed for VIN %s", vin)
+        # C3 sees a charge start within its own (≤5 min) cadence — well before
+        # the main poll, which may be idle-stretched out to 20 min. On a fresh
+        # off→on transition, nudge the main poll forward so the dashboard's
+        # charging hero (driven by the VehicleSnapshot) lights up promptly.
+        if charging and prev is not None and not prev.is_charging:
+            try:
+                _nudge_main_poll()
+            except Exception:  # noqa: BLE001
+                log.exception("Main-poll nudge failed for VIN %s", vin)
         try:
             _record_light_events(row, prev)
         except Exception:  # noqa: BLE001
@@ -657,8 +702,9 @@ def _persist_soh() -> None:
 
 
 def build_scheduler(client: PolestarClient, interval_min: int) -> AsyncIOScheduler:
-    global _SCHEDULER
+    global _SCHEDULER, _CLIENT
     s = get_settings()
+    _CLIENT = client
     # Pin to UTC — every timestamp we write uses utcnow(), and APScheduler
     # interprets naive datetimes in *its* timezone. Without this, deploying
     # the image with TZ=Europe/Vienna would offset every reschedule by 2h.

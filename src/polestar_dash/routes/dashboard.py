@@ -30,6 +30,22 @@ def _soh() -> dict | None:
         return None
 
 
+def _charge_live(snap: VehicleSnapshot | None) -> dict | None:
+    """Live energy-so-far + projection for the charging hero. Only while
+    actually charging; never breaks the dashboard if the lookup fails."""
+    from ..sessions import CHARGING_STATES
+
+    if snap is None or snap.charging_status not in CHARGING_STATES:
+        return None
+    try:
+        from ..sessions import live_charge_energy
+
+        return live_charge_energy(snap.vin, snap.soc_percent, snap.target_soc_percent)
+    except Exception:  # noqa: BLE001
+        log.exception("Live charge energy lookup failed")
+        return None
+
+
 def _latest_for_vin(vin: str | None) -> VehicleSnapshot | None:
     with Session(get_engine()) as s:
         stmt = select(VehicleSnapshot).order_by(VehicleSnapshot.fetched_at.desc())
@@ -61,7 +77,9 @@ def _fresh_c3(vin: str | None) -> C3Snapshot | None:
 def dashboard(request: Request, vin: str | None = None):
     snap = _latest_for_vin(vin)
     return templates.TemplateResponse(
-        request, "dashboard.html", {"s": snap, "soh": _soh(), "c3": _fresh_c3(vin)}
+        request, "dashboard.html",
+        {"s": snap, "soh": _soh(), "c3": _fresh_c3(vin),
+         "charge_live": _charge_live(snap)},
     )
 
 
@@ -69,5 +87,6 @@ def dashboard(request: Request, vin: str | None = None):
 def cards(request: Request, vin: str | None = None):
     snap = _latest_for_vin(vin)
     return templates.TemplateResponse(
-        request, "partials/cards.html", {"s": snap, "c3": _fresh_c3(vin)}
+        request, "partials/cards.html",
+        {"s": snap, "c3": _fresh_c3(vin), "charge_live": _charge_live(snap)},
     )
