@@ -3,6 +3,24 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.32.1] — 2026-06-11
+
+### Fixed — recurring Open-Meteo weather timeouts
+
+- The current-weather lookup (`weather.current_at`) was called on **every
+  dashboard tick (60 s)** and every C3 poll with a window open, with **no
+  cache** and a single tight 10 s timeout — and Open-Meteo's free endpoint
+  regularly answers in 5–9 s (and soft-throttles a chatty IP), so it sat right
+  at the timeout edge and threw `ConnectTimeout`/`ReadTimeout` with a full
+  traceback in the log. Now: a **10 min TTL cache** keyed by ~1 km coordinates
+  (Open-Meteo's "current" only refreshes ~every 15 min anyway), so almost every
+  call is instant and we stop hammering the API; a **split timeout** (5 s
+  connect / 20 s read) with **one retry**; **serve-last-good-value on failure**
+  (up to 1 h old) so a transient timeout no longer blanks the widget or skips
+  the rain alert; and **quiet one-line logging** (no traceback) for expected
+  network timeouts. The trip-enrichment backfill shares the same timeout +
+  quiet logging.
+
 ## [1.32.0] — 2026-06-11
 
 ### Changed — charging card shows the car's own time estimate
