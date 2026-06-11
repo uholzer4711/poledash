@@ -429,7 +429,7 @@
           <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
           <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)} kWh${d.implied_kw != null ? ` <span class="muted">· Ø ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
           <td style="text-align:right" data-label="{{ t('Cause') }}">${causeCell(d)}</td>
-        </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
+        </tr>`).join('') || '<tr><td colspan="5" class="muted" style="padding:6px 8px">{{ t("No idle drains in this period — parasitic standby stays under the ~2% detection floor, and SoC drops that coincide with a drive are excluded as trips.") }}</td></tr>';
     }
 
     async function safeLoad() {

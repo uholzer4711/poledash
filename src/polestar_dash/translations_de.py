@@ -500,6 +500,7 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Collecting data — a capacity trend needs several months of trips with a noticeable SoC drop.":
         "Sammle Daten — ein Kapazitätstrend braucht mehrere Monate Fahrten mit spürbarem SoC-Abfall.",
     "No idle drains detected.": "Keine Ruhe-Entladungen erkannt.",
+    "No idle drains in this period — parasitic standby stays under the ~2% detection floor, and SoC drops that coincide with a drive are excluded as trips.": "Keine Ruhe-Entladungen im Zeitraum — parasitärer Standby bleibt unter der ~2%-Erkennungsschwelle, und SoC-Abfälle, die mit einer Fahrt zusammenfallen, werden als Fahrt ausgeschlossen.",
     "Insights failed to load": "Auswertung konnte nicht geladen werden",
     # --- Route leaderboard (routes.html) ---
     "Most efficient routes": "Effizienteste Routen",
