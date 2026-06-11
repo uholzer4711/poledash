@@ -3,6 +3,64 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.34.0] — 2026-06-11
+
+### Changed — idle-drain detection rebuilt (no more drives mislabelled as standby)
+
+- The Insights idle-drain detector was reporting **drives as "Standby loss"** —
+  e.g. a 70 → 63 % SoC fall over 30 min (≈ 11 kW) shown as a parked standby
+  loss. Two telemetry quirks fooled the old odometer-equality gate: the
+  pypolestar **odometer freezes** for hours (its value *and* `event_ts` stop
+  advancing), so "odometer unchanged" never actually meant "stood still"; and
+  the C3 **GPS freezes at the departure point** mid-drive. Both made a moving
+  car look parked.
+- Movement is now decided from **C3 GPS displacement** in a tight ±10 min
+  window — a continuous drive's arrival fix lands there and gets rejected —
+  backed by a **physics ceiling**: with no GPS to confirm standstill, an implied
+  draw above drive level (8 kW) is a missed drive, not a drain.
+- A **settling guard** drops any SoC fall that starts < 30 min after the car
+  parked (`parked_for` from the C3 park stamp): that is post-drive open-circuit
+  voltage re-estimation or a mid-drive GPS freeze, not real consumption — it was
+  the dominant remaining false positive.
+- What survives is a genuine parked draw, split by implied power into
+  **active draw while parked** (`conditioning` — battery/thermal management or
+  pre-departure pre-conditioning, which C3's cabin-only climate flag misses) vs
+  **parasitic standby** (`vampire`); C3 cabin climate/air still win when active.
+  The misleading "standby" catch-all is gone.
+- `/api/idle-drain` now carries **`implied_kw`** and is ordered **newest-first**;
+  the Insights table shows the implied kW beside each kWh so every figure is
+  plausibility-checkable. Tests rewritten to lock in drive rejection (GPS +
+  power backstop), the settling guard, and the conditioning/vampire/unknown
+  split.
+
+## [1.33.0] — 2026-06-11
+
+### Changed — charging hero tells the truth about AC/DC, phases and energy
+
+- **AC/DC + phase count.** The charging hero dropped the wrong **"DC"** badge:
+  the Polestar gRPC `charging_type` enum mislabels ordinary 11 kW 3-phase AC as
+  DC. The badge is now derived from C3 (authoritative) or physics
+  (`util.charge_electrical`), and a **phase-count badge** (`P ≈ phases·V·I`,
+  e.g. 3-phase) sits beside it. The voltage gauge gains a **`≈ 400 V
+  line-to-line`** caption for 3-phase, since the API reports the ~230 V
+  per-phase value. The corrected AC/DC is also written to the stored snapshot so
+  History/labels stop reading "DC" for an AC charge (the raw payload keeps the
+  original enum).
+- **Live charged energy.** A new **"Charged"** stat shows the AC energy drawn so
+  far (power integration since plug-in) plus a **self-calibrated projection to
+  target** — the stored session energy is only computed at close
+  (`sessions.live_charge_energy`).
+- **Amperage headroom.** The Current stat shows an *of N A* hint when the
+  connection offers more amps than the car's onboard charger pulls.
+
+### Added — faster charge detection
+
+- The C3 loop (≤ 5 min, independent of the idle-stretched main poll) now
+  **nudges the main pypolestar poll forward** on a fresh charge-start
+  transition, so the dashboard's charging hero appears within the C3 cadence
+  instead of waiting up to a full (idle-stretched, ~20 min) interval. The two
+  libraries stay spaced apart so they never hit the shared rate limit together.
+
 ## [1.32.1] — 2026-06-11
 
 ### Fixed — recurring Open-Meteo weather timeouts
