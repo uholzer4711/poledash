@@ -152,6 +152,8 @@
       central: {{ t("central") | tojson }},
       heading: {{ t("heading") | tojson }},
       speed: {{ t("speed") | tojson }},
+      posFrom: {{ t("Position from") | tojson }},
+      currentPos: {{ t("Current position") | tojson }},
       parts: {
         door_fl: {{ t("Door FL") | tojson }}, door_fr: {{ t("Door FR") | tojson }},
         door_rl: {{ t("Door RL") | tojson }}, door_rr: {{ t("Door RR") | tojson }},
@@ -165,6 +167,19 @@
     function esc(s) { return String(s === null || s === undefined ? '—' : s); }
     function fmtTs(iso) { try { return new Date(iso).toLocaleTimeString(); } catch (e) { return '—'; } }
     function fmtDateTime(iso) { try { return new Date(iso).toLocaleString(); } catch (e) { return '—'; } }
+
+    // "Position von HH:MM" when the GPS fix is older than ~15 min. gps_ts is
+    // the moment the fix was recorded: C3 freezes GPS during a drive (the pin
+    // then shows the departure point), and while parked the fix keeps the
+    // arrival time — either way the position should carry its own timestamp
+    // instead of being presented as live. null = fresh enough / no fix.
+    function posFromLabel(j) {
+      if (!j.gps_ts) return null;
+      var ageMin = (Date.now() / 1000 - j.gps_ts) / 60;
+      if (ageMin < 15) return null;
+      var d = new Date(j.gps_ts * 1000);
+      return LBL.posFrom + ' ' + (ageMin > 1440 ? d.toLocaleString() : d.toLocaleTimeString());
+    }
 
     function paintCar(j) {
       // Drives both the SVG diagram (stroke) and the photo overlay (orange
@@ -289,7 +304,7 @@
       }
       if (c3Pin) c3Pin.remove();
       c3Pin = L.circleMarker(here, { radius: 8, color: orange, fillColor: orange, fillOpacity: 1, weight: 2 })
-        .addTo(c3Map).bindPopup({{ t("Current position") | tojson }});
+        .addTo(c3Map).bindPopup(posFromLabel(j) || LBL.currentPos);
       if (j.parked_lat != null && (j.parked_lat !== lat || j.parked_lng !== lng)) {
         if (c3Parked) c3Parked.remove();
         c3Parked = L.circleMarker([j.parked_lat, j.parked_lng],
@@ -361,14 +376,19 @@
           ? '<span class="accent">' + esc(wxNow.desc) + '</span>'
           : esc(wxNow.desc);
       } else {
-        wxSub.textContent = fmtTs(j.fetched_at);
+        // weather_ts (Unix millis) is the car's own measurement time — more
+        // honest than the poll time when the reading lags.
+        wxSub.textContent = j.weather_ts
+          ? new Date(j.weather_ts).toLocaleTimeString() : fmtTs(j.fetched_at);
       }
 
-      // Location meta
+      // Location meta — flag a stale fix instead of selling it as current.
       if (j.lat != null) {
+        var stalePos = posFromLabel(j);
         document.getElementById('c3_loc_meta').textContent =
           '· ' + j.lat.toFixed(4) + ', ' + j.lng.toFixed(4) +
-          ' · ' + LBL.speed + ' ' + esc(j.speed);
+          ' · ' + LBL.speed + ' ' + esc(j.speed) +
+          (stalePos ? ' · ' + stalePos : '');
       }
 
       // Health badges. Unknown ("—"/null) renders neutral, not red.

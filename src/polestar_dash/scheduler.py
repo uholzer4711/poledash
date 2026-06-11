@@ -18,6 +18,7 @@ from .config import get_settings
 from .db.models import (
     C3Snapshot,
     FetchError,
+    LightWarningEvent,
     LogEntry,
     RawC3Snapshot,
     RawSnapshot,
@@ -284,6 +285,14 @@ def _c3_rest_state() -> str:
                 and prev.lat is not None and prev.lng is not None
                 and haversine_km(prev.lat, prev.lng, latest.lat, latest.lng) > 0.3):
             return "in_use"
+        # Mid-drive, C3 freezes GPS at the departure point while SoC keeps
+        # falling — without this a locked car on the road counts as at_rest
+        # and gets night/idle-throttled in the middle of a drive.
+        if (latest.charge_level is not None and prev.charge_level is not None
+                and latest.charge_level < prev.charge_level
+                and latest.gps_ts is not None and latest.gps_ts == prev.gps_ts
+                and not latest.is_charging):
+            return "in_use"
     if (latest.speed or 0) >= 3:
         return "in_use"
     if latest.is_locked is True:
@@ -321,9 +330,12 @@ def _maybe_notify_c3_software(vin: str, data: dict) -> None:
         return
     # Stamp the first time we ever see this version so /software can show
     # "since <date>" — independent of whether it's a pending update or not.
-    from .software import c3_software_seen
+    from .software import c3_software_seen, record_c3_software_event
 
     c3_software_seen(version)
+    # Persist every (version, state) transition — the OTA state used to live
+    # only in the volatile C3 cache, so a restart erased the history.
+    record_c3_software_event(vin, sw)
     if sw.get("state_code") not in SW_PENDING_STATES:
         return
     notes = (sw.get("notes") or "").strip()
@@ -338,6 +350,31 @@ def _maybe_notify_c3_software(vin: str, data: dict) -> None:
         priority="high",
         tags=["gear"],
     )
+
+
+def _record_light_events(row: C3Snapshot, prev: C3Snapshot | None) -> None:
+    """Persist per-bulb fault/cleared transitions (LightWarningEvent) by diffing
+    the comma-joined ``failed_lights`` against the previous C3 row. Skipped when
+    the health section didn't fetch (all-None row) so a C3 hiccup can't fake a
+    "cleared" event."""
+    if row.any_light_failure is None:
+        return
+    now = {x for x in (row.failed_lights or "").split(",") if x}
+    before: set[str] = set()
+    if prev is not None and prev.any_light_failure is not None:
+        before = {x for x in (prev.failed_lights or "").split(",") if x}
+    events = [(lamp, "fault") for lamp in sorted(now - before)]
+    events += [(lamp, "cleared") for lamp in sorted(before - now)]
+    if not events:
+        return
+    with Session(get_engine()) as s:
+        for lamp, event in events:
+            s.add(LightWarningEvent(
+                vin=row.vin, detected_at=row.fetched_at, lamp=lamp, event=event,
+            ))
+        s.commit()
+    log.info("C3 light events for VIN %s: %s",
+             row.vin, ", ".join(f"{lamp} {event}" for lamp, event in events))
 
 
 async def c3_poll_once() -> None:
@@ -369,6 +406,12 @@ async def c3_poll_once() -> None:
 
         # Driving → poll faster so the GPS trail is dense enough to draw a route.
         # Detected from the car's own speed, or movement since the last fix.
+        # Third signal: SoC dropping while the GPS fix is frozen (same gps_ts as
+        # the last poll). C3 reports SoC live during a drive but freezes
+        # GPS+odometer until arrival, so mid-drive neither speed nor movement
+        # fires — the frozen fix + falling SoC is exactly that situation. A
+        # pre-conditioning car can also match (SoC drop while parked); the fast
+        # cadence then simply lasts until the SoC stabilises, which is fine.
         speed = row.speed or 0
         moved = (
             prev is not None
@@ -376,7 +419,14 @@ async def c3_poll_once() -> None:
             and row.lat is not None and row.lng is not None
             and haversine_km(prev.lat, prev.lng, row.lat, row.lng) > 0.3
         )
-        driving = speed >= 3 or moved
+        soc_dropping_fix_frozen = (
+            not charging
+            and prev is not None
+            and prev.charge_level is not None and row.charge_level is not None
+            and row.charge_level < prev.charge_level
+            and row.gps_ts is not None and row.gps_ts == prev.gps_ts
+        )
+        driving = speed >= 3 or moved or soc_dropping_fix_frozen
         try:
             with Session(get_engine()) as s:
                 s.add(row)
@@ -386,6 +436,10 @@ async def c3_poll_once() -> None:
                 s.expunge(row)
         except Exception:  # noqa: BLE001
             log.exception("C3 persist failed for VIN %s", vin)
+        try:
+            _record_light_events(row, prev)
+        except Exception:  # noqa: BLE001
+            log.exception("C3 light-event recording failed for VIN %s", vin)
         try:
             await asyncio.to_thread(run_c3_anomaly_checks, row, prev=prev)
         except Exception:  # noqa: BLE001

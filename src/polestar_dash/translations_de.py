@@ -983,4 +983,9 @@ TRANSLATIONS_DE: dict[str, str] = {
         "<a href=\"/routes\">Routen-Statistik</a> und Ladevorgang-Orte vor C3 "
         "werden ergänzt.",
     "{u} of {c}": "{u} von {c}",
+    # C3 position freshness + car-reported OTA history
+    "Position from": "Position von",
+    "Car-reported update history": "Update-Verlauf (vom Auto gemeldet)",
+    "Seen": "Gesehen",
+    "State": "Status",
 }

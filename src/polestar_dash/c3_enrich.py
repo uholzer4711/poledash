@@ -9,7 +9,7 @@ enrichment don't each re-implement them.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, select
 
@@ -24,12 +24,27 @@ def nearest_c3_env(
 ) -> dict | None:
     """Nearest C3 measurements around [start, end] (± pad). Returns
     {lat, lng, temp_c, pm25, ts} with Nones where a field has no sample in the
-    window, or None when the window is empty. lat/lng come from the nearest GPS
-    fix; temp/pm25 from the nearest row that actually carries each (the C3
-    weather/air sections can fail independently of the GPS one)."""
+    window, or None when the window is empty. temp/pm25 come from the nearest
+    row that actually carries each (the C3 weather/air sections can fail
+    independently of the GPS one).
+
+    lat/lng are picked by the *fix* timestamp (gps_ts), not by when we polled:
+    C3 freezes GPS while driving, so a row fetched mid-drive still carries the
+    coordinates of the previous parking spot. The newest fix recorded no later
+    than the window's end is the position the car actually held during the
+    window; rows whose only fixes were made after the window (car already
+    re-parked elsewhere) yield no GPS rather than a wrong one."""
     pad = timedelta(minutes=pad_min)
     lo = start - pad
     hi = (end or start) + pad
+    # Small slack over `end` itself: the arrival fix for the event can be
+    # stamped seconds after our naive-UTC window edge (clock skew).
+    fix_bound = (end or start) + timedelta(minutes=2)
+
+    def _fix_dt(r: C3Snapshot) -> datetime | None:
+        if not r.gps_ts:
+            return None
+        return datetime.fromtimestamp(r.gps_ts, UTC).replace(tzinfo=None)
 
     def _q(s: Session) -> dict | None:
         rows = list(
@@ -50,7 +65,15 @@ def nearest_c3_env(
                 else None
             )
 
-        gps = nearest([r for r in rows if r.lat is not None and r.lng is not None])
+        gps_cands = [r for r in rows if r.lat is not None and r.lng is not None]
+        with_fix = [r for r in gps_cands if _fix_dt(r) is not None]
+        valid_fix = [r for r in with_fix if _fix_dt(r) <= fix_bound]
+        if valid_fix:
+            gps = max(valid_fix, key=lambda r: r.gps_ts)
+        elif with_fix:
+            gps = None  # only post-window fixes → position during window unknown
+        else:
+            gps = nearest(gps_cands)  # legacy rows without gps_ts: old behaviour
         tmp = nearest([r for r in rows if r.weather_temp_c is not None])
         pm = nearest([r for r in rows if r.air_pm25 is not None])
         if gps is None and tmp is None and pm is None:

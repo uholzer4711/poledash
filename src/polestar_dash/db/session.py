@@ -37,13 +37,11 @@ def _ensure_columns(engine) -> None:
             ("vehiclesnapshot", "battery_cells", "INTEGER"),
             ("vehiclesnapshot", "pending_target_soc_percent", "INTEGER"),
             ("vehiclesnapshot", "pending_target_soc_type", "VARCHAR"),
-            ("vehiclesnapshot", "range_miles", "INTEGER"),
-            ("vehiclesnapshot", "avg_consumption_kwh_per_100km_automatic", "FLOAT"),
-            ("vehiclesnapshot", "avg_consumption_kwh_per_100km_since_charge", "FLOAT"),
-            ("vehiclesnapshot", "total_energy_consumption_wh", "FLOAT"),
-            ("vehiclesnapshot", "total_energy_consumption_wh_automatic", "FLOAT"),
-            ("vehiclesnapshot", "total_energy_consumption_wh_since_charge", "FLOAT"),
             ("vehiclesnapshot", "charger_power_status_raw", "INTEGER"),
+            # Dropped from the model (API never populated them for this car):
+            # range_miles, image_url, trip_manual_km, avg_consumption_*_automatic/
+            # _since_charge, total_energy_consumption_wh*. Existing DBs keep the
+            # (all-NULL) columns; they're simply unmapped now.
         ]
     if "chargesession" in tables:
         plan += [
@@ -75,6 +73,9 @@ def _ensure_columns(engine) -> None:
             ("c3snapshot", "low_voltage_battery", "VARCHAR"),
             ("c3snapshot", "engine_hours_to_service", "INTEGER"),
             ("c3snapshot", "failed_lights", "VARCHAR"),
+            ("c3snapshot", "time_to_full", "INTEGER"),
+            ("c3snapshot", "time_to_target", "INTEGER"),
+            ("c3snapshot", "time_to_min_soc", "INTEGER"),
         ]
 
     with engine.begin() as conn:

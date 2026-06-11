@@ -3,6 +3,53 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.31.0] — 2026-06-11
+
+### Changed — GPS fix timestamps (`gps_ts`) drive position honesty
+
+The car stamps a GPS fix when it **parks** and freezes it during a drive
+(`gps_ts == parked_ts` in practice) — a fix's age means "parked since", and
+the position only lies mid-drive. Three consumers now use that:
+
+- **Dashboard**: a fix older than ~15 min is labelled **"Position von HH:MM"**
+  (location line + map-pin popup) instead of being presented as current; the
+  weather card shows the car's own measurement time (`weather_ts`).
+- **Drive detection** (`c3_poll_once` + `_c3_rest_state`): *SoC falling +
+  unchanged `gps_ts` + not charging* now counts as driving — previously a
+  locked car mid-drive looked "at rest" (frozen GPS defeats the movement
+  heuristic) and could get night/idle-throttled on the road.
+- **Enrichment guard** (`nearest_c3_env`): the GPS stamp for charge sessions /
+  trips is picked by **fix time** (newest fix recorded no later than the
+  window end), not by poll time. A row polled mid-drive can no longer stamp a
+  session with the *previous* parking spot; windows whose only fixes were made
+  after the event yield no GPS rather than a wrong one.
+
+### Added — C3 data that used to be thrown away is now persisted
+
+- **`C3SoftwareEvent`** — one row per car-reported OTA *(version, state)*
+  transition (download/install/failed/installed …). Previously this lived only
+  in the volatile C3 cache, so every restart erased the history. Shown on
+  `/software` as "Update-Verlauf (vom Auto gemeldet)".
+- **`LightWarningEvent`** — per-bulb fault/cleared transitions, diffed from
+  `failed_lights` each C3 poll, so "which lamp failed first, and when" stays
+  reconstructible for the workshop. A failed health fetch can't fake a
+  "cleared" event.
+- **`C3Snapshot.time_to_full` / `time_to_target` / `time_to_min_soc`** — the
+  car's own charge-time horizons (minutes; 0 = "no estimate" stored as NULL)
+  instead of existing only in the live cache.
+
+### Removed — dead fields the API never populates for this car
+
+- Dropped from model + extraction (all-NULL across the entire history):
+  `total_energy_consumption_wh` (all 3 variants),
+  `avg_consumption_kwh_per_100km_automatic`/`_since_charge`,
+  `trip_manual_km`, `range_miles`, `image_url` (VehicleSnapshot) and
+  `altitude` (C3Snapshot). Existing DB columns stay in place, just unmapped;
+  the raw payloads and the `/api/lab/grpc-battery-raw` diagnostics keep
+  exposing the underlying gRPC fields. This also closes the hope of "real
+  per-trip kWh without CSV" — the journey-log import remains the only source
+  of real trip energy.
+
 ## [1.30.0] — 2026-06-10
 
 ### Added — Journey-log import: format/unit auto-detection + result popup

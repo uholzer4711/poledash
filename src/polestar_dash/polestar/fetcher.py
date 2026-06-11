@@ -42,7 +42,6 @@ class Snapshot:
     software_version: str | None = None
     battery_spec: str | None = None
     torque: str | None = None
-    image_url: str | None = None
     internal_vehicle_id: str | None = None
     registration_date: str | None = None
     factory_complete_date: str | None = None
@@ -57,13 +56,7 @@ class Snapshot:
     # Battery / charging
     soc_percent: int | None = None
     range_km: int | None = None
-    range_miles: int | None = None
     avg_consumption_kwh_per_100km: float | None = None
-    avg_consumption_kwh_per_100km_automatic: float | None = None
-    avg_consumption_kwh_per_100km_since_charge: float | None = None
-    total_energy_consumption_wh: float | None = None
-    total_energy_consumption_wh_automatic: float | None = None
-    total_energy_consumption_wh_since_charge: float | None = None
     charger_power_status_raw: int | None = None
     charging_status: str | None = None
     charger_connection_status: str | None = None
@@ -84,7 +77,6 @@ class Snapshot:
     odometer_km: float | None = None
     avg_speed_kmh: int | None = None
     trip_auto_km: float | None = None
-    trip_manual_km: float | None = None
     odometer_event_ts: datetime | None = None
 
     # Health
@@ -128,7 +120,6 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
         snap.registration_no = info.registration_no
         snap.software_version = info.software_version
         snap.torque = info.torque
-        snap.image_url = info.image_url
         snap.internal_vehicle_id = info.internal_vehicle_identifier
         snap.registration_date = (
             info.registration_date.isoformat() if info.registration_date else None
@@ -170,7 +161,6 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
             snap.odometer_km = (o.odometer_meters / 1000) if o.odometer_meters is not None else None
             snap.avg_speed_kmh = o.average_speed_km_per_hour
             snap.trip_auto_km = o.trip_meter_automatic_km
-            snap.trip_manual_km = o.trip_meter_manual_km
             snap.odometer_event_ts = o.event_updated_timestamp
 
         if tele.health is not None:
@@ -196,23 +186,10 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
                 snap.charging_status = cs_val
         if grpc_battery.charging_voltage_volts:
             snap.charging_voltage_v = grpc_battery.charging_voltage_volts
-        # Widened fields injected by our pypolestar patch (see client.py).
-        snap.avg_consumption_kwh_per_100km_automatic = getattr(
-            grpc_battery, "avg_consumption_kwh_per_100km_automatic", None
-        )
-        snap.avg_consumption_kwh_per_100km_since_charge = getattr(
-            grpc_battery, "avg_consumption_kwh_per_100km_since_charge", None
-        )
-        snap.total_energy_consumption_wh = getattr(
-            grpc_battery, "total_energy_consumption_wh", None
-        )
-        snap.total_energy_consumption_wh_automatic = getattr(
-            grpc_battery, "total_energy_consumption_wh_automatic", None
-        )
-        snap.total_energy_consumption_wh_since_charge = getattr(
-            grpc_battery, "total_energy_consumption_wh_since_charge", None
-        )
-        snap.range_miles = getattr(grpc_battery, "estimated_distance_to_empty_miles", None)
+        # The widened consumption/range fields our pypolestar patch injects
+        # (total_energy_consumption_wh & friends) stay un-extracted: the API
+        # never populates them for this car (all-NULL history). They remain
+        # inspectable via /api/lab/grpc-battery-raw and the raw payload.
         cps = getattr(grpc_battery, "charger_power_status_raw", None)
         snap.charger_power_status_raw = cps if cps is not None else None
         if grpc_battery.charging_type:
@@ -252,16 +229,9 @@ async def fetch_snapshot(client: PolestarClient, vin: str) -> Snapshot:
             pt = grpc_target.pending_charge_target_level_setting_type.value
             snap.pending_target_soc_type = pt if pt != "Unspecified" else None
 
-    # Use a "transparent" angle as preferred image (transparent BG works
-    # equally on dark/light themes); fall back to opaque, then the legacy
-    # info.image_url. `angle` is an int — pick the lowest non-zero one as
-    # a "front quarter" view (empirically the first listed is the hero
-    # shot), else just the first item.
-    if car_images is not None and not snap.image_url:
-        pool = list(car_images.transparent or []) + list(car_images.opaque or [])
-        if pool:
-            snap.image_url = pool[0].url
-
+    # car_images is only kept for the raw payload (safety net) — the API never
+    # returned a usable image for this car, and the dashboard image comes from
+    # the upload / CAR_IMAGE_URL / built-in SVG chain (templating.car_image_src).
     snap.raw = {
         "information": _to_jsonable(info),
         "telematics": _to_jsonable(tele),

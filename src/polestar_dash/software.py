@@ -28,7 +28,12 @@ from sqlmodel import Session, select
 
 from .app_settings import get_setting, set_setting
 from .config import get_settings
-from .db.models import SoftwareRelease, SoftwareVersionChange, VehicleSnapshot
+from .db.models import (
+    C3SoftwareEvent,
+    SoftwareRelease,
+    SoftwareVersionChange,
+    VehicleSnapshot,
+)
 from .db.session import get_engine
 from .notify import notify
 from .polestar.fetcher import Snapshot
@@ -219,6 +224,45 @@ def c3_software_seen(version: str | None) -> datetime | None:
     return now
 
 
+def record_c3_software_event(vin: str, sw: dict) -> None:
+    """Persist the car-reported OTA state (version + install state) on change.
+
+    ``sw`` is the decoded C3 software section ({new_version, state_code, state,
+    name, notes}). Writes one C3SoftwareEvent per (version, state) transition —
+    idempotent across polls, so the steady state costs one SELECT per poll.
+    """
+    version = (sw.get("new_version") or "").strip()
+    if not version:
+        return
+    state_code = int(sw.get("state_code") or 0)
+    with Session(get_engine()) as s:
+        last = s.exec(
+            select(C3SoftwareEvent)
+            .where(C3SoftwareEvent.vin == vin)
+            .order_by(C3SoftwareEvent.seen_at.desc())
+            .limit(1)
+        ).first()
+        if (
+            last is not None
+            and last.version == version
+            and last.state_code == state_code
+        ):
+            return
+        s.add(
+            C3SoftwareEvent(
+                vin=vin,
+                seen_at=utcnow(),
+                version=version,
+                state_code=state_code,
+                state=sw.get("state") or "?",
+                name=sw.get("name"),
+                notes=(sw.get("notes") or None) and str(sw["notes"])[:4000],
+            )
+        )
+        s.commit()
+    log.info("software: C3 OTA state %s → %s", version, sw.get("state"))
+
+
 def _latest_snapshot_vin() -> str | None:
     with Session(get_engine()) as s:
         return s.exec(
@@ -396,6 +440,13 @@ def dashboard_state(vin: str | None = None) -> dict:
         if ivin:
             hist_stmt = hist_stmt.where(SoftwareVersionChange.vin == ivin)
         history = list(s.exec(hist_stmt.limit(50)).all())
+        c3_events = list(
+            s.exec(
+                select(C3SoftwareEvent)
+                .order_by(C3SoftwareEvent.seen_at.desc())
+                .limit(50)
+            ).all()
+        )
         releases = list(
             s.exec(
                 select(SoftwareRelease).order_by(SoftwareRelease.version_key.desc())
@@ -425,6 +476,7 @@ def dashboard_state(vin: str | None = None) -> dict:
         "installed_ts": ts,
         "vin": ivin,
         "history": history,
+        "c3_events": c3_events,
         "releases": releases,
         "latest": latest,
         "update_available": update_available,

@@ -22,7 +22,6 @@ class VehicleSnapshot(SQLModel, table=True):
     software_version: str | None = None
     battery_spec: str | None = None
     torque: str | None = None
-    image_url: str | None = None
     # Structured vehicle info (extracted from CarInformationData)
     internal_vehicle_id: str | None = None
     registration_date: str | None = None  # ISO date string from API
@@ -39,13 +38,7 @@ class VehicleSnapshot(SQLModel, table=True):
 
     soc_percent: int | None = None
     range_km: int | None = None
-    range_miles: int | None = None
     avg_consumption_kwh_per_100km: float | None = None
-    avg_consumption_kwh_per_100km_automatic: float | None = None
-    avg_consumption_kwh_per_100km_since_charge: float | None = None
-    total_energy_consumption_wh: float | None = None
-    total_energy_consumption_wh_automatic: float | None = None
-    total_energy_consumption_wh_since_charge: float | None = None
     charger_power_status_raw: int | None = None
     charging_status: str | None = None
     charger_connection_status: str | None = None
@@ -63,7 +56,6 @@ class VehicleSnapshot(SQLModel, table=True):
     odometer_km: float | None = None
     avg_speed_kmh: int | None = None
     trip_auto_km: float | None = None
-    trip_manual_km: float | None = None
     odometer_event_ts: datetime | None = None
 
     service_warning: str | None = None
@@ -323,7 +315,6 @@ class C3Snapshot(SQLModel, table=True):
     # Location (net-new vs pypolestar)
     lat: float | None = None
     lng: float | None = None
-    altitude: float | None = None
     heading: float | None = None
     speed: float | None = None
     gps_ts: int | None = None  # car-reported Unix seconds
@@ -385,6 +376,11 @@ class C3Snapshot(SQLModel, table=True):
     charging_status: str | None = None
     charging_type: str | None = None
     connection: str | None = None
+    # The car's own charge-time horizons, minutes (0 = "no estimate" → stored
+    # as NULL). Only populate while charging.
+    time_to_full: int | None = None
+    time_to_target: int | None = None
+    time_to_min_soc: int | None = None
     amp_limit: float | None = None
     odometer_km: float | None = None
     availability_status: str | None = None
@@ -392,6 +388,38 @@ class C3Snapshot(SQLModel, table=True):
     __table_args__ = (
         Index("ix_c3snapshot_vin_fetched", "vin", "fetched_at"),
     )
+
+
+class C3SoftwareEvent(SQLModel, table=True):
+    """History of the car-reported OTA update state (C3 ``get_software_info``).
+
+    The live C3 cache is the only other place this exists — a restart used to
+    wipe it. One row per observed (version, state) transition, so /software can
+    show when an update appeared, downloaded, failed or installed. Complements
+    SoftwareVersionChange, which only tracks the *installed* version.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    vin: str = Field(index=True)
+    seen_at: datetime = Field(index=True)
+    version: str
+    state_code: int
+    state: str
+    name: str | None = None
+    notes: str | None = None
+
+
+class LightWarningEvent(SQLModel, table=True):
+    """Per-bulb fault history (C3 health). C3Snapshot only keeps the current
+    comma-joined ``failed_lights`` string — this records each lamp's fault /
+    cleared transitions so "which bulb failed first, and when" stays
+    reconstructible for the workshop."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    vin: str = Field(index=True)
+    detected_at: datetime = Field(index=True)
+    lamp: str  # human label from c3._LIGHT_FIELDS (e.g. "brake L")
+    event: str  # "fault" | "cleared"
 
 
 class RawC3Snapshot(SQLModel, table=True):

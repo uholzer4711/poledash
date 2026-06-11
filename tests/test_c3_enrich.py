@@ -94,3 +94,57 @@ def test_nearest_c3_env_picks_window_values(tmp_db):
     assert env["temp_c"] == 7.5
     assert env["pm25"] == 4.0
     assert env["lat"] is not None
+
+
+def _epoch(dt) -> int:
+    """Naive-UTC datetime → Unix seconds (the gps_ts encoding)."""
+    from datetime import UTC
+
+    return int(dt.replace(tzinfo=UTC).timestamp())
+
+
+def test_nearest_c3_env_prefers_fix_time_over_poll_time(tmp_db):
+    """C3 freezes GPS during a drive: a row polled just before a session can
+    still carry the *previous* parking spot's fix. The newest fix recorded no
+    later than the window end (the arrival at the charger) must win, even when
+    the frozen row's poll time is nearer to the window start."""
+    from sqlmodel import Session
+
+    from polestar_dash.c3_enrich import nearest_c3_env
+    from polestar_dash.db.session import get_engine
+
+    t0 = utcnow()
+    with Session(get_engine()) as s:
+        # Polled mid-drive, 2 min before the session: frozen fix from an hour ago.
+        s.add(_row(fetched_at=t0 - timedelta(minutes=2), lat=46.0, lng=14.0,
+                   gps_ts=_epoch(t0 - timedelta(hours=1))))
+        # Polled during the session: fix stamped at arrival, right before start.
+        s.add(_row(fetched_at=t0 + timedelta(minutes=5), lat=46.7, lng=14.7,
+                   gps_ts=_epoch(t0 - timedelta(minutes=1))))
+        s.commit()
+
+    env = nearest_c3_env(t0, t0 + timedelta(minutes=30))
+    assert env is not None
+    assert (env["lat"], env["lng"]) == (46.7, 14.7)
+
+
+def test_nearest_c3_env_rejects_post_window_fixes(tmp_db):
+    """When every available fix was recorded after the window (the car already
+    re-parked elsewhere), GPS must come back empty rather than wrong — but
+    temp/PM2.5 from the same rows stay usable."""
+    from sqlmodel import Session
+
+    from polestar_dash.c3_enrich import nearest_c3_env
+    from polestar_dash.db.session import get_engine
+
+    t0 = utcnow()
+    end = t0 + timedelta(minutes=10)
+    with Session(get_engine()) as s:
+        s.add(_row(fetched_at=end + timedelta(minutes=20), lat=46.9, lng=14.9,
+                   gps_ts=_epoch(end + timedelta(minutes=15)), weather_temp_c=3.0))
+        s.commit()
+
+    env = nearest_c3_env(t0, end)
+    assert env is not None
+    assert env["lat"] is None and env["lng"] is None
+    assert env["temp_c"] == 3.0

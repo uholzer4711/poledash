@@ -18,7 +18,6 @@ def _fake_info():
         software_version="P3.2",
         battery=SimpleNamespace(voltage=400.0, capacity=78.0, modules=27, cells=324),
         torque="660 Nm",
-        image_url="https://example.com/car.png",
         internal_vehicle_identifier="INT-VIN-1",
         registration_date=None,
         factory_complete_date=None,

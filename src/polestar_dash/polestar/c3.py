@@ -363,7 +363,6 @@ def c3_dict_to_row(data: dict) -> dict | None:
         "vin": veh.get("vin") or "",
         "lat": loc.get("lat"),
         "lng": loc.get("lng"),
-        "altitude": loc.get("altitude"),
         "heading": loc.get("heading"),
         "speed": loc.get("speed"),
         "gps_ts": loc.get("ts"),
@@ -413,6 +412,11 @@ def c3_dict_to_row(data: dict) -> dict | None:
         "charging_status": bat.get("charging_status"),
         "charging_type": bat.get("charging_type"),
         "connection": bat.get("connection"),
+        # 0 means "no estimate" (idle/done) — store NULL so charts/queries can
+        # filter on IS NOT NULL instead of guessing what 0 means.
+        "time_to_full": bat.get("time_to_full") or None,
+        "time_to_target": bat.get("time_to_target") or None,
+        "time_to_min_soc": bat.get("time_to_min_soc") or None,
         "amp_limit": data.get("amp_limit"),
         "odometer_km": data.get("odometer_km"),
         "availability_status": avail.get("status"),

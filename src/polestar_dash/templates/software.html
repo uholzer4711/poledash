@@ -127,6 +127,30 @@
     {% endif %}
   </div>
 
+  {% if c3_events %}
+  <div class="card-label mb-4">{{ t("Car-reported update history") }}</div>
+  <div class="card mb-6">
+    <table class="index" style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr class="mono-xs" style="text-align:left;color:var(--ujh-ink-3)">
+          <th style="padding:8px 0">{{ t("Seen") }}</th>
+          <th style="padding:8px 0">{{ t("Version") }}</th>
+          <th style="padding:8px 0">{{ t("State") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in c3_events %}
+        <tr style="border-top:1px solid var(--ujh-line)">
+          <td style="padding:8px 0" data-label="{{ t('Seen') }}">{{ e.seen_at|localtime }}</td>
+          <td style="padding:8px 0" data-label="{{ t('Version') }}"><strong>{{ e.version }}</strong></td>
+          <td style="padding:8px 0" data-label="{{ t('State') }}">{{ e.state }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   <div class="card-label mb-4">{{ t("Release notes — from the Polestar manual") }}</div>
   {% if releases %}
   <div class="grid">
