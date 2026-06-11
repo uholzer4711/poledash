@@ -400,12 +400,16 @@
       const dr = await (await fetch('/api/idle-drain?days=' + days)).json();
       document.getElementById('drain_total').textContent =
         `${dr.count} ` + {{ t("events") | tojson }} + ` · ≈ ${dr.total_kwh.toFixed(1)} kWh`;
-      // Attribution from C3 (climate/air active during the window, parked-for
-      // from the parked fix); drains predating C3 history stay "—".
+      // Attribution from C3 GPS + climate/air state during the window; actual
+      // drives are filtered out upstream. Drains predating C3 history stay "—".
+      // The implied kW is shown so the figure is plausibility-checkable: a
+      // parked car draws < 0.5 kW (vampire) or a few kW (conditioning) — never
+      // drive-level power.
       const CAUSE = {
         climate: {{ t("Pre-conditioning") | tojson }},
         air: {{ t("Air cleaning") | tojson }},
-        standby: {{ t("Standby loss") | tojson }},
+        conditioning: {{ t("Active draw (parked)") | tojson }},
+        vampire: {{ t("Parasitic standby") | tojson }},
       };
       const PARKED_FOR = {{ t("parked for") | tojson }};
       const causeCell = (d) => {
@@ -418,7 +422,7 @@
           <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
           <td style="text-align:right" data-label="{{ t('Duration') }}">${fmtDur(d.duration_min)}</td>
           <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
-          <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)}</td>
+          <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)}${d.implied_kw != null ? ` <span class="muted">· ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
           <td style="text-align:right" data-label="{{ t('Cause') }}">${causeCell(d)}</td>
         </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
     }

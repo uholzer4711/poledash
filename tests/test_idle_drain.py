@@ -1,4 +1,4 @@
-"""Tests for idle-drain detection + the C3-based cause attribution."""
+"""Tests for idle-drain detection: drive rejection + C3 cause attribution."""
 
 from __future__ import annotations
 
@@ -22,45 +22,137 @@ def _epoch(dt) -> int:
     return int(dt.replace(tzinfo=UTC).timestamp())
 
 
-def test_idle_drain_attribution(tmp_db):
+def _c3(ts, *, lat=None, lng=None, parked_ts=None,
+        climate_active=False, air_running=False):
+    # Real C3 rows always carry a parked/gps stamp; default it to a long-ago
+    # park so tests exercise the "genuine deep park" path unless they override.
+    if parked_ts is None and lat is not None:
+        parked_ts = _epoch(ts - timedelta(hours=3))
+    return C3Snapshot(
+        vin="VIN1", fetched_at=ts, lat=lat, lng=lng, gps_ts=parked_ts,
+        parked_ts=parked_ts, climate_active=climate_active, air_running=air_running,
+    )
+
+
+# A spot and one ~3 km away — far enough to read as "drove".
+HOME = (46.6172, 14.5984)
+AWAY = (46.6415, 14.6390)
+
+
+def test_climate_and_conditioning_attribution(tmp_db):
     from polestar_dash.idle_drain import detect_idle_drains
 
     t0 = utcnow() - timedelta(days=1)
     with Session(get_engine()) as s:
-        # Drain 1: SoC 80→76 while parked, climate running per C3 → "climate",
-        # parked since 2 h before the drain started.
+        # Drain 1: 80→76 over 30 min, climate running, parked since 2 h before,
+        # GPS pinned at HOME the whole time → "climate".
         s.add(_snap(t0, 80))
         s.add(_snap(t0 + timedelta(minutes=30), 76))
-        s.add(C3Snapshot(
-            vin="VIN1", fetched_at=t0 + timedelta(minutes=15),
-            climate_active=True, parked_ts=_epoch(t0 - timedelta(hours=2)),
-        ))
-        # Drain 2 (6 h later, separate event): SoC 76→73, C3 saw the window
-        # but nothing active → "standby".
+        s.add(_c3(t0, lat=HOME[0], lng=HOME[1], parked_ts=_epoch(t0 - timedelta(hours=2))))
+        s.add(_c3(t0 + timedelta(minutes=15), lat=HOME[0], lng=HOME[1],
+                  climate_active=True, parked_ts=_epoch(t0 - timedelta(hours=2))))
+        s.add(_c3(t0 + timedelta(minutes=35), lat=HOME[0], lng=HOME[1],
+                  parked_ts=_epoch(t0 - timedelta(hours=2))))
+        # Drain 2 (separate, 8 h later): 76→73 over 45 min, climate idle, GPS
+        # pinned, parked for hours → kW-level draw → "conditioning".
         t1 = t0 + timedelta(hours=8)
         s.add(_snap(t1, 76))
         s.add(_snap(t1 + timedelta(minutes=45), 73))
-        s.add(C3Snapshot(
-            vin="VIN1", fetched_at=t1 + timedelta(minutes=20),
-            climate_active=False, air_running=False,
-        ))
+        s.add(_c3(t1, lat=HOME[0], lng=HOME[1]))
+        s.add(_c3(t1 + timedelta(minutes=20), lat=HOME[0], lng=HOME[1]))
+        s.add(_c3(t1 + timedelta(minutes=50), lat=HOME[0], lng=HOME[1]))
         s.commit()
 
     drains = detect_idle_drains(vin="VIN1", days=3)
     assert len(drains) == 2
     assert drains[0].cause == "climate"
     assert drains[0].parked_for_min == 120
-    assert drains[1].cause == "standby"
-    assert drains[1].parked_for_min is None  # that row carries no parked fix
+    assert drains[1].cause == "conditioning"
 
 
-def test_idle_drain_without_c3_coverage_stays_unknown(tmp_db):
+def test_low_power_long_drain_is_vampire(tmp_db):
     from polestar_dash.idle_drain import detect_idle_drains
 
     t0 = utcnow() - timedelta(days=1)
     with Session(get_engine()) as s:
+        # 2% over 5 h while pinned at HOME ⇒ ~0.3 kW ⇒ parasitic standby.
         s.add(_snap(t0, 60))
-        s.add(_snap(t0 + timedelta(minutes=20), 57))
+        s.add(_snap(t0 + timedelta(hours=5), 58))
+        s.add(_c3(t0, lat=HOME[0], lng=HOME[1]))
+        s.add(_c3(t0 + timedelta(hours=5, minutes=5), lat=HOME[0], lng=HOME[1]))
+        s.commit()
+
+    drains = detect_idle_drains(vin="VIN1", days=3)
+    assert len(drains) == 1
+    assert drains[0].cause == "vampire"
+    assert drains[0].implied_kw < 1.0
+
+
+def test_drive_with_frozen_odometer_is_rejected(tmp_db):
+    """The June-3 bug: odometer frozen, SoC falling — but C3 GPS shows the car
+    ended up somewhere else. Must NOT be reported as a parked drain."""
+    from polestar_dash.idle_drain import detect_idle_drains
+
+    t0 = utcnow() - timedelta(days=1)
+    with Session(get_engine()) as s:
+        # Odometer identical (frozen) across the whole window.
+        s.add(_snap(t0, 70, odo=500.0))
+        s.add(_snap(t0 + timedelta(minutes=30), 63, odo=500.0))
+        # GPS frozen at the departure point, then the arrival fix appears within
+        # ±pad of where the SoC stops falling (C3's mid-drive freeze).
+        s.add(_c3(t0, lat=HOME[0], lng=HOME[1]))
+        s.add(_c3(t0 + timedelta(minutes=20), lat=HOME[0], lng=HOME[1]))
+        s.add(_c3(t0 + timedelta(minutes=38), lat=AWAY[0], lng=AWAY[1]))
+        s.commit()
+
+    drains = detect_idle_drains(vin="VIN1", days=3)
+    assert drains == []
+
+
+def test_drive_level_power_without_gps_is_rejected(tmp_db):
+    """No C3 coverage at all: a parked car cannot draw drive-level power, so an
+    implausible implied kW is rejected by the physics backstop."""
+    from polestar_dash.idle_drain import detect_idle_drains
+
+    t0 = utcnow() - timedelta(days=1)
+    with Session(get_engine()) as s:
+        # 7% over 30 min ⇒ ~11 kW ⇒ impossible for a standing car.
+        s.add(_snap(t0, 70))
+        s.add(_snap(t0 + timedelta(minutes=30), 63))
+        s.commit()
+
+    drains = detect_idle_drains(vin="VIN1", days=3)
+    assert drains == []
+
+
+def test_drop_right_after_parking_is_settling(tmp_db):
+    """SoC relaxes for a while after a drive (OCV re-estimation). A drop that
+    starts < SETTLE_MIN after the car parked is that settling, not real draw."""
+    from polestar_dash.idle_drain import detect_idle_drains
+
+    t0 = utcnow() - timedelta(days=1)
+    with Session(get_engine()) as s:
+        s.add(_snap(t0, 72))
+        s.add(_snap(t0 + timedelta(minutes=20), 68))
+        # Parked only ~12 min before the drop began, GPS pinned (just arrived).
+        parked = _epoch(t0 - timedelta(minutes=12))
+        s.add(_c3(t0, lat=HOME[0], lng=HOME[1], parked_ts=parked))
+        s.add(_c3(t0 + timedelta(minutes=25), lat=HOME[0], lng=HOME[1], parked_ts=parked))
+        s.commit()
+
+    drains = detect_idle_drains(vin="VIN1", days=3)
+    assert drains == []
+
+
+def test_no_c3_modest_power_stays_unknown(tmp_db):
+    from polestar_dash.idle_drain import detect_idle_drains
+
+    t0 = utcnow() - timedelta(days=1)
+    with Session(get_engine()) as s:
+        # 3% over 90 min ⇒ ~1.6 kW ⇒ plausible parked draw, but no C3 to
+        # attribute it → cause stays unknown (None) rather than guessing.
+        s.add(_snap(t0, 60))
+        s.add(_snap(t0 + timedelta(minutes=90), 57))
         s.commit()
 
     drains = detect_idle_drains(vin="VIN1", days=3)

@@ -834,6 +834,8 @@ def insights(days: int = Query(90, ge=7, le=365), vin: str | None = None) -> dic
 @router.get("/idle-drain")
 def idle_drain(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> dict:
     drains = detect_idle_drains(vin=vin, days=days)
+    # Newest first — the user cares about recent events, and the C3-attributed
+    # ones (which only exist for recent history) belong at the top.
     items = [
         {
             "started_at": d.started_at.isoformat(),
@@ -843,10 +845,11 @@ def idle_drain(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> d
             "soc_end": d.soc_end,
             "soc_drop": d.soc_drop,
             "kwh": d.kwh,
+            "implied_kw": d.implied_kw,
             "cause": d.cause,
             "parked_for_min": d.parked_for_min,
         }
-        for d in drains
+        for d in sorted(drains, key=lambda d: d.started_at, reverse=True)
     ]
     total_kwh = round(sum(d.kwh for d in drains), 1)
     return {"items": items, "total_kwh": total_kwh, "count": len(items)}

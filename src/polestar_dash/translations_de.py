@@ -997,5 +997,7 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Pre-conditioning": "Vorklimatisierung",
     "Air cleaning": "Luftreinigung",
     "Standby loss": "Standby-Verlust",
+    "Active draw (parked)": "Aktiver Verbrauch (geparkt)",
+    "Parasitic standby": "Parasitärer Standby-Verlust",
     "parked for": "geparkt seit",
 }
