@@ -125,6 +125,7 @@
       <thead><tr>
         <th style="text-align:left;padding:4px 8px">{{ t("Started") }}</th>
         <th>{{ t("Duration") }}</th><th>{{ t("SoC drop") }}</th><th>≈ kWh</th>
+        <th>{{ t("Cause") }}</th>
       </tr></thead>
       <tbody></tbody>
     </table>
@@ -399,12 +400,26 @@
       const dr = await (await fetch('/api/idle-drain?days=' + days)).json();
       document.getElementById('drain_total').textContent =
         `${dr.count} ` + {{ t("events") | tojson }} + ` · ≈ ${dr.total_kwh.toFixed(1)} kWh`;
+      // Attribution from C3 (climate/air active during the window, parked-for
+      // from the parked fix); drains predating C3 history stay "—".
+      const CAUSE = {
+        climate: {{ t("Pre-conditioning") | tojson }},
+        air: {{ t("Air cleaning") | tojson }},
+        standby: {{ t("Standby loss") | tojson }},
+      };
+      const PARKED_FOR = {{ t("parked for") | tojson }};
+      const causeCell = (d) => {
+        let txt = CAUSE[d.cause] || '—';
+        if (d.parked_for_min != null) txt += ` · ${PARKED_FOR} ${fmtDur(d.parked_for_min)}`;
+        return txt;
+      };
       document.querySelector('#drain_tbl tbody').innerHTML = dr.items.map(d => `
         <tr style="border-top:1px solid var(--ujh-line)">
           <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
           <td style="text-align:right" data-label="{{ t('Duration') }}">${fmtDur(d.duration_min)}</td>
           <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
           <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)}</td>
+          <td style="text-align:right" data-label="{{ t('Cause') }}">${causeCell(d)}</td>
         </tr>`).join('') || '<tr><td class="muted" style="padding:6px 8px">{{ t("No idle drains detected.") }}</td></tr>';
     }
 

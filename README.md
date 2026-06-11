@@ -53,8 +53,8 @@ Update: `git pull && docker compose up -d --build`. Or add
 | `/history` | **Battery & Charging** — telemetry time-series + charging sessions, the **battery-health (SoH) trend**, plus a **charging control panel** (start/stop, amp limit, target SoC) |
 | `/sessions/{id}` | Per-session charging curve (kW + SoC + V/A) |
 | `/tripbook` | Trips from odometer in collapsible per-month sections, monthly kWh/100km, iCal feed; imported journey-log table with category/comments + odometer-gap (untracked km) detection |
-| `/insights` | **Answer-first** efficiency & cost page: five themed sections (*What is the car costing me? · How efficiently am I driving? · How healthy is the battery? · Am I wasting energy? · Impact & patterns*), each with a headline number, **auto-generated plain-language insight sentences** (cold-weather penalty, most-efficient speed band, EV-vs-petrol saving, range trend, idle losses, CO₂ saved…) and the charts demoted to collapsible evidence. A *Bottom line* band + a 30/90/180/365-day time-range selector |
-| `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available; plus the **car-reported pending update** (with a *first-seen* date) when the car announces one |
+| `/insights` | **Answer-first** efficiency & cost page: five themed sections (*What is the car costing me? · How efficiently am I driving? · How healthy is the battery? · Am I wasting energy? · Impact & patterns*), each with a headline number, **auto-generated plain-language insight sentences** (cold-weather penalty, most-efficient speed band, EV-vs-petrol saving, range trend, idle losses, CO₂ saved…) and the charts demoted to collapsible evidence. Idle drains carry a **cause** (pre-conditioning / air cleaning / standby loss, attributed from C3) plus how long the car had been parked. A *Bottom line* band + a 30/90/180/365-day time-range selector |
+| `/software` | Installed software version + since when, version history, and the release-notes changelog scraped from the Polestar manual; emails when a newer version is available; plus the **car-reported pending update** (with a *first-seen* date) and a persisted **car-reported update history** — every OTA (version, state) transition the car announced, surviving restarts |
 | `/log` | **Activity log** — everything the app's loggers emit (polls, sessions, notifications, automations, errors). Live tail in memory, auto-refreshing, **search / source / level / time-range filters** + plain-text export, consolidated into collapsible hour/day groups; persisted to the DB (`LOG_RETENTION_DAYS`) so you can page back through history with "Load older" |
 | `/routes` | Repeated routes aggregated from imported trips, with a most/least-efficient leaderboard |
 | `/lab` | **Consolidated developer tab** — live C3 state, the raw API payload, the write-control panel, and live field discovery / gRPC proto dump, in collapsible lazy-loading frames. The old `/raw` and `/test` URLs redirect here |
@@ -73,7 +73,15 @@ published over MQTT (incl. a Home Assistant `device_tracker`). It also drives a
 *unlocked* notification. It also alerts on **health warnings** — 12V battery,
 washer/brake/oil/coolant levels, and bulb failures (naming the failed lamp) —
 and notifies when the **car itself reports a pending software update** (more
-reliable than the manual-scrape path). Disable with `C3_ENABLED=false`.
+reliable than the manual-scrape path). OTA state transitions and per-bulb
+light fault/cleared events are **persisted** (`C3SoftwareEvent`,
+`LightWarningEvent`), as are the car's own **time-to-full/target** estimates —
+which the dashboard charging card prefers over its static interpolation.
+The car only refreshes its GPS fix when it *parks* (the position freezes
+mid-drive), so the dashboard labels a stale fix honestly as *"Position von
+HH:MM"*, drive detection falls back to *SoC falling + frozen fix*, and
+session/trip locations are stamped by fix time — never by a frozen mid-drive
+coordinate. Disable with `C3_ENABLED=false`.
 
 **Remote control & automations.** The C3 backend also accepts *write* commands,
 so poledash can lock/unlock, open/close the windows, run climate + pre-cleaning,

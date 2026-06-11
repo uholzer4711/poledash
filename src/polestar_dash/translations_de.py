@@ -988,4 +988,10 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Car-reported update history": "Update-Verlauf (vom Auto gemeldet)",
     "Seen": "Gesehen",
     "State": "Status",
+    # Idle-drain attribution (insights)
+    "Cause": "Ursache",
+    "Pre-conditioning": "Vorklimatisierung",
+    "Air cleaning": "Luftreinigung",
+    "Standby loss": "Standby-Verlust",
+    "parked for": "geparkt seit",
 }

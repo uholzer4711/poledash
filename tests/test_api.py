@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -10,6 +10,7 @@ from polestar_dash.db.models import VehicleSnapshot
 from polestar_dash.db.session import get_engine
 from polestar_dash.routes import api as api_routes
 from polestar_dash.routes import dashboard, health, raw
+from polestar_dash.util import utcnow
 
 
 def _app():
@@ -37,7 +38,7 @@ def test_latest_404_when_empty(tmp_db):
 
 
 def test_latest_and_history(tmp_db):
-    now = datetime.utcnow()
+    now = utcnow()
     with Session(get_engine()) as s:
         for i in range(3):
             s.add(
@@ -66,7 +67,7 @@ def test_latest_and_history(tmp_db):
 def test_log_history_filter_and_export(tmp_db):
     from polestar_dash.db.models import LogEntry
 
-    now = datetime.utcnow()
+    now = utcnow()
     rows = [
         ("polestar_dash.scheduler", "INFO", 20, "Stored snapshot for VIN X", 0),
         ("polestar_dash.scheduler", "WARNING", 30, "slow fetch", 1),
@@ -133,7 +134,7 @@ def test_soh_estimate(tmp_db):
     # Too little data → no estimate, "collecting".
     assert compute_soh()["enough_data"] is False
 
-    now = datetime.utcnow()
+    now = utcnow()
     with Session(get_engine()) as s:
         for i in range(5):
             # ~75 kWh implied (30 kWh over a 40% SoC span) — a healthy pack.

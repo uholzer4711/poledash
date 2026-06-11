@@ -843,6 +843,8 @@ def idle_drain(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> d
             "soc_end": d.soc_end,
             "soc_drop": d.soc_drop,
             "kwh": d.kwh,
+            "cause": d.cause,
+            "parked_for_min": d.parked_for_min,
         }
         for d in drains
     ]

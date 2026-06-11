@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Self-hosted web dashboard for Polestar 2 vehicle data"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.11,<4.0"
+# unofficial-polestar-api (C3) requires 3.12 — the Docker image runs 3.12,
+# and a 3.11 venv can't even install the project, so be honest here.
+requires-python = ">=3.12,<4.0"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -48,7 +50,7 @@ packages = ["src/polestar_dash"]
 
 [tool.ruff]
 line-length = 110
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

@@ -3,6 +3,33 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.32.0] — 2026-06-11
+
+### Changed — charging card shows the car's own time estimate
+
+- While charging, the dashboard's **time-to-target / time-to-full now prefers
+  the car's own C3 estimate** (persisted since 1.31.0, fresh ≤ 10 min) over
+  pypolestar's value and the static linear interpolation. The interpolation
+  remains as fallback when C3 has no estimate.
+
+### Added — idle drains get a cause
+
+- The Insights idle-drain table has a new **"Cause" column**: each drain is
+  attributed from the C3 rows overlapping its window — **Vorklimatisierung**
+  (climate active, incl. spin-up states), **Luftreinigung** (cabin
+  pre-cleaning), or **Standby-Verlust** (C3 saw the window, nothing ran).
+  Drains predating C3 history stay "—". Where the parked fix allows it, the
+  row also shows **how long the car had been parked** when the drain started
+  (`parked_ts`) — conditioning clusters around departure, vampire drain shows
+  up hours later. `/api/idle-drain` carries `cause` + `parked_for_min`.
+
+### Fixed — dev hygiene
+
+- `requires-python` is now **>= 3.12** (the C3 lib requires it; the Docker
+  image always ran 3.12) and the repo `.venv` is a uv-managed 3.12 venv with
+  the `dev` extra, so `pytest` runs on the host again (documented in
+  the project conventions). Tests no longer use the deprecated `datetime.utcnow()`.
+
 ## [1.31.0] — 2026-06-11
 
 ### Changed — GPS fix timestamps (`gps_ts`) drive position honesty

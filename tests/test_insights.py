@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlmodel import Session
 
 from polestar_dash.db.models import ChargeSession, JourneyImport
 from polestar_dash.db.session import get_engine
+from polestar_dash.util import utcnow
 
 
 def _seed(now):
@@ -44,7 +45,7 @@ def test_cost_vs_petrol_pure(tmp_db):
 def test_charge_price_split(tmp_db):
     from polestar_dash.insights_extras import charge_price_split
 
-    _seed(datetime.utcnow())
+    _seed(utcnow())
     split = charge_price_split(days=30, vin="VIN1")
     assert split["ac_ct"] == 20.0  # the 7 kW session
     assert split["dc_ct"] == 55.0  # the 120 kW session
@@ -53,7 +54,7 @@ def test_charge_price_split(tmp_db):
 def test_temp_efficiency_delta(tmp_db):
     from polestar_dash.insights_extras import compute_temp_scatter, temp_efficiency_delta
 
-    _seed(datetime.utcnow())
+    _seed(utcnow())
     td = temp_efficiency_delta(compute_temp_scatter(days=30))
     # Same Wh/km in both buckets here → ~0 % delta, but the structure is sound.
     assert td is not None and "delta_pct" in td
@@ -70,7 +71,7 @@ def test_build_narrative_smoke(tmp_db):
     )
     from polestar_dash.insights_narrative import build_narrative
 
-    _seed(datetime.utcnow())
+    _seed(utcnow())
     nr = build_narrative(
         days=30, vin="VIN1",
         forecast=compute_forecast(days=30), trip_cost=compute_trip_cost(days=30),
