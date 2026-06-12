@@ -65,6 +65,41 @@ def test_disconnect_alerts_once_after_persisting(tmp_db, monkeypatch):
     assert {c["key"] for c in captured} == {alert["key"]}
 
 
+def test_reconnect_clears_once_after_outage(tmp_db, monkeypatch):
+    import polestar_dash.c3_anomalies as ca
+
+    captured: list[dict] = []
+    monkeypatch.setattr(ca, "notify", lambda **kw: captured.append(kw))
+
+    # Connected, then a confirmed outage (>= 2 stateless polls), then back.
+    _persist([_connected(0), _connected(1)])
+    _persist([_stateless(2), _stateless(3)])
+
+    # First connected poll after the outage → exactly one all-clear.
+    _persist([_connected(4)])
+    ca._check_c3_reconnected(_connected(4))
+    assert len(captured) == 1
+    assert captured[0]["kind"] == "c3_reconnected"
+
+    # A subsequent connected poll has a connected predecessor → no re-clear.
+    _persist([_connected(5)])
+    ca._check_c3_reconnected(_connected(5))
+    assert len(captured) == 1
+
+
+def test_no_reconnect_clear_for_transient_blip(tmp_db, monkeypatch):
+    import polestar_dash.c3_anomalies as ca
+
+    captured: list[dict] = []
+    monkeypatch.setattr(ca, "notify", lambda **kw: captured.append(kw))
+
+    # One stateless poll (below the disconnect threshold) → no outage, no clear.
+    _persist([_connected(0), _stateless(1)])
+    _persist([_connected(2)])
+    ca._check_c3_reconnected(_connected(2))
+    assert captured == []
+
+
 def test_no_alert_when_connected(tmp_db, monkeypatch):
     import polestar_dash.c3_anomalies as ca
 

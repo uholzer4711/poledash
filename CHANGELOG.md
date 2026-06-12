@@ -3,6 +3,20 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.37.1] — 2026-06-12
+
+### Added — "vehicle connection restored" all-clear
+
+- Counterpart to the disconnect alert: when C3 starts returning live data again
+  after a confirmed outage, you get one **all-clear** — *Vehicle connection
+  restored — the car is returning live data again … the connection was lost
+  around HH:MM.* Fires exactly once, on the first connected poll after the
+  outage, and only if the outage was long enough to have alerted (a transient
+  blip below the disconnect threshold gets neither alert nor all-clear).
+- Both directions share one switch: **/settings → Alerts & automations** now
+  lists it as **Vehicle connection lost / restored** (the single toggle governs
+  the lost *and* restored notifications).
+
 ## [1.37.0] — 2026-06-12
 
 ### Added — alert when the C3 vehicle connection is lost (re-pair needed)

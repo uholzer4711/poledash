@@ -302,11 +302,54 @@ def _check_c3_disconnected(row: C3Snapshot) -> None:
     )
 
 
+def _check_c3_reconnected(row: C3Snapshot) -> None:
+    """All-clear when C3 starts returning live data again after a confirmed
+    outage. Fires once, on the first connected poll following a stateless streak
+    that was long enough to have alerted — so a transient blip (below the
+    disconnect threshold) gets no recovery ping either. Shares the
+    ``c3_disconnected`` toggle: one switch governs the whole connection-state
+    pair."""
+    if not alert_enabled("c3_disconnected"):
+        return
+    if not _c3_has_state(row):
+        return  # still down — nothing to clear
+    # Measure the stateless streak immediately *before* this connected poll.
+    with Session(get_engine()) as s:
+        recent = s.exec(
+            select(C3Snapshot)
+            .where(C3Snapshot.vin == row.vin)
+            .where(C3Snapshot.fetched_at < row.fetched_at)
+            .order_by(C3Snapshot.fetched_at.desc())
+            .limit(12)
+        ).all()
+    streak = 0
+    started_at = None
+    for r in recent:
+        if _c3_has_state(r):
+            break
+        streak += 1
+        started_at = r.fetched_at
+    if streak < _C3_DISCONNECT_MIN_POLLS or started_at is None:
+        return  # no confirmed outage just ended (normal poll, or a blip)
+    notify(
+        kind="c3_reconnected",
+        # Keyed on the ended outage so the all-clear is sent exactly once.
+        key=f"{row.vin}-{started_at:%Y%m%d-%H%M}",
+        title=t("Vehicle connection restored"),
+        body=t("The car is returning live data again — door/lock/GPS state is "
+               "back. The connection was lost around {time}.",
+               time=f"{started_at:%Y-%m-%d %H:%M} UTC"),
+        vin=row.vin,
+        tags=["car"],
+    )
+
+
 def run_c3_anomaly_checks(row: C3Snapshot, *, prev: C3Snapshot | None = None) -> None:
     # Each check self-gates on its per-alert config (enable + quiet-hour window),
     # so callers just run them all. The legacy NOTIFY_DOOR_OPEN/NOTIFY_UNLOCKED
     # env flags now seed the default-enabled state (see app_settings).
     _check_c3_disconnected(row)
+    _check_c3_reconnected(row)
     _check_openings(row, prev)
     _check_unlocked(row, prev)
     _check_health(row, prev)

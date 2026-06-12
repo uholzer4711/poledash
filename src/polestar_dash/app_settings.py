@@ -156,7 +156,7 @@ ALERT_LABELS: dict[str, str] = {
     "c3_light": "Light failure",
     "c3_level": "Fluid / level warning",
     "c3_rain_windows": "Rain & windows open",
-    "c3_disconnected": "Vehicle connection lost (re-pair)",
+    "c3_disconnected": "Vehicle connection lost / restored",
     "anomaly_soc_drop": "Unexpected SoC drop",
     "anomaly_power_collapse": "Charging power collapse",
     "anomaly_range_factor": "Low range factor",

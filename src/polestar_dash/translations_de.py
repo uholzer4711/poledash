@@ -783,9 +783,11 @@ TRANSLATIONS_DE: dict[str, str] = {
     # --- Alert labels (app_settings.ALERT_LABELS) ---
     "Door / window left open": "Tür / Fenster offen gelassen",
     "Fluid / level warning": "Flüssigkeits- / Füllstand-Warnung",
-    "Vehicle connection lost (re-pair)": "Fahrzeugverbindung verloren (neu koppeln)",
+    "Vehicle connection lost / restored": "Fahrzeugverbindung verloren / wiederhergestellt",
     "Vehicle connection lost": "Fahrzeugverbindung verloren",
     "The car stopped returning live data around {time} — door/lock/GPS state is unavailable. The car account likely needs re-pairing in the Polestar app / settings.": "Das Auto liefert seit ca. {time} keine Live-Daten mehr — Tür-/Schloss-/GPS-Status ist nicht verfügbar. Das Fahrzeugkonto muss vermutlich in der Polestar-App / den Einstellungen neu gekoppelt werden.",
+    "Vehicle connection restored": "Fahrzeugverbindung wiederhergestellt",
+    "The car is returning live data again — door/lock/GPS state is back. The connection was lost around {time}.": "Das Auto liefert wieder Live-Daten — Tür-/Schloss-/GPS-Status ist zurück. Die Verbindung war seit ca. {time} unterbrochen.",
     "Unexpected SoC drop": "Unerwarteter SoC-Abfall",
     "Charging power collapse": "Ladeleistung eingebrochen",
     "Low range factor": "Niedriger Reichweiten-Faktor",
