@@ -14,12 +14,27 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from sqlmodel import Session, select
+
 from .app_settings import alert_enabled, in_alert_window
 from .db.models import C3Snapshot
+from .db.session import get_engine
 from .i18n import t
 from .notify import notify
 
 log = logging.getLogger(__name__)
+
+# State fields that prove the C3 backend actually returned vehicle data. When the
+# C3 login degrades (lost car relation / throttle → every section
+# PERMISSION_DENIED) the poll still stores a row, but with all of these `None`.
+_STATE_FIELDS = (
+    "is_locked", "door_fl", "door_fr", "door_rl", "door_rr",
+    "sunroof", "hood", "tailgate", "tank_lid", "lat",
+)
+# How many consecutive stateless polls before we call it a real disconnect — one
+# blip is a transient throttle (recovers within a poll), so we wait for it to
+# persist before alerting (still ~one cadence gap, not hours).
+_C3_DISCONNECT_MIN_POLLS = 2
 
 # Openings we watch, mapped to their human label key.
 _OPENINGS: list[tuple[str, str]] = [
@@ -229,10 +244,69 @@ async def check_rain_windows(row: C3Snapshot) -> None:
     )
 
 
+def _c3_has_state(row: C3Snapshot | None) -> bool:
+    """True when this poll actually carried vehicle state (not an all-`None`
+    PERMISSION_DENIED row left behind by a degraded C3 login)."""
+    if row is None:
+        return False
+    return any(getattr(row, f, None) is not None for f in _STATE_FIELDS)
+
+
+def _check_c3_disconnected(row: C3Snapshot) -> None:
+    """Alert when the C3 backend stops returning live data — the car account has
+    lost its relation to the vehicle (throttle that won't clear, or a login that
+    needs **re-pairing**): every section comes back PERMISSION_DENIED and the
+    stored row is all-`None`. Fires once per disconnect episode (keyed on when it
+    started), only after it persists past a transient throttle, and only if the
+    car *had* been returning data — so a never-set-up car doesn't nag."""
+    if not alert_enabled("c3_disconnected"):
+        return
+    if _c3_has_state(row):
+        return  # this poll is fine — connected
+    # Walk recent rows newest→oldest: measure the unbroken stateless streak
+    # ending now, when it started, and whether we'd been connected before it.
+    with Session(get_engine()) as s:
+        recent = s.exec(
+            select(C3Snapshot)
+            .where(C3Snapshot.vin == row.vin)
+            .order_by(C3Snapshot.fetched_at.desc())
+            .limit(12)
+        ).all()
+    streak = 0
+    started_at = row.fetched_at
+    had_state_before = False
+    for r in recent:
+        if _c3_has_state(r):
+            had_state_before = True
+            break
+        streak += 1
+        started_at = r.fetched_at
+    if streak < _C3_DISCONNECT_MIN_POLLS:
+        return  # transient — wait for it to persist past a throttle blip
+    if not had_state_before:
+        return  # never connected in the recent window — not a live "drop"
+    notify(
+        kind="c3_disconnected",
+        # One alert per episode: stable while the streak lasts, new after reconnect.
+        key=f"{row.vin}-{started_at:%Y%m%d-%H%M}",
+        title=t("Vehicle connection lost"),
+        body=t(
+            "The car stopped returning live data around {time} — door/lock/GPS "
+            "state is unavailable. The car account likely needs re-pairing in "
+            "the Polestar app / settings.",
+            time=f"{started_at:%Y-%m-%d %H:%M} UTC",
+        ),
+        vin=row.vin,
+        priority="high",
+        tags=["warning", "car"],
+    )
+
+
 def run_c3_anomaly_checks(row: C3Snapshot, *, prev: C3Snapshot | None = None) -> None:
     # Each check self-gates on its per-alert config (enable + quiet-hour window),
     # so callers just run them all. The legacy NOTIFY_DOOR_OPEN/NOTIFY_UNLOCKED
     # env flags now seed the default-enabled state (see app_settings).
+    _check_c3_disconnected(row)
     _check_openings(row, prev)
     _check_unlocked(row, prev)
     _check_health(row, prev)

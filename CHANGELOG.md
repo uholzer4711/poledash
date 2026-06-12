@@ -3,6 +3,26 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.37.0] — 2026-06-12
+
+### Added — alert when the C3 vehicle connection is lost (re-pair needed)
+
+- When the C3 login degrades — the account loses its relation to the car, so
+  every section returns `PERMISSION_DENIED` / `UNAUTHENTICATED` and door / lock /
+  GPS state silently goes unavailable — you now get a **notification**
+  (ntfy / Telegram / email, same channels as every other alert): *Vehicle
+  connection lost — the car stopped returning live data around HH:MM … the car
+  account likely needs re-pairing in the Polestar app / settings.*
+- Fires **once per outage episode** (keyed on when it started; `notify()`'s
+  NotificationLog dedups the rest), only after it **persists past a transient
+  throttle** (≥ 2 consecutive stateless polls, ~one cadence gap), and only if the
+  car *had* been returning data — a never-paired car doesn't nag. Detected in
+  `c3_anomalies.run_c3_anomaly_checks` from the all-`None` rows a degraded login
+  leaves behind.
+- **Configurable** on **/settings → Alerts** as *Vehicle connection lost
+  (re-pair)* — toggle + quiet-hour window like every other alert; on by default,
+  any-time window so it reaches you immediately.
+
 ## [1.36.1] — 2026-06-12
 
 ### Fixed — vehicle-state goes blank when the C3 login degrades (re-pair needed)

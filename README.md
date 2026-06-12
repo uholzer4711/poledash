@@ -72,8 +72,12 @@ published over MQTT (incl. a Home Assistant `device_tracker`). It also drives a
 **rain + windows-open alert** and a one-day-dedup *door/boot left open* /
 *unlocked* notification. It also alerts on **health warnings** — 12V battery,
 washer/brake/oil/coolant levels, and bulb failures (naming the failed lamp) —
-and notifies when the **car itself reports a pending software update** (more
-reliable than the manual-scrape path). OTA state transitions and per-bulb
+and, when the **C3 vehicle connection itself drops** (the account loses its
+relation to the car → every section `PERMISSION_DENIED`, i.e. a re-pair is
+needed), fires a one-per-episode *Vehicle connection lost* alert so a silent
+loss of door/lock/GPS data doesn't go unnoticed. It also notifies when the
+**car itself reports a pending software update** (more reliable than the
+manual-scrape path). OTA state transitions and per-bulb
 light fault/cleared events are **persisted** (`C3SoftwareEvent`,
 `LightWarningEvent`), as are the car's own **time-to-full/target** estimates —
 which the dashboard charging card prefers over its static interpolation.
