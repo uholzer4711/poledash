@@ -118,30 +118,41 @@
   <div id="ins_waste" class="ins-list mb-4"></div>
   <div class="card mb-6">
     <div class="flex-between">
-      <div class="card-label">{{ t("Idle drains") }} <span class="muted">· {{ t("pre-conditioning / standheizung / vampire") }}</span></div>
-      <div class="mono-xs" id="drain_total">—</div>
+      <div class="card-label">{{ t("Parked energy use") }} <span class="muted">· {{ t("pre-conditioning / standheizung / vampire") }}</span></div>
+      <div class="mono-xs" id="drain_total"></div>
     </div>
-    <table class="index mono-xs mt-4" style="width:100%;border-collapse:collapse" id="drain_tbl">
-      <thead><tr>
-        <th style="text-align:left;padding:4px 8px">{{ t("Started") }}</th>
-        <th title="{{ t('How long the loss ran') }}">{{ t("Duration") }}</th><th>{{ t("SoC drop") }}</th><th title="{{ t('Energy lost · average power') }}">≈ kWh</th>
-        <th>{{ t("Cause") }}</th>
-      </tr></thead>
-      <tbody></tbody>
-    </table>
-    <div class="mono-xs muted mt-2">{{ t("Duration is how long the loss ran; the parked time is how long the car had already stood when it began.") }}</div>
 
-    <details class="mt-4">
-      <summary class="mono-xs">{{ t("What does the cause mean?") }}</summary>
-      <ul class="mono-xs muted" style="margin:8px 0 0;padding-left:18px;line-height:1.7">
-        <li><b>{{ t("Pre-conditioning") }}</b> — {{ t("the car ran cabin climate (heating/cooling) while parked — C3 confirmed it.") }}</li>
-        <li><b>{{ t("Air cleaning") }}</b> — {{ t("the car ran cabin air-cleaning while parked — C3 confirmed it.") }}</li>
-        <li><b>{{ t("Active draw (parked)") }}</b> — {{ t("parked with no climate running, but a kW-level draw — most likely battery/thermal management or pre-departure conditioning the climate flag doesn't cover.") }}</li>
-        <li><b>{{ t("Parasitic standby") }}</b> — {{ t("parked, a small steady background loss (the 12V system, keeping the car awake).") }}</li>
-        <li><b>{{ t("Unknown") }}</b> — {{ t("a plausible parked draw, but no C3 GPS for that time to attribute it (e.g. before C3 was enabled).") }}</li>
-      </ul>
-    </details>
+    {# Calm, honest empty state — the common healthy case: nothing parked could
+       be attributed to a real draw, so we say exactly that and show no table. #}
+    <div id="drain_empty" class="mono-xs muted mt-3" style="display:none"></div>
 
+    {# Only rendered when we actually attributed parked energy to a cause
+       (C3-confirmed climate/air, or a confirmed deep-park draw). #}
+    <div id="drain_content" style="display:none">
+      <div id="drain_breakdown" class="mt-3" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <table class="index mono-xs mt-4" style="width:100%;border-collapse:collapse" id="drain_tbl">
+        <thead><tr>
+          <th style="text-align:left;padding:4px 8px">{{ t("Started") }}</th>
+          <th title="{{ t('How long the loss ran') }}">{{ t("Duration") }}</th><th>{{ t("SoC drop") }}</th><th title="{{ t('Energy lost · average power') }}">≈ kWh</th>
+          <th>{{ t("Cause") }}</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="mono-xs muted mt-2">{{ t("Duration is how long the loss ran; the parked time is how long the car had already stood when it began.") }}</div>
+
+      <details class="mt-4">
+        <summary class="mono-xs">{{ t("What does the cause mean?") }}</summary>
+        <ul class="mono-xs muted" style="margin:8px 0 0;padding-left:18px;line-height:1.7">
+          <li><b>{{ t("Pre-conditioning") }}</b> — {{ t("the car ran cabin climate (heating/cooling) while parked — C3 confirmed it.") }}</li>
+          <li><b>{{ t("Air cleaning") }}</b> — {{ t("the car ran cabin air-cleaning while parked — C3 confirmed it.") }}</li>
+          <li><b>{{ t("Active draw (parked)") }}</b> — {{ t("parked with no climate running, but a kW-level draw — most likely battery/thermal management or pre-departure conditioning the climate flag doesn't cover.") }}</li>
+          <li><b>{{ t("Parasitic standby") }}</b> — {{ t("parked, a small steady background loss (the 12V system, keeping the car awake).") }}</li>
+        </ul>
+      </details>
+    </div>
+
+    {# Always available for the curious: every SoC drop and why it was kept or
+       excluded (most are drives the frozen odometer hid). Collapsed. #}
     <details class="mt-2">
       <summary class="mono-xs">{{ t("Diagnostics — every SoC drop and why") }} <span class="muted" id="drain_diag_sum"></span></summary>
       <div class="mono-xs muted" style="margin:8px 0">{{ t("Most SoC drops are drives the frozen odometer hid — these are the ones the table above excludes, shown here with the reason.") }}</div>
@@ -421,39 +432,67 @@
           : {{ t("no charging sessions yet") | tojson }};
       }
 
-      // ── Idle drains table ───────────────────────────────────────────────
+      // ── Parked energy use (attributed only) ─────────────────────────────
       const dr = await (await fetch('/api/idle-drain?days=' + days)).json();
-      document.getElementById('drain_total').textContent =
-        `${dr.count} ` + {{ t("events") | tojson }} + ` · ≈ ${dr.total_kwh.toFixed(1)} kWh`;
-      // Attribution from C3 GPS + climate/air state during the window; actual
-      // drives are filtered out upstream. Drains predating C3 history stay "—".
-      // The implied kW is shown so the figure is plausibility-checkable: a
-      // parked car draws < 0.5 kW (vampire) or a few kW (conditioning) — never
-      // drive-level power.
       const CAUSE = {
         climate: {{ t("Pre-conditioning") | tojson }},
         air: {{ t("Air cleaning") | tojson }},
         conditioning: {{ t("Active draw (parked)") | tojson }},
         vampire: {{ t("Parasitic standby") | tojson }},
       };
-      // {dur} is filled in JS (fmtDur runs client-side) — phrased so it reads
-      // as "how long it had already stood when the loss began", not the loss
-      // length (which is the Duration column).
-      const BEGAN_AFTER = {{ t("began after {dur} parked") | tojson }};
-      const causeCell = (d) => {
-        let txt = CAUSE[d.cause] || '—';
-        if (d.parked_for_min != null)
-          txt += ` <span class="muted">· ${BEGAN_AFTER.replace('{dur}', fmtDur(d.parked_for_min))}</span>`;
-        return txt;
-      };
-      document.querySelector('#drain_tbl tbody').innerHTML = dr.items.map(d => `
-        <tr style="border-top:1px solid var(--ujh-line)">
-          <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
-          <td style="text-align:right" data-label="{{ t('Duration') }}">${fmtDur(d.duration_min)}</td>
-          <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
-          <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)} kWh${d.implied_kw != null ? ` <span class="muted">· Ø ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
-          <td style="text-align:right" data-label="{{ t('Cause') }}">${causeCell(d)}</td>
-        </tr>`).join('') || '<tr><td colspan="5" class="muted" style="padding:6px 8px">{{ t("No idle drains in this period — parasitic standby stays under the ~2% detection floor, and SoC drops that coincide with a drive are excluded as trips.") }}</td></tr>';
+      const NO_WASTE = {{ t("No measurable parked energy waste in the last {days} days — when the car runs pre-conditioning, air-cleaning or another draw while standing, it shows up here.") | tojson }};
+      // Relevance filter (the whole point of this rework): show ONLY parked
+      // energy we could actually attribute to a cause — C3-confirmed climate /
+      // air, or a confirmed deep-park draw. Unattributable "unknown" drops are
+      // mostly drives the frozen odometer hid; they stay out of the headline and
+      // live only in the diagnostics table below. No data → no table, no noise.
+      const attributed = (dr.items || []).filter(d => d.cause && CAUSE[d.cause]);
+      const attrKwh = attributed.reduce((s, d) => s + d.kwh, 0);
+      const drEmpty = document.getElementById('drain_empty');
+      const drContent = document.getElementById('drain_content');
+
+      if (!attributed.length) {
+        document.getElementById('drain_total').textContent = '';
+        drContent.style.display = 'none';
+        drEmpty.style.display = '';
+        drEmpty.textContent = NO_WASTE.replace('{days}', days);
+      } else {
+        drEmpty.style.display = 'none';
+        drContent.style.display = '';
+        document.getElementById('drain_total').textContent =
+          `${attributed.length} ` + {{ t("events") | tojson }} + ` · ≈ ${attrKwh.toFixed(1)} kWh`;
+
+        // Per-cause breakdown chips (neutral badges — green/red is reserved for
+        // vehicle state). The implied kW stays in the table for plausibility.
+        const byCause = {};
+        attributed.forEach(d => {
+          const b = byCause[d.cause] || (byCause[d.cause] = { n: 0, kwh: 0 });
+          b.n++; b.kwh += d.kwh;
+        });
+        document.getElementById('drain_breakdown').innerHTML =
+          Object.keys(byCause).map(c =>
+            `<span class="badge">${CAUSE[c]} · ${byCause[c].n} · ${byCause[c].kwh.toFixed(1)} kWh</span>`
+          ).join('');
+
+        // {dur} is filled in JS (fmtDur runs client-side) — phrased so it reads
+        // as "how long it had already stood when the loss began", not the loss
+        // length (which is the Duration column).
+        const BEGAN_AFTER = {{ t("began after {dur} parked") | tojson }};
+        const causeCell = (d) => {
+          let txt = CAUSE[d.cause] || '—';
+          if (d.parked_for_min != null)
+            txt += ` <span class="muted">· ${BEGAN_AFTER.replace('{dur}', fmtDur(d.parked_for_min))}</span>`;
+          return txt;
+        };
+        document.querySelector('#drain_tbl tbody').innerHTML = attributed.map(d => `
+          <tr style="border-top:1px solid var(--ujh-line)">
+            <td style="padding:6px 8px" data-label="{{ t('Started') }}">${new Date(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(d.started_at) ? d.started_at : d.started_at + 'Z').toLocaleString()}</td>
+            <td style="text-align:right" data-label="{{ t('Duration') }}">${fmtDur(d.duration_min)}</td>
+            <td style="text-align:right" data-label="{{ t('SoC drop') }}">${d.soc_start}% → ${d.soc_end}% (−${d.soc_drop})</td>
+            <td style="text-align:right" data-label="≈ kWh">${d.kwh.toFixed(2)} kWh${d.implied_kw != null ? ` <span class="muted">· Ø ${d.implied_kw.toFixed(1)} kW</span>` : ''}</td>
+            <td style="text-align:right" data-label="{{ t('Cause') }}">${causeCell(d)}</td>
+          </tr>`).join('');
+      }
 
       // ── Diagnostics: every candidate + verdict ─────────────────────────────
       const VERDICT = {

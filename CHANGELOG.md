@@ -3,6 +3,40 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.36.0] — 2026-06-12
+
+### Fixed — vehicle-state lost its labels on a throttled C3 read
+
+- The dashboard car diagram could lose every chip/label, the openings summary
+  could falsely read *all closed*, and the lock card could show *Unlocked* when
+  the state was simply unknown. Cause was in the data, not the template: a
+  throttled/partial `GET /api/c3/latest?live=1` returned `ok` but with the whole
+  exterior+location section empty (every door/lock/GPS field `None`), and that
+  hollow live read was served over the full persisted row.
+- `routes/api.py` — the live C3 read now treats a **stateless** response (all of
+  `is_locked`/`door_*`/`sunroof`/`hood`/`tailgate`/`tank_lid`/`lat` `None`) as a
+  miss and falls back to the persisted `C3Snapshot` row — the "degrade
+  gracefully" invariant in the project conventions.
+- `partials/c3_state.html` — when no part state is known at all, the openings
+  summary now reads **no state data** instead of a false *all closed*; the lock
+  card shows **—** for `is_locked = null` rather than *Unlocked*.
+
+### Changed — Insights "Am I wasting energy?" shows only evidenced parked draws
+
+- The section now renders **only what we can actually attribute**: C3-confirmed
+  pre-conditioning / air-cleaning, a confirmed active draw while parked, or a
+  parasitic-standby loss. Unattributable *unknown* SoC drops (mostly drives the
+  frozen odometer hid) no longer appear in the headline, table or narrative —
+  they live only in the collapsed **Diagnostics** view.
+- Card renamed **Parked energy use** (*Verbrauch im Stand*). With nothing
+  attributable it shows one honest line — *No measurable parked energy waste in
+  the last N days…* — instead of a near-empty table or a misleading "kept"
+  unknown row. When there are real events it shows per-cause breakdown badges
+  (e.g. *Pre-conditioning · 2 · 1.3 kWh*) plus a table of just those events.
+- `insights_extras.idle_loss_summary` now counts **only attributed** drains, so
+  the Insights *Bottom line* no longer claims energy "lost to pre-conditioning"
+  when nothing was actually attributed.
+
 ## [1.35.0] — 2026-06-11
 
 ### Added — idle-drain transparency: every SoC drop, its verdict, and what "cause" means

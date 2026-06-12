@@ -580,11 +580,15 @@ def charge_price_split(days: int = 365, vin: str | None = None) -> dict | None:
 
 
 def idle_loss_summary(days: int = 365, vin: str | None = None) -> dict | None:
-    """Total kWh + € lost to idle drains (vampire / pre-conditioning) in window."""
+    """kWh + € lost to *attributed* parked draws (climate / air / conditioning /
+    vampire) in the window. Unattributable "unknown" drops are deliberately
+    excluded — most are drives the frozen odometer hid, so claiming them as
+    "lost to pre-conditioning" is noise (the Insights waste section was reworked
+    to surface only evidenced loss)."""
     from .app_settings import get_default_price_ct
     from .idle_drain import detect_idle_drains
 
-    drains = detect_idle_drains(vin=vin, days=days)
+    drains = [d for d in detect_idle_drains(vin=vin, days=days) if d.cause]
     if not drains:
         return None
     total_kwh = sum(d.kwh for d in drains)

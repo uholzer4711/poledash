@@ -145,6 +145,7 @@
       locked: {{ t("Locked") | tojson }},
       unlocked: {{ t("Unlocked") | tojson }},
       allClosed: {{ t("all closed") | tojson }},
+      noState: {{ t("no state data") | tojson }},
       openWord: {{ t("open") | tojson }},
       stClosed: {{ t("closed") | tojson }},
       stAjar: {{ t("ajar") | tojson }},
@@ -223,7 +224,12 @@
         (OPEN_STATES.indexOf(v) >= 0 ? openKeys : closedKeys).push(k);
       });
       var sum = document.getElementById('c3_open_summary');
-      if (openKeys.length === 0) {
+      if (openKeys.length === 0 && closedKeys.length === 0) {
+        // No part state at all (C3 throttled / not yet polled) — say so instead
+        // of falsely claiming everything is closed.
+        sum.className = 'openings-summary';
+        sum.textContent = LBL.noState;
+      } else if (openKeys.length === 0) {
         sum.className = 'openings-summary is-ok';
         sum.textContent = LBL.allClosed;
       } else {
@@ -349,11 +355,14 @@
       renderOpenings(j);
       renderChips(j);
 
-      // Locked stat card
-      document.getElementById('c3_locked').innerHTML = j.is_locked
-        ? '<span class="accent">' + LBL.locked + '</span>' : esc(LBL.unlocked);
-      document.getElementById('c3_locked_sub').textContent =
-        (j.any_door_open ? LBL.doorOpen : LBL.allClosed) + ' · ' + LBL.central + ': ' + esc(j.central_lock);
+      // Locked stat card — unknown lock state stays "—", never a false "Unlocked".
+      var lockEl = document.getElementById('c3_locked');
+      if (j.is_locked === true) lockEl.innerHTML = '<span class="accent">' + LBL.locked + '</span>';
+      else if (j.is_locked === false) lockEl.textContent = LBL.unlocked;
+      else lockEl.textContent = '—';
+      document.getElementById('c3_locked_sub').textContent = j.is_locked == null
+        ? '—'
+        : (j.any_door_open ? LBL.doorOpen : LBL.allClosed) + ' · ' + LBL.central + ': ' + esc(j.central_lock);
 
       // Climate
       document.getElementById('c3_clim').textContent = j.climate_active ? {{ t("ON") | tojson }} : {{ t("off") | tojson }};

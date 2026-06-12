@@ -1255,6 +1255,15 @@ async def c3_latest(vin: str | None = None, live: bool = False) -> dict:
         flat = c3_dict_to_row(data)
         if not flat:
             return None
+        # A throttled/partial live read can come back `ok` but with the whole
+        # exterior+location section empty (every door/lock/GPS field None).
+        # Served over the persisted row that blanks the dashboard car: no
+        # openings, no chip labels, and a false "all closed". Treat a stateless
+        # read as a miss so we degrade to the DB row (the project conventions invariant).
+        state_keys = ("is_locked", "door_fl", "door_fr", "door_rl", "door_rr",
+                      "sunroof", "hood", "tailgate", "tank_lid", "lat")
+        if all(flat.get(k) is None for k in state_keys):
+            return None
         # trips (car odometers) + software (car-reported pending OTA) exist only
         # in the live snapshot, not the flat C3Snapshot row — attach for the
         # dashboard trip-meters line and the /software car-reported card.
