@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime, timedelta
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from ..app_settings import (
@@ -1282,18 +1282,44 @@ async def c3_latest(vin: str | None = None, live: bool = False) -> dict:
     if live:
         fresh = await _live()
         if fresh is not None:
-            return fresh
+            return {**fresh, "connected": True}
 
     with Session(get_engine()) as s:
-        stmt = select(C3Snapshot).order_by(C3Snapshot.fetched_at.desc())
+        base = select(C3Snapshot)
         if vin:
-            stmt = stmt.where(C3Snapshot.vin == vin)
-        row = s.exec(stmt.limit(1)).first()
+            base = base.where(C3Snapshot.vin == vin)
+        latest = s.exec(
+            base.order_by(C3Snapshot.fetched_at.desc()).limit(1)
+        ).first()
+        # When the C3 login degrades (throttle / lost car relation → re-pair),
+        # every section comes back PERMISSION_DENIED and recent rows are all
+        # `None`. Serve the last row that actually carried vehicle state so the
+        # dashboard shows the last *known* state instead of a blank diagram, and
+        # flag the disconnect so the UI can say "last state from HH:MM" rather
+        # than pretend it's current. (the project conventions degrade-gracefully invariant.)
+        good = s.exec(
+            base.where(
+                or_(
+                    C3Snapshot.is_locked.is_not(None),
+                    C3Snapshot.door_fl.is_not(None),
+                    C3Snapshot.lat.is_not(None),
+                )
+            )
+            .order_by(C3Snapshot.fetched_at.desc())
+            .limit(1)
+        ).first()
+    row = good or latest
     if row is not None:
-        return {**row.model_dump(mode="json"), "source": "db", **meta}
+        # connected = the newest poll itself carried state (not a stale leftover).
+        connected = latest is not None and row.id == latest.id
+        out = {**row.model_dump(mode="json"), "source": "db",
+               "connected": connected, **meta}
+        if not connected and latest is not None:
+            out["last_poll_at"] = latest.fetched_at.isoformat()
+        return out
     # No persisted row yet — live-fetch so the dashboard isn't blank.
     fresh = await _live()
-    return fresh if fresh is not None else dict(meta)
+    return {**fresh, "connected": True} if fresh is not None else dict(meta)
 
 
 @router.get("/weather/current")

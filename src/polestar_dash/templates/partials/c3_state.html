@@ -142,6 +142,9 @@
       interval: {{ t("Interval") | tojson }},
       live: {{ t("live") | tojson }},
       stored: {{ t("stored") | tojson }},
+      disconnected: {{ t("C3 not connected — showing last known state from {time}. The car account may need re-pairing.") | tojson }},
+      lastState: {{ t("Last known state") | tojson }},
+      notConnected: {{ t("not connected") | tojson }},
       locked: {{ t("Locked") | tojson }},
       unlocked: {{ t("Unlocked") | tojson }},
       allClosed: {{ t("all closed") | tojson }},
@@ -343,11 +346,25 @@
           iv ? (LBL.interval + ': ' + iv + ' min') : '—';
         return;
       }
-      errBox.style.display = 'none';
-      var src = j.source === 'live' ? LBL.live : LBL.stored;
-      document.getElementById('c3_meta').textContent =
-        LBL.lastPoll + ': ' + fmtDateTime(j.fetched_at) + ' (' + src + ')' +
-        (iv ? ' · ' + LBL.interval + ': ' + iv + ' min' : '');
+      // C3 disconnected (auth/throttle → re-pair): every section comes back
+      // empty, so the API serves the last row that still had real state and
+      // flags connected=false. Show that last-known state, but say plainly it's
+      // stale and not live — never imply the blank/old data is current.
+      var disconnected = j.connected === false;
+      if (disconnected) {
+        errBox.style.display = 'block';
+        errBox.textContent = LBL.disconnected.replace('{time}', fmtDateTime(j.fetched_at));
+        document.getElementById('c3_meta').textContent =
+          LBL.lastState + ': ' + fmtDateTime(j.fetched_at) + ' · ' + LBL.notConnected +
+          (j.last_poll_at ? ' (' + LBL.lastPoll + ': ' + fmtDateTime(j.last_poll_at) + ')' : '') +
+          (iv ? ' · ' + LBL.interval + ': ' + iv + ' min' : '');
+      } else {
+        errBox.style.display = 'none';
+        var src = j.source === 'live' ? LBL.live : LBL.stored;
+        document.getElementById('c3_meta').textContent =
+          LBL.lastPoll + ': ' + fmtDateTime(j.fetched_at) + ' (' + src + ')' +
+          (iv ? ' · ' + LBL.interval + ': ' + iv + ' min' : '');
+      }
 
       paintCar(j);
 

@@ -3,6 +3,26 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.36.1] — 2026-06-12
+
+### Fixed — vehicle-state goes blank when the C3 login degrades (re-pair needed)
+
+- When the C3 backend loses its relation to the car (every section returns
+  `PERMISSION_DENIED` / `UNAUTHENTICATED` — a throttle or a login that needs
+  **re-pairing**), the scheduler keeps storing C3Snapshot rows but with *all*
+  state fields `None`. The dashboard then served the newest (empty) row and the
+  vehicle-state section rendered nothing — no labels, no diagram, no
+  explanation — even though the last *known* state was minutes old.
+- `routes/api.py` — the DB fallback now serves the **last row that still
+  carried real state** (`is_locked` / `door_fl` / `lat` not `None`) instead of
+  the newest empty one, and returns `connected` (is the newest poll itself
+  stateful?) plus `last_poll_at`.
+- `partials/c3_state.html` — when `connected` is false the section shows the
+  last-known diagram/cards **and** a clear banner — *C3 not connected — showing
+  last known state from HH:MM. The car account may need re-pairing.* — with the
+  meta line switched to *Last known state: HH:MM · not connected*, so stale data
+  is never passed off as current.
+
 ## [1.36.0] — 2026-06-12
 
 ### Fixed — vehicle-state lost its labels on a throttled C3 read
