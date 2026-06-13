@@ -102,15 +102,22 @@
     </div>
   </div>
 
-{% include "partials/control_vehicle.html" %}
+<details class="veh-acc mb-6">
+  <summary><span class="veh-acc-mark">→</span> <span class="veh-acc-title">{{ t("Vehicle control") }}</span></summary>
+  {% include "partials/control_vehicle.html" %}
+</details>
 
-<div class="card mb-6" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
-  <div class="card-label" style="padding:var(--ujh-s-5) var(--ujh-s-5) 0;margin-bottom:0">
-    {{ t("Location") }} <span class="muted" id="c3_loc_meta">· —</span></div>
-  <div id="c3_map" style="flex:1;min-height:360px;margin-top:12px;background:var(--ujh-bg-3)"></div>
-</div>
+<details class="veh-acc mb-6" id="c3_loc_acc">
+  <summary><span class="veh-acc-mark">→</span> <span class="veh-acc-title">{{ t("Location") }}</span>
+    <span class="veh-acc-meta muted" id="c3_loc_meta_m">—</span></summary>
+  <div class="card" style="padding:0;overflow:hidden;display:flex;flex-direction:column">
+    <div class="card-label" style="padding:var(--ujh-s-5) var(--ujh-s-5) 0;margin-bottom:0">
+      {{ t("Location") }} <span class="muted" id="c3_loc_meta">· —</span></div>
+    <div id="c3_map" style="flex:1;min-height:360px;margin-top:12px;background:var(--ujh-bg-3)"></div>
+  </div>
+</details>
 
-<div class="grid grid-4 mb-6">
+<div class="grid grid-4 mb-6 c3-status-grid">
   <div class="card"><div class="card-label">{{ t("Locked") }}</div>
     <div class="stat num" id="c3_locked">—</div><div class="stat-sub" id="c3_locked_sub">—</div></div>
   <div class="card"><div class="card-label">{{ t("Climate") }}</div>
@@ -121,12 +128,15 @@
     <div class="stat num" id="c3_wx">—</div><div class="stat-sub" id="c3_wx_sub">—</div></div>
 </div>
 
-<div class="card mb-6">
-  <div class="card-label">{{ t("Health & warnings") }}
-    <span class="muted" id="c3_state_meta">· —</span></div>
-  <div id="c3_health" class="mt-2" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-  <div id="c3_extra" class="mono-xs muted mt-3"></div>
-</div>
+<details class="veh-acc mb-6">
+  <summary><span class="veh-acc-mark">→</span> <span class="veh-acc-title">{{ t("Health & warnings") }}</span></summary>
+  <div class="card">
+    <div class="card-label">{{ t("Health & warnings") }}
+      <span class="muted" id="c3_state_meta">· —</span></div>
+    <div id="c3_health" class="mt-2" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div id="c3_extra" class="mono-xs muted mt-3"></div>
+  </div>
+</details>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="/static/map.js"></script>
@@ -271,20 +281,21 @@
       var host = document.getElementById('c3_chips');
       if (!host) return;
       var html = '', openGroups = {};
+      // Always render every chip — the LABEL must sit by its leader line even
+      // when a value is missing (throttled poll). Unknown → "—", never a blank
+      // chip. This is what keeps the in-photo labels from ever disappearing.
       CHIPS.forEach(function (c) {
-        var rowsHtml = '', anyOpen = false, anyKnown = false;
+        var rowsHtml = '', anyOpen = false;
         c.rows.forEach(function (r) {
           var v = j[r.k];
-          if (v === undefined || v === null || v === '—' || v === '?') return;
-          anyKnown = true;
-          var open = OPEN_STATES.indexOf(v) >= 0;
+          var known = !(v === undefined || v === null || v === '—' || v === '?');
+          var open = known && OPEN_STATES.indexOf(v) >= 0;
           if (open) anyOpen = true;
           rowsHtml += '<div class="chip-row' + (open ? ' is-open' : '') + '">' +
             (r.l ? '<span class="rk">' + r.l + '</span>' : '<span class="rk"></span>') +
-            '<span class="rv">' + esc(stateLabel(v)) + '</span></div>';
+            '<span class="rv">' + (known ? esc(stateLabel(v)) : '—') + '</span></div>';
         });
         openGroups[c.g] = anyOpen;
-        if (!anyKnown) return;
         html += '<div class="car-chip chip-' + c.g + (anyOpen ? ' is-open' : '') + '">' +
           '<div class="chip-title">' + c.title + '</div>' + rowsHtml + '</div>';
       });
@@ -307,9 +318,22 @@
       var orange = getComputedStyle(document.documentElement).getPropertyValue('--ujh-orange').trim() || '#ff5b14';
       var ink3 = getComputedStyle(document.documentElement).getPropertyValue('--ujh-ink-3').trim() || '#888';
       if (c3Trail) c3Trail.remove();
-      if (track && track.length > 1) {
-        c3Trail = L.polyline(track.map(function (p) { return [p.lat, p.lng]; }),
-          { color: orange, weight: 3, opacity: 0.6 }).addTo(c3Map);
+      if (track && track.length) {
+        // Break the trail wherever the API flagged a coverage gap (C3 outage /
+        // off-grid). One continuous line across a gap would invent a straight
+        // path the car never drove — exactly what hid the day-long June outage.
+        c3Trail = L.layerGroup().addTo(c3Map);
+        var seg = [];
+        var flushSeg = function () {
+          if (seg.length > 1) {
+            L.polyline(seg, { color: orange, weight: 3, opacity: 0.6 }).addTo(c3Trail);
+          }
+        };
+        track.forEach(function (p) {
+          if (p.gap_before) { flushSeg(); seg = []; }
+          seg.push([p.lat, p.lng]);
+        });
+        flushSeg();
       }
       if (c3Pin) c3Pin.remove();
       c3Pin = L.circleMarker(here, { radius: 8, color: orange, fillColor: orange, fillOpacity: 1, weight: 2 })
@@ -415,6 +439,9 @@
           '· ' + j.lat.toFixed(4) + ', ' + j.lng.toFixed(4) +
           ' · ' + LBL.speed + ' ' + esc(j.speed) +
           (stalePos ? ' · ' + stalePos : '');
+        // Short glance on the collapsed mobile Location accordion.
+        var locM = document.getElementById('c3_loc_meta_m');
+        if (locM) locM.textContent = stalePos || (j.lat.toFixed(3) + ', ' + j.lng.toFixed(3));
       }
 
       // Health badges. Unknown ("—"/null) renders neutral, not red.
@@ -451,6 +478,15 @@
 
       drawMap(j, track);
     }
+
+    // Leaflet lays out at 0px while its container sits in a collapsed <details>
+    // (the mobile Location accordion), rendering grey until told to remeasure.
+    // Fix the size the first time the panel is opened. Desktop never toggles it
+    // (the accordion is forced-open via CSS), so this is a no-op there.
+    var locAcc = document.getElementById('c3_loc_acc');
+    if (locAcc) locAcc.addEventListener('toggle', function () {
+      if (locAcc.open && c3Map) { c3Map.invalidateSize(); }
+    });
 
     function init() { load(); setInterval(load, 60000); }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

@@ -75,6 +75,19 @@ def create_app() -> FastAPI:
     app.include_router(test_routes.router)
 
     app.mount("/static", StaticFiles(directory=str(PKG_DIR / "static")), name="static")
+
+    # HTML pages carried no cache headers, so browsers (esp. iOS Safari / a
+    # home-screen PWA) could pin a stale page indefinitely — old markup pointing
+    # at an old ?v= CSS, hiding every deploy until a manual hard-refresh. Force
+    # revalidation on HTML only; /static stays cacheable (it's ?v=-busted).
+    @app.middleware("http")
+    async def _no_cache_html(request, call_next):
+        response = await call_next(request)
+        ctype = response.headers.get("content-type", "")
+        if ctype.startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
     return app
 
 

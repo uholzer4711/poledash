@@ -304,6 +304,22 @@ html.view-mobile #tf_map { height: 300px !important; }
 html.view-mobile #trip-map { height: 260px !important; }
 html.view-mobile #c3_map, html.view-mobile #tst_map { height: 300px !important; }
 
+/* Vehicle-state: Polestar-style compact 2×2 status tiles (Locked / Climate /
+   Cabin air / Weather) instead of four full-width cards. */
+html.view-mobile .c3-status-grid { grid-template-columns: 1fr 1fr; gap: var(--ujh-s-2); }
+html.view-mobile .c3-status-grid .card { padding: var(--ujh-s-3); }
+html.view-mobile .c3-status-grid .stat { font-size: 18px; }
+html.view-mobile .c3-status-grid .stat-sub { font-size: 9px; margin-top: 2px; }
+/* Drill-down accordion summaries: tighter on phones. */
+html.view-mobile .veh-acc > summary { padding: var(--ujh-s-3) var(--ujh-s-4); }
+
+/* Tripbook: one compact, tappable line per trip (the .trip-list is mobile-only;
+   the desktop .trip-table stays the dense table). The hide rule must out-specify
+   the generic `html.view-mobile table.index { display:block }` fold rule above
+   (0,2,2) — hence `table.index.trip-table` (0,3,2), not a bare `.trip-table`. */
+html.view-mobile table.index.trip-table { display: none; }
+html.view-mobile .trip-list { display: block; }
+
 /* iPhone safe-area (notch / home-indicator) — always honored */
 @supports (padding: max(0px)) {
   .shell {
@@ -510,12 +526,12 @@ html.view-mobile .lab-acc-body { padding: var(--ujh-s-4); }
 .car-photo-overlay .ov-leader.is-open { stroke: var(--ujh-orange); }
 .car-photo-overlay .ov-dot.is-open { fill: var(--ujh-orange); }
 
-/* Chips are the wide-view presentation; the grid is the narrow-view fallback. */
+/* Labels live IN the photo, next to the leader lines (the status chips) — on
+   EVERY viewport, web and mobile. renderChips() always emits every chip (value
+   "—" when unknown) so a label never vanishes. The openings grid below is only
+   a fallback for when there is no car photo at all (then .openings has no
+   .is-fallback class and shows by default). */
 .openings.is-fallback { display: none; }
-@media (max-width: 559px) {
-  .car-chips { display: none; }
-  .openings.is-fallback { display: block; }
-}
 .car-glass { fill: var(--ujh-bg); stroke: var(--ujh-line-2); stroke-width: 1.5; }
 .car-label { fill: var(--ujh-ink-4); font: 500 9px/1 var(--ujh-mono); letter-spacing: 0.1em; text-transform: uppercase; }
 /* Toggleable openings: green outline when closed, red when open. */
@@ -727,6 +743,67 @@ details.month-acc[open] > summary .month-acc-mark {
 }
 details.month-acc > table.index { width: 100%; }
 details.month-acc > table.index thead th { border-top: 1px solid var(--ujh-line); }
+
+/* ---------- Vehicle-state drill-down accordions (mobile only) ----------
+   Reuses the month-acc rotating-→ look. On desktop the <details> is rendered
+   fully expanded with no summary chrome, so the dashboard looks byte-for-byte
+   identical to before — only html.view-mobile turns these into collapsibles. */
+html:not(.view-mobile) .veh-acc > summary { display: none; }
+html:not(.view-mobile) .veh-acc > :not(summary) { display: block !important; }
+.veh-acc > summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: baseline; gap: var(--ujh-s-3);
+  padding: var(--ujh-s-4) var(--ujh-s-5);
+  background: var(--ujh-bg-2); border: 1px solid var(--ujh-line);
+  transition: background var(--ujh-t-base);
+}
+.veh-acc > summary::-webkit-details-marker { display: none; }
+.veh-acc > summary:hover { background: var(--ujh-bg-3); }
+.veh-acc-mark {
+  font: 500 13px/1 var(--ujh-mono); color: var(--ujh-ink-3);
+  display: inline-block; transition: transform var(--ujh-t-base);
+}
+.veh-acc[open] > summary .veh-acc-mark { transform: rotate(90deg); color: var(--ujh-ink-2); }
+.veh-acc-title {
+  font: 500 11px/1 var(--ujh-mono); letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--ujh-ink);
+}
+.veh-acc-meta { margin-left: auto; font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.08em; color: var(--ujh-ink-3); }
+.veh-acc[open] > summary { border-bottom: 0; }
+/* Mobile only: the accordion border is the separator, so drop the inner card's
+   own margin. On desktop the card keeps its mb-6 so section spacing is unchanged. */
+html.view-mobile .veh-acc > .card { margin-bottom: 0; }
+
+/* ---------- Tripbook: compact per-trip rows (mobile-only list) ----------
+   .trip-list is hidden on desktop (the table.index.trip-table shows instead);
+   html.view-mobile flips them. Each .trip-row is one summary line + tap-to-open
+   detail, mirroring the Polestar app's drill-down. */
+.trip-list { display: none; }
+.trip-row { border: 1px solid var(--ujh-line); border-bottom: 0; }
+.trip-row:last-child { border-bottom: 1px solid var(--ujh-line); }
+.trip-row > summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: baseline; gap: var(--ujh-s-3);
+  padding: var(--ujh-s-3) var(--ujh-s-4);
+}
+.trip-row > summary::-webkit-details-marker { display: none; }
+.trip-row-mark {
+  font: 500 12px/1 var(--ujh-mono); color: var(--ujh-ink-3);
+  display: inline-block; transition: transform var(--ujh-t-base);
+}
+.trip-row[open] > summary .trip-row-mark { transform: rotate(90deg); color: var(--ujh-ink-2); }
+.trip-sum-time { font: 500 12px/1.3 var(--ujh-mono); letter-spacing: 0.02em; color: var(--ujh-ink); white-space: nowrap; }
+.trip-sum-stats {
+  margin-left: auto; display: flex; gap: var(--ujh-s-3); flex-shrink: 0;
+  font: 500 12px/1.3 var(--ujh-sans); color: var(--ujh-ink-2);
+}
+.trip-row-body {
+  display: flex; flex-wrap: wrap; gap: 5px var(--ujh-s-5);
+  padding: 0 var(--ujh-s-4) var(--ujh-s-3) calc(var(--ujh-s-4) + 20px);
+}
+.trip-kv { display: flex; align-items: baseline; gap: var(--ujh-s-2); }
+.trip-kv .k { font: 500 9px/1.5 var(--ujh-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ujh-ink-4); }
+.trip-kv .v { font-size: 11px; color: var(--ujh-ink-2); }
 
 /* ---------- Charging Hero ---------- */
 .charge-hero {
