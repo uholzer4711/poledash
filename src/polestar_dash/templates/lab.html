@@ -65,6 +65,22 @@
     </div>
   </details>
 
+  {# ======================= C3 CONNECTION COVERAGE ======================= #}
+  <details class="card lab-acc" data-loader="labLoadCoverage">
+    <summary>
+      <span class="lab-acc-title">{{ t("C3 connection coverage") }}</span>
+      <span class="lab-acc-meta mono-xs muted" id="cov_meta">—</span>
+      <span class="lab-acc-mark" aria-hidden="true"></span>
+    </summary>
+    <div class="lab-acc-body">
+      <p class="muted mono-xs mb-4">
+        {{ t("When did the car stop returning C3 data (GPS, doors/locks, climate)? Each gap longer than 20 min is an outage episode — usually the car account losing its relation to the vehicle (needs re-pairing). Times are your local clock.") }}
+      </p>
+      <div id="cov_summary" class="stat num mb-2">—</div>
+      <div id="cov_list" class="mono-xs"></div>
+    </div>
+  </details>
+
   {# ============================ CONTROL (writes) ============================ #}
   {% set heat_opts = [(0, t("leave")), (1, t("off")), (2, t("Level 1")), (3, t("Level 2")), (4, t("Level 3"))] %}
   <details class="card lab-acc lab-acc-danger no-print">
@@ -559,6 +575,33 @@
           out.innerHTML = `<span style="color:var(--ujh-alert)">${CMDTXT.failed}</span> · ${escHtml(label)} · ${escHtml(j.status || j.error)}`;
         }
         setTimeout(() => window.tstLoad(true), 3500);
+      };
+
+      // ============================ C3 connection coverage ============================
+      window.labLoadCoverage = async function () {
+        const meta = document.getElementById('cov_meta');
+        const summary = document.getElementById('cov_summary');
+        const list = document.getElementById('cov_list');
+        let j;
+        try {
+          const r = await fetch('/api/c3/coverage?days=14');
+          j = await r.json();
+        } catch (e) { meta.textContent = {{ t("network error: ") | tojson }} + e; return; }
+        meta.textContent = (j.last_seen ? ({{ t("last seen") | tojson }} + ' ' + j.last_seen) : '—');
+        summary.innerHTML = (j.uptime_pct != null)
+          ? `${escHtml(j.uptime_pct)}<span class="unit">% ${ {{ t("uptime · last {n} days") | tojson }}.replace('{n}', j.days) }</span>`
+          : '—';
+        const outages = j.outages || [];
+        if (!outages.length) {
+          list.innerHTML = `<span class="muted">${ {{ t("No outages in this window.") | tojson }} }</span>`;
+          return;
+        }
+        list.innerHTML = outages.map((o) => {
+          const h = Math.floor(o.minutes / 60), m = o.minutes % 60;
+          const dur = (h ? h + ' h ' : '') + m + ' min';
+          return `<div style="display:flex;justify-content:space-between;gap:12px;border-bottom:1px dotted var(--ujh-line);padding:4px 0">` +
+            `<span><span class="badge warn">${escHtml(dur)}</span> ${escHtml(o.start)} → ${escHtml(o.end)}</span></div>`;
+        }).join('');
       };
 
       // ============================ RAW API RESPONSE ============================

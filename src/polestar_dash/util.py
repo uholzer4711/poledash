@@ -21,6 +21,26 @@ def local_now() -> datetime:
     return datetime.now(LOCAL_TZ)
 
 
+def to_local(dt: datetime | None) -> datetime | None:
+    """Convert a naive-UTC datetime (the form we persist) to local wall-clock.
+    Tz-aware inputs are honoured as-is. Returns None for None."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(LOCAL_TZ)
+
+
+def fmt_local(dt: datetime | None, fmt: str = "%Y-%m-%d %H:%M") -> str:
+    """Format a stored (naive-UTC) datetime as the user's local time with a short
+    zone label, e.g. ``2026-06-12 07:43 CEST``. Human-facing surfaces should use
+    this — never raw UTC — so the clock always matches the owner's wall time."""
+    loc = to_local(dt)
+    if loc is None:
+        return ""
+    return f"{loc:{fmt}} {loc:%Z}"
+
+
 def in_hour_window(hour: int, start: int, end: int) -> bool:
     """True if `hour` is in [start, end), wrapping midnight when start>end."""
     if start <= end:

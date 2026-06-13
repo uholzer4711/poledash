@@ -13,7 +13,12 @@ from sqlmodel import Session, select
 from .anomalies import run_anomaly_checks
 from .automations import run_automations
 from .backup import run_backup
-from .c3_anomalies import check_rain_windows, run_c3_anomaly_checks
+from .c3_anomalies import (
+    _c3_has_state,
+    check_c3_disconnected,
+    check_rain_windows,
+    run_c3_anomaly_checks,
+)
 from .config import get_settings
 from .db.models import (
     C3Snapshot,
@@ -293,6 +298,16 @@ def _latest_c3(vin: str) -> C3Snapshot | None:
         return row
 
 
+def _known_c3_vin() -> str | None:
+    """The most recently seen C3 VIN, for the outage path: when the fetch fails
+    so hard it doesn't even return the static vehicle section, we still need a VIN
+    to key the disconnect alert and the diagnostic raw row on."""
+    with Session(get_engine()) as s:
+        return s.exec(
+            select(C3Snapshot.vin).order_by(C3Snapshot.fetched_at.desc()).limit(1)
+        ).first()
+
+
 def _c3_rest_state() -> str:
     """Best-effort 'is the car in use?' from the two latest C3 snapshots.
 
@@ -422,14 +437,43 @@ async def c3_poll_once() -> None:
     driving = False
     try:
         data = await get_c3_snapshot(force=True)
-        if not data.get("ok"):
-            log.warning("C3 poll: backend error — %s", data.get("error"))
+        ok = bool(data.get("ok"))
+        row_data = c3_dict_to_row(data) if ok else None
+        row = (
+            C3Snapshot(fetched_at=utcnow(), **row_data)
+            if row_data and row_data.get("vin")
+            else None
+        )
+        # A fetch that failed outright (ok=False) or "succeeded" with every
+        # dynamic section PERMISSION_DENIED — the degraded-login / lost-car-relation
+        # case, where only the static vehicle section resolves so the row carries
+        # no state — is an *outage* poll. Don't persist a useless all-None
+        # C3Snapshot (it pollutes every "last known state" / aggregate reader and
+        # used to pile up by the hundreds over a multi-hour outage). Keep just the
+        # raw payload (its _errors are the diagnosis) and let the disconnect alert
+        # fire once per episode. Deliberately no per-poll FetchError: a day-long
+        # outage would flood /errors — the deduped notification + the /api/c3/
+        # coverage strip are the surfaces for it.
+        if row is None or not _c3_has_state(row):
+            vin = (row_data or {}).get("vin") or _known_c3_vin()
+            if vin:
+                try:
+                    with Session(get_engine()) as s:
+                        s.add(RawC3Snapshot(fetched_at=utcnow(), vin=vin, payload=data))
+                        s.commit()
+                except Exception:  # noqa: BLE001
+                    log.exception("C3 outage raw-persist failed for VIN %s", vin)
+                try:
+                    await asyncio.to_thread(check_c3_disconnected, vin, utcnow())
+                except Exception:  # noqa: BLE001
+                    log.exception("C3 disconnect check failed for VIN %s", vin)
+            if ok:
+                log.warning("C3 poll: degraded — no usable state "
+                            "(likely PERMISSION_DENIED) for VIN %s", vin)
+            else:
+                log.warning("C3 poll: backend error — %s", data.get("error"))
             return
-        row_data = c3_dict_to_row(data)
-        if not row_data or not row_data.get("vin"):
-            log.warning("C3 poll: no usable data (no VIN)")
-            return
-        vin = row_data["vin"]
+        vin = row.vin
         charging = bool((data.get("battery") or {}).get("is_charging"))
 
         try:
@@ -437,8 +481,6 @@ async def c3_poll_once() -> None:
         except Exception:  # noqa: BLE001
             log.exception("C3 previous-row lookup failed for VIN %s", vin)
             prev = None
-
-        row = C3Snapshot(fetched_at=utcnow(), **row_data)
 
         # Driving → poll faster so the GPS trail is dense enough to draw a route.
         # Detected from the car's own speed, or movement since the last fix.

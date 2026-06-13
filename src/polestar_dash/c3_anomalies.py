@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timedelta
 
+from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from .app_settings import alert_enabled, in_alert_window
+from .config import get_settings
 from .db.models import C3Snapshot
 from .db.session import get_engine
 from .i18n import t
 from .notify import notify
+from .util import fmt_local
 
 log = logging.getLogger(__name__)
 
@@ -31,10 +35,18 @@ _STATE_FIELDS = (
     "is_locked", "door_fl", "door_fr", "door_rl", "door_rr",
     "sunroof", "hood", "tailgate", "tank_lid", "lat",
 )
-# How many consecutive stateless polls before we call it a real disconnect — one
-# blip is a transient throttle (recovers within a poll), so we wait for it to
-# persist before alerting (still ~one cadence gap, not hours).
-_C3_DISCONNECT_MIN_POLLS = 2
+def disconnect_gap() -> timedelta:
+    """How stale the last good fix must be before a gap counts as a real C3
+    outage (vs a normal cadence pause). Derived from the *slowest* configured
+    cadence — the night interval — so a 30-min night poll never reads as an
+    outage and a single missed night poll doesn't false-alarm: 1.5× the night
+    interval, floored at 30 min. Time-based (not poll-count) so it's correct
+    across cadence changes *and* across an app restart mid-outage — the old
+    12-row lookback went blind the moment the whole window was stateless (e.g. a
+    restart 4 h into an outage). Shared by the disconnect alert and the trail /
+    coverage gap so both agree on what "a gap" means."""
+    night = get_settings().c3_night_poll_interval_min
+    return timedelta(minutes=max(30, round(night * 1.5)))
 
 # Openings we watch, mapped to their human label key.
 _OPENINGS: list[tuple[str, str]] = [
@@ -252,51 +264,55 @@ def _c3_has_state(row: C3Snapshot | None) -> bool:
     return any(getattr(row, f, None) is not None for f in _STATE_FIELDS)
 
 
-def _check_c3_disconnected(row: C3Snapshot) -> None:
+def _last_stateful_at(vin: str, *, before: datetime | None = None) -> datetime | None:
+    """Timestamp of the newest C3 poll that actually carried vehicle state, for
+    this VIN, across the **whole** table (optionally strictly before a cutoff).
+    Whole-table — not a fixed recent-row window — so detection survives an app
+    restart and reports the true outage onset even after a day-long gap. The
+    ``or_(state field not NULL)`` filter also skips any legacy all-`None` rows
+    left behind before we stopped persisting stateless polls."""
+    has_state = or_(*[getattr(C3Snapshot, f).is_not(None) for f in _STATE_FIELDS])
+    with Session(get_engine()) as s:
+        stmt = (
+            select(C3Snapshot.fetched_at)
+            .where(C3Snapshot.vin == vin)
+            .where(has_state)
+            .order_by(C3Snapshot.fetched_at.desc())
+            .limit(1)
+        )
+        if before is not None:
+            stmt = stmt.where(C3Snapshot.fetched_at < before)
+        return s.exec(stmt).first()
+
+
+def check_c3_disconnected(vin: str, now: datetime) -> None:
     """Alert when the C3 backend stops returning live data — the car account has
-    lost its relation to the vehicle (throttle that won't clear, or a login that
-    needs **re-pairing**): every section comes back PERMISSION_DENIED and the
-    stored row is all-`None`. Fires once per disconnect episode (keyed on when it
-    started), only after it persists past a transient throttle, and only if the
-    car *had* been returning data — so a never-set-up car doesn't nag."""
+    lost its relation to the vehicle (a throttle that won't clear, or a login that
+    needs **re-pairing**): every section comes back PERMISSION_DENIED, so the poll
+    carries no usable state and we no longer persist a row for it. Called from the
+    scheduler's outage branch (there is no fresh row to pass). Fires once per
+    episode (keyed on the onset = the last good fix), only after the outage has
+    persisted past a transient throttle, and only if the car *had* been returning
+    data — so a never-paired car doesn't nag."""
     if not alert_enabled("c3_disconnected"):
         return
-    if _c3_has_state(row):
-        return  # this poll is fine — connected
-    # Walk recent rows newest→oldest: measure the unbroken stateless streak
-    # ending now, when it started, and whether we'd been connected before it.
-    with Session(get_engine()) as s:
-        recent = s.exec(
-            select(C3Snapshot)
-            .where(C3Snapshot.vin == row.vin)
-            .order_by(C3Snapshot.fetched_at.desc())
-            .limit(12)
-        ).all()
-    streak = 0
-    started_at = row.fetched_at
-    had_state_before = False
-    for r in recent:
-        if _c3_has_state(r):
-            had_state_before = True
-            break
-        streak += 1
-        started_at = r.fetched_at
-    if streak < _C3_DISCONNECT_MIN_POLLS:
+    last_good = _last_stateful_at(vin)
+    if last_good is None:
+        return  # never connected — not a live "drop"
+    if now - last_good < disconnect_gap():
         return  # transient — wait for it to persist past a throttle blip
-    if not had_state_before:
-        return  # never connected in the recent window — not a live "drop"
     notify(
         kind="c3_disconnected",
-        # One alert per episode: stable while the streak lasts, new after reconnect.
-        key=f"{row.vin}-{started_at:%Y%m%d-%H%M}",
+        # One alert per episode: the onset is stable for the whole outage.
+        key=f"{vin}-{last_good:%Y%m%d-%H%M}",
         title=t("Vehicle connection lost"),
         body=t(
             "The car stopped returning live data around {time} — door/lock/GPS "
             "state is unavailable. The car account likely needs re-pairing in "
             "the Polestar app / settings.",
-            time=f"{started_at:%Y-%m-%d %H:%M} UTC",
+            time=fmt_local(last_good),
         ),
-        vin=row.vin,
+        vin=vin,
         priority="high",
         tags=["warning", "car"],
     )
@@ -304,41 +320,29 @@ def _check_c3_disconnected(row: C3Snapshot) -> None:
 
 def _check_c3_reconnected(row: C3Snapshot) -> None:
     """All-clear when C3 starts returning live data again after a confirmed
-    outage. Fires once, on the first connected poll following a stateless streak
-    that was long enough to have alerted — so a transient blip (below the
-    disconnect threshold) gets no recovery ping either. Shares the
-    ``c3_disconnected`` toggle: one switch governs the whole connection-state
-    pair."""
+    outage. Fires once, on the first connected poll whose gap to the previous good
+    fix exceeded the disconnect threshold — so a transient blip gets no recovery
+    ping either. The onset (= that previous good fix) is read whole-table, so the
+    reported outage window is the real one, not a recent-window truncation. Shares
+    the ``c3_disconnected`` toggle: one switch governs the connection-state pair."""
     if not alert_enabled("c3_disconnected"):
         return
     if not _c3_has_state(row):
         return  # still down — nothing to clear
-    # Measure the stateless streak immediately *before* this connected poll.
-    with Session(get_engine()) as s:
-        recent = s.exec(
-            select(C3Snapshot)
-            .where(C3Snapshot.vin == row.vin)
-            .where(C3Snapshot.fetched_at < row.fetched_at)
-            .order_by(C3Snapshot.fetched_at.desc())
-            .limit(12)
-        ).all()
-    streak = 0
-    started_at = None
-    for r in recent:
-        if _c3_has_state(r):
-            break
-        streak += 1
-        started_at = r.fetched_at
-    if streak < _C3_DISCONNECT_MIN_POLLS or started_at is None:
-        return  # no confirmed outage just ended (normal poll, or a blip)
+    prev_good = _last_stateful_at(row.vin, before=row.fetched_at)
+    if prev_good is None:
+        return  # no prior good fix — first-ever connect, not a recovery
+    if row.fetched_at - prev_good < disconnect_gap():
+        return  # normal cadence gap — no confirmed outage just ended
     notify(
         kind="c3_reconnected",
-        # Keyed on the ended outage so the all-clear is sent exactly once.
-        key=f"{row.vin}-{started_at:%Y%m%d-%H%M}",
+        # Keyed on the ended outage's onset so the all-clear is sent exactly once,
+        # matching the c3_disconnected key for the same episode.
+        key=f"{row.vin}-{prev_good:%Y%m%d-%H%M}",
         title=t("Vehicle connection restored"),
         body=t("The car is returning live data again — door/lock/GPS state is "
                "back. The connection was lost around {time}.",
-               time=f"{started_at:%Y-%m-%d %H:%M} UTC"),
+               time=fmt_local(prev_good)),
         vin=row.vin,
         tags=["car"],
     )
@@ -348,7 +352,8 @@ def run_c3_anomaly_checks(row: C3Snapshot, *, prev: C3Snapshot | None = None) ->
     # Each check self-gates on its per-alert config (enable + quiet-hour window),
     # so callers just run them all. The legacy NOTIFY_DOOR_OPEN/NOTIFY_UNLOCKED
     # env flags now seed the default-enabled state (see app_settings).
-    _check_c3_disconnected(row)
+    # The disconnect alert fires from the scheduler's outage branch (no row to
+    # pass there); here we only emit the reconnect all-clear on a good poll.
     _check_c3_reconnected(row)
     _check_openings(row, prev)
     _check_unlocked(row, prev)

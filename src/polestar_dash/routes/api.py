@@ -23,6 +23,7 @@ from ..app_settings import (
     set_charging_loss_factor,
     set_default_price_ct,
 )
+from ..c3_anomalies import disconnect_gap
 from ..config import get_settings
 from ..db.models import (
     C3Snapshot,
@@ -68,7 +69,7 @@ from ..polestar.c3_control import run_command
 from ..polestar.control_verify import verify_command, verify_command_with_retries
 from ..routes_stats import list_routes, trips_for_route
 from ..tripbook import detect_trips
-from ..util import utcnow
+from ..util import fmt_local, utcnow
 from ..weather import enrich_pending as enrich_weather_pending
 
 
@@ -1405,7 +1406,12 @@ def c3_track(
 ) -> list[dict]:
     """GPS trail from C3Snapshot history for the dashboard mini-map.
 
-    Returns chronological [{lat, lng, ts, speed}] points that have a fix."""
+    Returns chronological [{lat, lng, ts, speed, gap_before}] points that have a
+    fix. ``gap_before`` is True on the first point after a coverage gap longer
+    than the outage threshold (a C3 outage, or simply the car parked off-grid) —
+    the map breaks the polyline there instead of drawing a phantom straight line
+    across an interval where we have no idea where the car went."""
+    gap = disconnect_gap()
     since = utcnow() - timedelta(hours=hours)
     with Session(get_engine()) as s:
         stmt = (
@@ -1423,10 +1429,59 @@ def c3_track(
         if vin:
             stmt = stmt.where(C3Snapshot.vin == vin)
         rows = s.exec(stmt).all()
-    return [
-        {"lat": lat, "lng": lng, "ts": ts.isoformat(), "speed": speed}
-        for lat, lng, ts, speed in rows
-    ]
+    out: list[dict] = []
+    prev_ts = None
+    for lat, lng, ts, speed in rows:
+        gap_before = prev_ts is not None and (ts - prev_ts) > gap
+        out.append({
+            "lat": lat, "lng": lng, "ts": ts.isoformat(),
+            "speed": speed, "gap_before": gap_before,
+        })
+        prev_ts = ts
+    return out
+
+
+@router.get("/c3/coverage")
+def c3_coverage(days: int = Query(7, ge=1, le=90), vin: str | None = None) -> dict:
+    """C3 connection-coverage summary for the diagnostics strip: the outage
+    episodes (gaps between successive *stateful* polls longer than the disconnect
+    threshold) over the window, plus a rough uptime ratio. All timestamps are the
+    owner's local wall-clock so the strip reads in their time, not UTC."""
+    gap_min = disconnect_gap()
+    since = utcnow() - timedelta(days=days)
+    state_cols = (
+        C3Snapshot.is_locked, C3Snapshot.door_fl, C3Snapshot.sunroof,
+        C3Snapshot.hood, C3Snapshot.tailgate, C3Snapshot.lat,
+    )
+    with Session(get_engine()) as s:
+        stmt = (
+            select(C3Snapshot.fetched_at)
+            .where(C3Snapshot.fetched_at >= since)
+            .where(or_(*[c.is_not(None) for c in state_cols]))
+            .order_by(C3Snapshot.fetched_at.asc())
+        )
+        if vin:
+            stmt = stmt.where(C3Snapshot.vin == vin)
+        stamps = list(s.exec(stmt).all())
+    outages: list[dict] = []
+    down = timedelta()
+    for a, b in zip(stamps, stamps[1:], strict=False):
+        gap = b - a
+        if gap > gap_min:
+            down += gap
+            outages.append({
+                "start": fmt_local(a),
+                "end": fmt_local(b),
+                "minutes": round(gap.total_seconds() / 60),
+            })
+    span = (stamps[-1] - stamps[0]).total_seconds() if len(stamps) >= 2 else 0
+    uptime = round(100 * (1 - down.total_seconds() / span), 1) if span else None
+    return {
+        "days": days,
+        "last_seen": fmt_local(stamps[-1]) if stamps else None,
+        "uptime_pct": uptime,
+        "outages": list(reversed(outages)),  # newest first
+    }
 
 
 @router.delete("/journey-imports")
