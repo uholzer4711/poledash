@@ -16,7 +16,7 @@ from .app_settings import get_calibrated_battery_kwh
 from .db.models import VehicleSnapshot
 from .db.session import get_engine
 from .sessions import DEFAULT_BATTERY_KWH
-from .util import utcnow
+from .util import fmt_local, utcnow
 
 _battery_kwh_cache: tuple[float, float] | None = None  # (value, timestamp)
 _BATTERY_KWH_TTL = 300  # 5 minutes
@@ -90,13 +90,11 @@ class Trip:
             return soc_kwh
         if self.avg_consumption_kwh_per_100km is not None and self.km > 0.5:
             return round(self.avg_consumption_kwh_per_100km * self.km / 100.0, 2)
-        # Short trip with no avg figure: SoC drop is the last resort.
-        if self.soc_start is None or self.soc_end is None:
-            return None
-        drop = self.soc_start - self.soc_end
-        if drop <= 0:
-            return None
-        return round(drop / 100.0 * _battery_kwh(), 2)
+        # No usable estimate: a short trip's SoC drop can't be the last resort —
+        # the gated SoC method above already returned anything trustworthy, and
+        # an *un*gated drop here reads as e.g. ~1300 Wh/km on a 1%/0.6 km trip
+        # and would poison monthly totals / insights. Better no number.
+        return None
 
     @property
     def wh_per_km(self) -> int | None:
@@ -360,7 +358,7 @@ def detect_trips(vin: str | None = None, days: int = 30, gap_minutes: int = 10) 
 def monthly_totals(trips: list[Trip]) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for t in trips:
-        key = t.started_at.strftime("%Y-%m")
+        key = fmt_local(t.started_at, "%Y-%m")  # local month — UTC midnight is 02:00 here
         out.setdefault(key, {"trips": 0, "km": 0.0, "minutes": 0, "kwh": 0.0})
         out[key]["trips"] += 1
         out[key]["km"] += t.km

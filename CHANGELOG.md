@@ -3,6 +3,40 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.40.0] — 2026-06-19
+
+### Changed — Poll-loop robustness: a post-fetch failure can no longer stall the loop
+
+- `_reschedule` and `_reschedule_c3` run from `poll_once`'s `finally`, so a raise
+  there (DB locked during the interval calc, APScheduler rejecting the job) used
+  to break the single-shot trigger chain and stall polling until restart. Both
+  are now fully guarded: a failed adaptive-interval calc falls back to the base
+  interval, and a failed `add_job` retries once with a bare fixed-interval job,
+  logging `CRITICAL` only if even that fails.
+- C3 live read no longer queues behind an in-flight poll fetch. A dashboard
+  (`force=False`) read waits at most `_LIVE_LOCK_TIMEOUT_S` (6 s) for the lock,
+  then degrades to the last cache (or a `busy` marker → the route's DB fallback);
+  the poll loop (`force=True`) still always waits. Both paths hit the shared
+  rate-limited account, so a slow `_collect` must never block the dashboard.
+- A throttle / auth-denied **first** C3 failure (`not authorized`,
+  `PERMISSION_DENIED`, `429`, …) skips the immediate retry — a double-tap only
+  hits the same limit again. Only transient failures (e.g. a token expired
+  between page views) still get the one clean retry.
+
+### Fixed — Correctness: local-date dedup keys, poll floor, misleading short-trip kWh
+
+- Anomaly notifications (`_check_soc_drop`, `_check_power_collapse`,
+  `_check_range_factor`) keyed their daily dedup on the **UTC** date. Local
+  midnight is 02:00 UTC here, so the "once per day" suppression rolled over at
+  the wrong time. Keys now use `fmt_local` — one alert per **local** day.
+- `poll_interval_min` / `fast_poll_interval_min` are now floored at **2 min**
+  (`ge=2`), matching the README rate-limit invariant (never poll faster
+  than ~60 s; throttling shows up as "not authorized").
+- `tripbook.Trip.energy_kwh` no longer falls back to a raw SoC-drop estimate for
+  short trips with no avg figure. On a 1 % / 0.6 km trip that read as ~1300 Wh/km
+  and poisoned monthly totals / insights — better no number than a wrong one.
+  `monthly_totals` is also now keyed by **local** month.
+
 ## [1.39.0] — 2026-06-19
 
 ### Changed — "Am I wasting energy?" rebuilt around a confirmed-parked baseline

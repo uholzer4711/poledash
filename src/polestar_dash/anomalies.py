@@ -17,7 +17,7 @@ from .db.session import get_engine
 from .i18n import t
 from .notify import notify
 from .polestar.fetcher import Snapshot
-from .util import utcnow
+from .util import fmt_local, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def _check_soc_drop(snap: Snapshot, prev: VehicleSnapshot) -> None:
     # Daily dedup (like the sibling checks): a persistent / recurring drop
     # should nudge once per day, not on every poll. The old per-minute key was
     # effectively unique each poll, so the dedup never actually suppressed.
-    key = f"{snap.vin}-{snap.fetched_at.strftime('%Y-%m-%d')}-socdrop"
+    key = f"{snap.vin}-{fmt_local(snap.fetched_at, '%Y-%m-%d')}-socdrop"
     _alert(
         kind="anomaly_soc_drop",
         key=key,
@@ -80,7 +80,7 @@ def _check_soc_drop(snap: Snapshot, prev: VehicleSnapshot) -> None:
             "charging since {since}.",
             prev=prev.soc_percent,
             cur=snap.soc_percent,
-            since=f"{prev.fetched_at:%H:%M}",
+            since=fmt_local(prev.fetched_at, "%H:%M"),
         ),
         vin=snap.vin,
     )
@@ -102,8 +102,8 @@ def _check_power_collapse(snap: Snapshot, prev: VehicleSnapshot) -> None:
     # SoC near target → expected throttling, not a fault.
     if snap.target_soc_percent and snap.soc_percent and snap.soc_percent >= snap.target_soc_percent - 5:
         return
-    # One alert per session-day.
-    day = snap.fetched_at.strftime("%Y%m%d")
+    # One alert per session-day (local date — UTC midnight is 02:00 here).
+    day = fmt_local(snap.fetched_at, "%Y%m%d")
     key = f"{snap.vin}-{day}-powercollapse"
     _alert(
         kind="anomaly_power_collapse",
@@ -155,7 +155,7 @@ def _check_range_factor(snap: Snapshot) -> None:
     median = factors[len(factors) // 2]
     if median >= RANGE_FACTOR_FLOOR_KMPP:
         return
-    day = snap.fetched_at.strftime("%Y-%m-%d")
+    day = fmt_local(snap.fetched_at, "%Y-%m-%d")
     key = f"{snap.vin}-{day}-rangefactor"
     _alert(
         kind="anomaly_range_factor",

@@ -219,29 +219,50 @@ async def poll_once(client: PolestarClient) -> None:
 
 
 def _reschedule(client: PolestarClient, *, charging: bool) -> None:
-    """Schedule the next single-shot poll at fast/slow cadence."""
-    s = get_settings()
+    """Schedule the next single-shot poll at fast/slow cadence.
+
+    Runs from poll_once's `finally`, so it MUST NOT raise: an exception here
+    (DB locked during the interval calc, APScheduler rejecting the job) would
+    break the single-shot trigger chain and stall the poll loop until restart.
+    Every step is guarded — a failed adaptive calc falls back to the base
+    interval, a failed add_job retries once with a bare fixed-interval job."""
     sched: AsyncIOScheduler | None = _SCHEDULER
     if sched is None:
         return
-    base = s.fast_poll_interval_min if charging else s.poll_interval_min
-    interval = _adaptive_interval(
-        base, charging=charging, driving=False,
-        night_interval=s.night_poll_interval_min,
-        idle_interval=s.idle_poll_interval_min,
-    )
+    try:
+        s = get_settings()
+        base = s.fast_poll_interval_min if charging else s.poll_interval_min
+        interval = _adaptive_interval(
+            base, charging=charging, driving=False,
+            night_interval=s.night_poll_interval_min,
+            idle_interval=s.idle_poll_interval_min,
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("_reschedule: interval calc failed — using safe 10 min default")
+        base = interval = 10
     next_run = utcnow() + timedelta(minutes=interval)
-    sched.add_job(
-        poll_once,
-        DateTrigger(run_date=next_run),
-        args=[client],
-        id=JOB_ID,
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
-    )
-    mode = "fast" if charging else ("slow" if interval == base else f"idle/{interval}m")
-    log.info("Next poll at %s (%s mode)", next_run.isoformat(), mode)
+    try:
+        sched.add_job(
+            poll_once,
+            DateTrigger(run_date=next_run),
+            args=[client],
+            id=JOB_ID,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+        mode = "fast" if charging else ("slow" if interval == base else f"idle/{interval}m")
+        log.info("Next poll at %s (%s mode)", next_run.isoformat(), mode)
+    except Exception:  # noqa: BLE001
+        log.exception("_reschedule: add_job failed — retrying with bare fixed job")
+        try:
+            sched.add_job(
+                poll_once, DateTrigger(run_date=utcnow() + timedelta(minutes=10)),
+                args=[client], id=JOB_ID, replace_existing=True,
+            )
+        except Exception:  # noqa: BLE001
+            log.critical("_reschedule: fallback add_job ALSO failed — "
+                         "poll loop will stall until restart")
 
 
 _SCHEDULER: AsyncIOScheduler | None = None
@@ -556,29 +577,49 @@ async def c3_poll_once() -> None:
 
 
 def _reschedule_c3(*, charging: bool, driving: bool = False) -> None:
-    s = get_settings()
+    """Re-arm the C3 poll. Like _reschedule, this runs from a `finally` and
+    must never raise — guarded so a failed interval calc or add_job can't kill
+    the C3 loop until restart."""
     sched: AsyncIOScheduler | None = _SCHEDULER
-    if sched is None or not s.c3_enabled:
+    try:
+        s = get_settings()
+        if sched is None or not s.c3_enabled:
+            return
+        if charging:
+            interval = s.c3_fast_poll_interval_min
+        elif driving:
+            interval = s.c3_drive_poll_interval_min
+        else:
+            interval = _adaptive_interval(
+                s.c3_poll_interval_min, charging=False, driving=False,
+                night_interval=s.c3_night_poll_interval_min,
+                idle_interval=s.c3_idle_poll_interval_min,
+            )
+    except Exception:  # noqa: BLE001
+        log.exception("_reschedule_c3: interval calc failed — using safe 5 min default")
+        interval = 5
+    if sched is None:
         return
-    if charging:
-        interval = s.c3_fast_poll_interval_min
-    elif driving:
-        interval = s.c3_drive_poll_interval_min
-    else:
-        interval = _adaptive_interval(
-            s.c3_poll_interval_min, charging=False, driving=False,
-            night_interval=s.c3_night_poll_interval_min,
-            idle_interval=s.c3_idle_poll_interval_min,
-        )
     next_run = utcnow() + timedelta(minutes=interval)
-    sched.add_job(
-        c3_poll_once,
-        DateTrigger(run_date=next_run),
-        id=C3_JOB_ID,
-        max_instances=1,
-        coalesce=True,
-        replace_existing=True,
-    )
+    try:
+        sched.add_job(
+            c3_poll_once,
+            DateTrigger(run_date=next_run),
+            id=C3_JOB_ID,
+            max_instances=1,
+            coalesce=True,
+            replace_existing=True,
+        )
+    except Exception:  # noqa: BLE001
+        log.exception("_reschedule_c3: add_job failed — retrying with bare fixed job")
+        try:
+            sched.add_job(
+                c3_poll_once, DateTrigger(run_date=utcnow() + timedelta(minutes=5)),
+                id=C3_JOB_ID, replace_existing=True,
+            )
+        except Exception:  # noqa: BLE001
+            log.critical("_reschedule_c3: fallback add_job ALSO failed — "
+                         "C3 loop will stall until restart")
 
 
 def _prune_raw_snapshots() -> None:

@@ -101,6 +101,9 @@ def _failed_lights(r: Any) -> list[str]:
     return out
 
 _TTL_S = 30.0  # cache window — gentle on the C3 rate limiter
+_LIVE_LOCK_TIMEOUT_S = 6.0  # a non-forced (dashboard) read waits at most this
+#   long for an in-flight poll fetch before degrading to cache/DB — both hit the
+#   shared rate-limited account, so it must never queue behind a slow _collect.
 _lock = asyncio.Lock()
 _api: Any = None
 _vehicle: Any = None
@@ -293,6 +296,28 @@ async def _collect() -> dict:
     return out
 
 
+def _aged_cache(now: float) -> dict:
+    """A copy of the live cache stamped with its current age."""
+    c = dict(_cache)  # type: ignore[arg-type]
+    c["age_s"] = round(now - _cache_at)
+    return c
+
+
+# Substrings that mark a rate-limit / auth failure of the shared account — a
+# throttle ("not authorized") or a login that lost its relation to the car
+# (PERMISSION_DENIED / re-pair). For these an immediate retry only hits the same
+# limit again, so we skip it.
+_THROTTLE_AUTH_MARKERS = (
+    "not authorized", "unauthorized", "unauthenticated", "permission_denied",
+    "permission denied", "429", "too many requests", "rate", "throttl",
+)
+
+
+def _is_throttle_or_auth(exc: Exception) -> bool:
+    msg = f"{type(exc).__name__}: {exc}".lower()
+    return any(m in msg for m in _THROTTLE_AUTH_MARKERS)
+
+
 async def get_c3_snapshot(force: bool = False) -> dict:
     """Return a decoded snapshot of the new C3 data. Cached for `_TTL_S`.
 
@@ -302,35 +327,53 @@ async def get_c3_snapshot(force: bool = False) -> dict:
     global _cache, _cache_at
     now = time.monotonic()
     if not force and _cache is not None and (now - _cache_at) < _TTL_S:
-        c = dict(_cache)
-        c["age_s"] = round(now - _cache_at)
-        return c
+        return _aged_cache(now)
 
-    async with _lock:
+    # The poll loop (force=True) is the writer and always waits for the lock.
+    # A dashboard read (force=False) must not block on an in-flight poll fetch —
+    # both hit the shared rate-limited account — so it waits only briefly, then
+    # degrades to the last cache (or a 'busy' marker → the route's DB fallback).
+    if force:
+        await _lock.acquire()
+    else:
+        try:
+            await asyncio.wait_for(_lock.acquire(), timeout=_LIVE_LOCK_TIMEOUT_S)
+        except TimeoutError:
+            now = time.monotonic()
+            return _aged_cache(now) if _cache is not None else {
+                "ok": False, "error": "busy", "age_s": 0,
+            }
+    try:
         now = time.monotonic()
         if not force and _cache is not None and (now - _cache_at) < _TTL_S:
-            c = dict(_cache)
-            c["age_s"] = round(now - _cache_at)
-            return c
+            return _aged_cache(now)
         try:
             await _ensure_client()
             data = await _collect()
             data["ok"] = True
             data["error"] = None
-        except Exception:
+        except Exception as e1:
             await _reset()
-            # one clean retry (token may have expired between page views)
-            try:
-                await _ensure_client()
-                data = await _collect()
-                data["ok"] = True
-                data["error"] = None
-            except Exception as e2:
-                await _reset()
-                data = {"ok": False, "error": f"{type(e2).__name__}: {e2}"[:200]}
+            # A throttle / auth-denied first failure means the shared account is
+            # rate-limited or needs re-pairing — retrying immediately just double-
+            # taps the same limit, so don't. Only retry the transient case (e.g. a
+            # token that expired between page views).
+            if _is_throttle_or_auth(e1):
+                data = {"ok": False, "error": f"{type(e1).__name__}: {e1}"[:200]}
+            else:
+                try:
+                    await _ensure_client()
+                    data = await _collect()
+                    data["ok"] = True
+                    data["error"] = None
+                except Exception as e2:
+                    await _reset()
+                    data = {"ok": False, "error": f"{type(e2).__name__}: {e2}"[:200]}
         data["age_s"] = 0
         _cache, _cache_at = data, time.monotonic()
         return dict(data)
+    finally:
+        _lock.release()
 
 
 def c3_dict_to_row(data: dict) -> dict | None:

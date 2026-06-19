@@ -13,8 +13,10 @@ class Settings(BaseSettings):
     polestar_vins: str = ""
 
     # --- Polling ---
-    poll_interval_min: int = Field(default=10, ge=1, le=1440)
-    fast_poll_interval_min: int = Field(default=2, ge=1, le=60)
+    # 2-min floor (ge=2): the README rate-limit invariant — never poll the
+    # Polestar API faster than ~60 s; throttling shows up as "not authorized".
+    poll_interval_min: int = Field(default=10, ge=2, le=1440)
+    fast_poll_interval_min: int = Field(default=2, ge=2, le=60)
 
     # --- C3 (Volvo Cloud Connectivity) polling ---
     # A second library (unofficial-polestar-api) hitting the same account, so
