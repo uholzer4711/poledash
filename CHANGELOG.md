@@ -3,6 +3,50 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.41.0] — 2026-06-19
+
+### Changed — Charging hero rebuilt to the UJH design system (no glows, no gradients)
+
+- The v1.39 charging visualization leaned on effects the design system forbids
+  (the project conventions §4: no drop-shadows, no gradients). Reworked to flat, signal-colour
+  primitives — same live feel, design-compliant:
+  - `.charge-hero` drops its `linear-gradient` glow overlay; the live state is
+    carried by the existing solid orange top contour.
+  - `.battery-bar-fill` leading edge and the live-dot pulse now animate
+    **opacity** instead of a `box-shadow` ring/glow.
+  - The battery sweep is a single sharp 2 px orange line (was a soft
+    `linear-gradient`); the decorative `repeating-linear-gradient` energy-flow
+    ticks are gone.
+  - `.vu-needle` drops its `box-shadow` glow.
+- `.card.alert` no longer uses a (dead, fully-occluded) `linear-gradient`
+  background — flat `--ujh-bg-2`, no visual change.
+- `.demo-banner` used an undefined `--ujh-accent` token (silently falling back to
+  a hard-coded hex) and `#000` — now `--ujh-orange` / `--ujh-bg`.
+- `ujh.css?v=` cache-bust token bumped.
+
+### Fixed — Low-SoC alert deduped on the UTC day instead of the local day
+
+- `scheduler._maybe_notify` keyed the once-per-day low-battery alert on the
+  **UTC** date — the same class of bug fixed in `anomalies.py` for v1.40.0, but
+  this call site was missed. Local midnight is 02:00 UTC here, so suppression
+  rolled over at the wrong time. Now uses `fmt_local`.
+
+### Security / robustness
+
+- `/api/lab/queries` no longer leaks the raw exception text (file paths, lib
+  internals) to the client when it can't read the pypolestar GraphQL source —
+  generic message to the client, full detail to the server log.
+- HA MQTT discovery (`publish_state` / `publish_c3`) guards its check-and-set on
+  the `_published_discovery` sets with an `asyncio.Lock`, closing a TOCTOU where
+  two concurrent publishes could announce discovery twice.
+
+### Tests
+
+- New `test_anomalies.py` (local-date dedup keys), `test_scheduler.py`
+  (`_reschedule`/`_reschedule_c3` never raise — fallback + total-failure paths),
+  `test_config.py` (2-min poll floor), and a short-trip → `kwh_used=None`
+  case in `test_tripbook.py`. Suite: 55 → 64.
+
 ## [1.40.0] — 2026-06-19
 
 ### Changed — Poll-loop robustness: a post-fetch failure can no longer stall the loop

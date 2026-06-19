@@ -321,8 +321,10 @@ def known_queries():
     try:
         import pypolestar.graphql as g
         src = Path(g.__file__).read_text(encoding="utf-8")
-    except Exception as e:
-        raise HTTPException(500, f"cannot read pypolestar.graphql: {e}") from e
+    except Exception:
+        # Don't leak the exception text (paths / lib internals) to the client.
+        log.exception("cannot read pypolestar.graphql source")
+        raise HTTPException(500, "cannot read pypolestar.graphql source") from None
     queries = []
     for m in re.finditer(r"(QUERY_[A-Z_]+)\s*=\s*gql\(\s*\"\"\"(.*?)\"\"\"\s*\)", src, re.DOTALL):
         queries.append({"name": m.group(1), "body": m.group(2).strip()})

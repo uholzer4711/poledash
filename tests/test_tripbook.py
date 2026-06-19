@@ -106,6 +106,34 @@ def test_short_trip_energy_uses_car_consumption_not_soc(tmp_db):
     assert abs(t.kwh_per_100km - 14.8) <= 0.2  # rounding through int wh/km
 
 
+def test_short_trip_no_kwh_without_consumption(tmp_db):
+    """A short trip with no car-reported consumption must yield kwh_used=None.
+    The old SoC-drop fallback read as ~1300 Wh/km on a sub-km / 1% trip and
+    poisoned monthly totals / insights — better no number than a wrong one."""
+    base = utcnow().replace(microsecond=0) - timedelta(hours=2)
+    rows = [
+        {"fetched_at": base, "odometer_km": 100.0,
+         "odometer_event_ts": base - timedelta(hours=2), "soc_percent": 58,
+         "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=10), "odometer_km": 107.8,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 55,
+         "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=20), "odometer_km": 107.8,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 55,
+         "charging_status": "Idle"},
+        {"fetched_at": base + timedelta(minutes=30), "odometer_km": 107.8,
+         "odometer_event_ts": base + timedelta(minutes=8), "soc_percent": 55,
+         "charging_status": "Idle"},
+    ]
+    _insert(rows)
+
+    t = detect_trips(vin="V", days=1)[0]
+    assert t.km == 7.8                              # below the 10 km SoC floor
+    assert t.avg_consumption_kwh_per_100km is None
+    assert t.kwh_used is None                       # no last-resort SoC estimate
+    assert t.wh_per_km is None
+
+
 def test_long_trip_prefers_soc_over_flat_avg(tmp_db):
     """On a long-enough trip the SoC drop is the honest per-trip energy. The
     car's avg-consumption is a slow lifetime average; using it would reprint the

@@ -40,7 +40,7 @@ from .polestar.client import PolestarClient
 from .polestar.fetcher import Snapshot, fetch_snapshot
 from .sessions import CHARGING_STATES, previous_snapshot, update_session
 from .software import check_software_updates, record_installed_version
-from .util import haversine_km, in_hour_window, local_now, utcnow
+from .util import fmt_local, haversine_km, in_hour_window, local_now, utcnow
 
 # Retention for the raw-JSON safety net. Structured rows in VehicleSnapshot
 # stay forever; the verbatim API payloads we keep just long enough to debug
@@ -93,9 +93,10 @@ def _maybe_notify(snap: Snapshot, closed_session) -> None:  # noqa: ANN001
             tags=["battery", "zap"],
         )
 
-    # Low SoC (once per day at most)
+    # Low SoC (once per day at most). Local date — UTC midnight is 02:00 here,
+    # so a UTC key would roll the daily dedup over at the wrong time of day.
     if snap.soc_percent is not None and snap.soc_percent <= s.notify_low_soc:
-        day_key = snap.fetched_at.strftime("%Y-%m-%d")
+        day_key = fmt_local(snap.fetched_at, "%Y-%m-%d")
         notify(
             kind="low_soc",
             key=f"{snap.vin}-{day_key}",

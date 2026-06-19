@@ -13,6 +13,10 @@ from .polestar.fetcher import Snapshot
 log = logging.getLogger(__name__)
 
 _published_discovery: set[str] = set()  # vin → already announced
+# Guards the check-and-set on the discovery sets below. Two concurrent publishes
+# (main + C3 loop) could otherwise both pass the `vin not in …` check across the
+# awaited publish loop and announce discovery twice.
+_disc_lock = asyncio.Lock()
 # Strong refs to in-flight publish tasks. Without this, Python is free to GC a
 # pending Task while still scheduled (asyncio only weak-refs them), and the
 # publish silently disappears.
@@ -97,12 +101,14 @@ async def publish_snapshot(snap: Snapshot) -> None:
         import aiomqtt
 
         async with aiomqtt.Client(**kw) as client:
-            if s.mqtt_ha_discovery and vin not in _published_discovery:
-                for sensor in _SENSORS:
-                    topic, payload = _discovery_payload(vin, base, sensor)
-                    await client.publish(topic, json.dumps(payload), retain=True)
-                _published_discovery.add(vin)
-                log.info("Published HA discovery for %s", vin)
+            if s.mqtt_ha_discovery:
+                async with _disc_lock:
+                    if vin not in _published_discovery:
+                        for sensor in _SENSORS:
+                            topic, payload = _discovery_payload(vin, base, sensor)
+                            await client.publish(topic, json.dumps(payload), retain=True)
+                        _published_discovery.add(vin)
+                        log.info("Published HA discovery for %s", vin)
 
             data = asdict(snap)
             data.pop("raw", None)
@@ -267,11 +273,13 @@ async def publish_c3(row) -> None:  # noqa: ANN001 — C3Snapshot
         import aiomqtt
 
         async with aiomqtt.Client(**kw) as client:
-            if s.mqtt_ha_discovery and vin not in _published_c3_discovery:
-                for topic, payload in _c3_discovery(vin, base):
-                    await client.publish(topic, json.dumps(payload), retain=True)
-                _published_c3_discovery.add(vin)
-                log.info("Published C3 HA discovery for %s", vin)
+            if s.mqtt_ha_discovery:
+                async with _disc_lock:
+                    if vin not in _published_c3_discovery:
+                        for topic, payload in _c3_discovery(vin, base):
+                            await client.publish(topic, json.dumps(payload), retain=True)
+                        _published_c3_discovery.add(vin)
+                        log.info("Published C3 HA discovery for %s", vin)
             payload = _c3_state_payload(row)
             await client.publish(f"{base}/{vin}/c3/state", json.dumps(payload), retain=True)
             await client.publish(f"{base}/{vin}/c3/availability", "online", retain=True)
