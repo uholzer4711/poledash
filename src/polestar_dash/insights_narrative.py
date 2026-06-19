@@ -17,7 +17,6 @@ from .insights_extras import (
     charge_price_split,
     cold_charge_throttle,
     cost_vs_petrol,
-    idle_loss_summary,
     month_over_month_cost,
     range_now_vs_then,
     speed_sweet_spot,
@@ -125,12 +124,24 @@ def build_narrative(
             cold=cct["cold_kw"], warm=cct["warm_kw"])))
 
     # --- Waste --------------------------------------------------------------
-    idle = idle_loss_summary(days=days, vin=vin)
-    if idle:
+    # The real "waste" is the parasitic standby *rate*, aggregated over all
+    # confirmed-parked climate-idle time (integer-SoC noise cancels) — not the
+    # sparse, weakly-attributed discrete events the old summary surfaced.
+    from .idle_drain import standby_baseline
+    sb = standby_baseline(days=days, vin=vin)
+    st = sb.get("standby")
+    if st and st["kwh_per_month"] >= 0.1:
         waste.append(_s(t(
-            "~{kwh} kWh (~€{eur}) lost to standby / pre-conditioning across "
-            "{events} events.", kwh=idle["kwh"], eur=idle["eur"],
-            events=idle["events"]), "warn" if idle["kwh"] >= 5 else "neutral"))
+            "Parasitic standby ~{pct}%/day ≈ {kwh} kWh/month (~€{eur}/month).",
+            pct=st["pct_per_day"], kwh=st["kwh_per_month"],
+            eur=st["eur_per_month"]),
+            "warn" if st["kwh_per_month"] >= 8 else "neutral"))
+    pc = sb.get("preconditioning")
+    if pc and pc["kwh"] >= 0.5:
+        waste.append(_s(t(
+            "~{kwh} kWh went into pre-conditioning while parked — comfort / "
+            "pre-heating, usually range-positive, not waste.",
+            kwh=pc["kwh"]), "neutral"))
 
     # --- Impact -------------------------------------------------------------
     if co2.get("saved_kg") is not None and co2.get("g_per_km") is not None:

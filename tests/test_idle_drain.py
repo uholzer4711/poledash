@@ -167,6 +167,53 @@ def test_drop_before_drive_with_stale_parkstamp_is_rejected(tmp_db):
     assert drains == []
 
 
+def test_standby_baseline_splits_trickle_from_predeparture_conditioning(tmp_db):
+    """The June-2 shape: SoC holds flat for ~10 h while parked, then drops fast
+    in the last half-hour before the car drives off. The flat trickle is
+    standby; the pre-departure ramp is pre-conditioning — never standby."""
+    from polestar_dash.idle_drain import standby_baseline
+
+    t0 = utcnow() - timedelta(days=1)
+    parked = _epoch(t0)
+    with Session(get_engine()) as s:
+        # 24 h parked at HOME (constant parked_ts ⇒ provably not moved; well
+        # over MIN_STANDBY_HOURS): SoC holds 80 % the whole time, then 80→76 in
+        # the final 30 min (≈8% → ~6 kW+, the conditioning ramp). 10-min cadence.
+        steps = 24 * 6  # 144 polls over 24 h
+        for k in range(steps + 1):
+            ts = t0 + timedelta(minutes=10 * k)
+            soc = 80 if k <= steps - 4 else 80 - (k - (steps - 4))  # last 4 steps drop
+            s.add(_snap(ts, soc))
+            s.add(_c3(ts, lat=HOME[0], lng=HOME[1], parked_ts=parked))
+        s.commit()
+
+    sb = standby_baseline(vin="VIN1", days=3)
+    # Flat plateau dominates → standby rate is tiny; the ramp is pre-conditioning.
+    assert sb["standby"] is not None
+    assert sb["standby"]["pct_per_day"] < 0.5
+    assert sb["preconditioning"] is not None
+    assert sb["preconditioning"]["kwh"] > 1.0
+
+
+def test_standby_baseline_ignores_drives(tmp_db):
+    """A drive (parked_ts changes) must never feed the standby denominator."""
+    from polestar_dash.idle_drain import standby_baseline
+
+    t0 = utcnow() - timedelta(days=1)
+    with Session(get_engine()) as s:
+        # Two short parks with a drive between them, each < MIN_PARK_HOURS and
+        # with distinct parked_ts → no qualifying parked time at all.
+        s.add(_snap(t0, 60))
+        s.add(_c3(t0, lat=HOME[0], lng=HOME[1], parked_ts=_epoch(t0)))
+        s.add(_snap(t0 + timedelta(minutes=30), 50, odo=130.0))
+        s.add(_c3(t0 + timedelta(minutes=30), lat=AWAY[0], lng=AWAY[1],
+                  parked_ts=_epoch(t0 + timedelta(minutes=30))))
+        s.commit()
+
+    sb = standby_baseline(vin="VIN1", days=3)
+    assert sb["standby"] is None  # not enough confirmed-parked time
+
+
 def test_no_c3_modest_power_stays_unknown(tmp_db):
     from polestar_dash.idle_drain import detect_idle_drains
 

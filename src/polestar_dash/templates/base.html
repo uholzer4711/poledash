@@ -131,6 +131,13 @@
       const mobile = _isMobileView();
       r.classList.toggle('view-mobile', mobile);
       r.classList.toggle('view-forced', vm === 'mobile' && wide);
+      // Drill-down accordions (.veh-acc) are collapsed on mobile but must show
+      // in full on web. The old approach force-showed a *collapsed* <details>
+      // via CSS (display:block on its children) — but recent Chromium hides
+      // <details> content with content-visibility on a UA slot that `display`
+      // can't override, so on web the panels (e.g. Vehicle control) vanished.
+      // Setting the native `open` flag renders the content reliably everywhere.
+      document.querySelectorAll('.veh-acc').forEach(function (d) { d.open = !mobile; });
       const b = document.getElementById('view-btn');
       if (b) b.textContent = mobile ? VIEW_LABELS.web : VIEW_LABELS.mobile;
     }

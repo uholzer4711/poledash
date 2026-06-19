@@ -36,7 +36,7 @@ from ..db.models import (
 )
 from ..db.session import get_engine
 from ..i18n import SUPPORTED_LANGS, get_language, set_language
-from ..idle_drain import diagnose_idle_drains
+from ..idle_drain import diagnose_idle_drains, standby_baseline
 from ..insights_extras import (
     compute_air_exposure,
     compute_battery_trend,
@@ -861,10 +861,17 @@ def idle_drain(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> d
     # what was kept vs excluded as a drive/settling/noise — is fully inspectable.
     items = [_drain_dict(d) for d in candidates if d.kept]
     total_kwh = round(sum(d.kwh for d in candidates if d.kept), 1)
+    # The headline numbers now come from the aggregate baseline (parasitic
+    # standby rate + a neutral pre-conditioning total), not the sparse,
+    # weakly-attributed discrete events — which live on only in `diagnostics`.
+    baseline = standby_baseline(vin=vin, days=days)
     return {
         "items": items,
         "total_kwh": total_kwh,
         "count": len(items),
+        "standby": baseline["standby"],
+        "preconditioning": baseline["preconditioning"],
+        "battery_kwh": baseline["battery_kwh"],
         "diagnostics": [_drain_dict(d) for d in candidates],
         "tally": diag["tally"],
         "excluded": diag["excluded"],

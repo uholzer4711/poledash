@@ -3,6 +3,45 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.39.0] — 2026-06-19
+
+### Changed — "Am I wasting energy?" rebuilt around a confirmed-parked baseline
+
+- The old waste headline hung on sparse, weakly-attributed discrete events —
+  in practice a single SoC drop whose "climate" cause came from one stray C3
+  poll, while the bulk of the fall happened with climate idle. The data shows
+  the real shape: while genuinely parked this car's SoC holds **rock flat**
+  for 12+ h, then drops a few % in the half-hour **right before departure** —
+  battery **pre-conditioning** (invisible to C3's cabin-climate flag), not
+  standby loss. Reporting that as "kWh lost to standby" was the bug.
+- New `idle_drain.standby_baseline()` anchors on the C3 **`parked_ts`**
+  (constant ⇒ the car provably did not move — no frozen-odometer / frozen-GPS
+  guessing) and reads SoC from `VehicleSnapshot`. Within each park it splits:
+  - **Parasitic standby** — the slow background trickle, aggregated as drop ÷
+    hours over *all* confirmed-parked time (flat plateaus included) so
+    integer-SoC noise averages into a real **%/day** rate → kWh/month + €/month.
+    The honest "am I wasting energy" number.
+  - **Pre-conditioning** — the pre-departure battery/cabin warm-up (steep draws
+    or ≥2 consecutive declining steps, plus C3-confirmed cabin climate), shown
+    **neutrally**, never as a euro cost (it's intentional, usually
+    range-positive). The two buckets never double-count.
+- `/api/idle-drain` now returns `standby` + `preconditioning`; the Insights
+  section leads with the standby rate (kWh/month · €/month) and a neutral
+  pre-conditioning line; the discrete events live on only in the diagnostics
+  drawer. Narrative bullets reworded; `insights_extras.idle_loss_summary`
+  removed. New tests for the trickle/conditioning split and drive rejection.
+
+### Fixed — Vehicle control, Location & Health panels missing on web
+
+- The dashboard's drill-down accordions (`.veh-acc`: **Vehicle control**,
+  **Location**, **Health & warnings**) are collapsed on mobile but must show in
+  full on web. The old approach force-showed a *collapsed* `<details>` via CSS
+  (`display:block` on its children) — but recent Chromium hides `<details>`
+  content with `content-visibility` on a UA slot that `display` can't override,
+  so on web all three panels silently vanished. `base.html` now sets the native
+  `open` flag on `.veh-acc` when not in mobile view, which renders the content
+  reliably in every browser (collapsed drill-down on mobile is unchanged).
+
 ## [1.37.1] — 2026-06-12
 
 ### Added — "vehicle connection restored" all-clear

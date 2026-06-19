@@ -31,7 +31,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, select
 
-from .app_settings import get_calibrated_battery_kwh
+from .app_settings import get_calibrated_battery_kwh, get_default_price_ct
 from .db.models import C3Snapshot, VehicleSnapshot
 from .db.session import get_engine
 from .util import haversine_km, utcnow
@@ -286,6 +286,164 @@ def _classify(drains: list[IdleDrain]) -> list[IdleDrain]:
                 )
 
     return drains
+
+
+# --- Standby baseline ------------------------------------------------------
+# The discrete-event detector above answers "what *single* parked draws can I
+# point at?". The honest waste question — "how much do I lose just sitting?" —
+# needs a different lens. The data shows why: while genuinely parked this car's
+# SoC holds *rock flat* for 12+ h, then drops several % in the half-hour right
+# before it drives off — that tail is **battery pre-conditioning** (invisible
+# to C3's cabin-climate flag), not standby loss. Reporting it as "kWh lost to
+# standby" (the old summary did) is the bug.
+#
+# So we anchor on the C3 **parked_ts** — the car stamps it when it parks and
+# holds it until it next moves, so a *constant* parked_ts is authoritative proof
+# the car did not drive (no frozen-odometer / frozen-GPS guessing). Within each
+# such park we read SoC from VehicleSnapshot (reliable even when C3 is frozen —
+# the data-source split) and split each step by rate:
+#   * a slow step (< RAMP_KW, includes the long flat plateaus) → **standby**
+#     denominator; aggregated drop ÷ hours so integer-SoC ticks average into a
+#     real trickle instead of reading as a per-step spike.
+#   * a fast step (≥ RAMP_KW) or any C3 cabin-climate step → **pre-conditioning**
+#     (the pre-departure battery/cabin warm-up), reported neutrally, never as a
+#     euro cost.
+
+MIN_STANDBY_HOURS = 12.0  # don't quote a rate until this much confirmed-parked
+#                           idle time is observed (else it's just noise)
+MIN_PARK_HOURS = 1.0  # ignore very short parks — too little to measure a rate
+RAMP_KW = 6.0  # a parked draw ≥ this is the pre-departure conditioning ramp
+#                (≥2%/10 min ≈ 10 kW here), not the parasitic trickle (a lone
+#                1% tick over a 10-min poll is ~5 kW, so it stays in standby)
+
+
+def _c3_parks(c3: list[C3Snapshot]) -> list[tuple[datetime, datetime, list]]:
+    """Group C3 rows into parks — maximal contiguous runs sharing one parked_ts
+    (the car has not moved). Returns (start, end, rows) per park."""
+    parks: list[tuple[datetime, datetime, list]] = []
+    run: list[C3Snapshot] = []
+    cur_ts = None
+    for c in c3:
+        if c.parked_ts is None:
+            continue
+        if c.parked_ts != cur_ts:
+            if len(run) >= 2:
+                parks.append((run[0].fetched_at, run[-1].fetched_at, run))
+            run = [c]
+            cur_ts = c.parked_ts
+        else:
+            run.append(c)
+    if len(run) >= 2:
+        parks.append((run[0].fetched_at, run[-1].fetched_at, run))
+    return parks
+
+
+def standby_baseline(vin: str | None = None, days: int = 30) -> dict:
+    """Confirmed-parked energy use, split into two honest buckets:
+
+    * **standby** — the parasitic background rate (%/day) from the slow,
+      climate-idle trickle while parked, aggregated over all such time (flat
+      plateaus included) so integer-SoC noise cancels. The real waste number.
+    * **preconditioning** — energy drawn for the pre-departure battery/cabin
+      warm-up (the fast tail before the car leaves, plus any C3-confirmed
+      cabin climate). Intentional, usually range-positive → reported neutrally,
+      never as a euro cost.
+
+    Parks are taken from the C3 ``parked_ts`` (constant ⇒ the car provably did
+    not move), and SoC from VehicleSnapshot — see the module comment above.
+    """
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        stmt = (
+            select(VehicleSnapshot)
+            .where(VehicleSnapshot.fetched_at >= since)
+            .where(VehicleSnapshot.soc_percent.is_not(None))
+            .order_by(VehicleSnapshot.fetched_at.asc())
+        )
+        if vin:
+            stmt = stmt.where(VehicleSnapshot.vin == vin)
+        snaps = list(s.exec(stmt).all())
+        c3_stmt = (
+            select(C3Snapshot)
+            .where(C3Snapshot.fetched_at >= since)
+            .order_by(C3Snapshot.fetched_at.asc())
+        )
+        if vin:
+            c3_stmt = c3_stmt.where(C3Snapshot.vin == vin)
+        c3 = list(s.exec(c3_stmt).all())
+
+    batt = get_calibrated_battery_kwh()
+    charging = {"Charging", "Smart Charging"}
+
+    standby_hours = 0.0
+    standby_drop_pct = 0.0
+    precond_kwh = 0.0
+    precond_steps = 0
+
+    for t0, t1, c3_rows in _c3_parks(c3):
+        if (t1 - t0).total_seconds() / 3600.0 < MIN_PARK_HOURS:
+            continue
+        vs = [r for r in snaps if t0 <= r.fetched_at <= t1]
+        if len(vs) < 2 or any(r.charging_status in charging for r in vs):
+            continue  # charging changes SoC — can't read drain from this park
+        climate_on = any(
+            c.climate_active or (c.climate_running in _CLIMATE_ACTIVE_STATES)
+            or c.air_running
+            for c in c3_rows
+        )
+        # Per-step (gap_h, drop, fast?) for every usable step in the park.
+        steps: list[tuple[float, int, bool]] = []
+        prev = vs[0]
+        for r in vs[1:]:
+            gap_h = (r.fetched_at - prev.fetched_at).total_seconds() / 3600.0
+            if 0 < gap_h * 60 <= GAP_MINUTES:
+                drop = max(0, (prev.soc_percent or 0) - (r.soc_percent or 0))
+                rate_kw = (drop / 100.0 * batt) / gap_h
+                steps.append((gap_h, drop, rate_kw >= RAMP_KW))
+            prev = r
+
+        # A step is pre-conditioning if it's a *steep* draw, OR part of a run of
+        # ≥2 consecutive declining steps (a sustained ramp, even a gentle one —
+        # an isolated 1% tick reads as ~5 kW too, so rate alone can't tell a lone
+        # trickle tick from a gentle ramp; persistence can). Everything else —
+        # flat steps and isolated ticks — is the slow standby trickle.
+        n_steps = len(steps)
+        for k, (gap_h, drop, fast) in enumerate(steps):
+            run = drop > 0 and (
+                (k > 0 and steps[k - 1][1] > 0)
+                or (k + 1 < n_steps and steps[k + 1][1] > 0)
+            )
+            if fast or run or (climate_on and drop > 0):
+                precond_kwh += drop / 100.0 * batt  # pre-departure / cabin conditioning
+                precond_steps += 1
+            else:  # flat step or isolated tick → the standby denominator
+                standby_hours += gap_h
+                standby_drop_pct += drop
+
+    price = get_default_price_ct()
+    standby: dict | None = None
+    if standby_hours >= MIN_STANDBY_HOURS:
+        pct_per_day = standby_drop_pct / standby_hours * 24
+        kwh_per_month = pct_per_day / 100.0 * batt * 30
+        standby = {
+            "pct_per_day": round(pct_per_day, 2),
+            "kwh_per_month": round(kwh_per_month, 1),
+            "eur_per_month": round(kwh_per_month * price / 100.0, 2),
+            "hours_observed": round(standby_hours),
+        }
+    preconditioning: dict | None = None
+    if precond_kwh >= 0.5:
+        preconditioning = {
+            "kwh": round(precond_kwh, 1),
+            "steps": precond_steps,
+            "eur": round(precond_kwh * price / 100.0, 2),
+        }
+    return {
+        "days": days,
+        "battery_kwh": batt,
+        "standby": standby,
+        "preconditioning": preconditioning,
+    }
 
 
 def _attach_place(d: IdleDrain, rows: list[C3Snapshot], geofences: dict) -> None:

@@ -435,6 +435,16 @@ TRANSLATIONS_DE: dict[str, str] = {
     "pattern empty": "Muster leer",
     "peak": "Spitze",
     "pre-conditioning / standheizung / vampire": "Vorklimatisierung / Standheizung / Vampir",
+    "standby vs pre-conditioning": "Standby vs Vorklimatisierung",
+    "standby loss / day": "Standby-Verlust / Tag",
+    "standby / month": "Standby / Monat",
+    "at your price": "zu deinem Preis",
+    "Background draw while the car is parked (systems kept awake, battery management), averaged over {h} h of confirmed-parked time in the last {days} days.":
+        "Hintergrundverbrauch im Stand (wachgehaltene Systeme, Batteriemanagement), gemittelt über {h} h bestätigte Standzeit in den letzten {days} Tagen.",
+    "~{kwh} kWh into pre-conditioning while parked (cabin climate / air-cleaning C3 confirmed) — intentional comfort / pre-heating, usually range-positive, not waste.":
+        "~{kwh} kWh in Vorklimatisierung im Stand (Kabinenklima / Luftreinigung, C3-bestätigt) — gewollter Komfort / Vorheizen, meist reichweitenpositiv, keine Verschwendung.",
+    "Not enough confirmed-parked time in the last {days} days to measure standby loss yet — it builds up as the car sits idle.":
+        "Noch nicht genug bestätigte Standzeit in den letzten {days} Tagen, um den Standby-Verlust zu messen — das wächst, je länger das Auto steht.",
     "probing {n} field(s)…": "sondiere {n} Feld(er)…",
     "pypolestar's": "pypolestars",
     "reset failed": "Zurücksetzen fehlgeschlagen",
@@ -955,10 +965,12 @@ TRANSLATIONS_DE: dict[str, str] = {
     "— preconditioning before a fast charge helps.":
         "Unter 5 °C drosselt das Auto das Laden auf ~{cold} kW (vs ~{warm} kW "
         "warm) — Vorklimatisieren vor dem Schnellladen hilft.",
-    "~{kwh} kWh (~€{eur}) lost to standby / pre-conditioning across "
-    "{events} events.":
-        "~{kwh} kWh (~€{eur}) durch Standby / Vorklimatisierung verloren, über "
-        "{events} Ereignisse.",
+    "Parasitic standby ~{pct}%/day ≈ {kwh} kWh/month (~€{eur}/month).":
+        "Parasitärer Standby ~{pct}%/Tag ≈ {kwh} kWh/Monat (~€{eur}/Monat).",
+    "~{kwh} kWh went into pre-conditioning while parked — comfort / "
+    "pre-heating, usually range-positive, not waste.":
+        "~{kwh} kWh flossen in Vorklimatisierung im Stand — Komfort / "
+        "Vorheizen, meist reichweitenpositiv, keine Verschwendung.",
     "~{saved} kg CO₂ saved vs a petrol car ({g} g/km on your grid mix).":
         "~{saved} kg CO₂ gespart vs Benziner ({g} g/km bei deinem Netz-Mix).",
     "Biggest efficiency lever: cold weather (+{pct}% below 5 °C).":
@@ -1026,6 +1038,7 @@ TRANSLATIONS_DE: dict[str, str] = {
     "a plausible parked draw, but no C3 GPS for that time to attribute it (e.g. before C3 was enabled).": "ein plausibler Park-Verbrauch, aber kein C3-GPS für den Zeitraum zum Zuordnen (z.B. vor C3-Aktivierung).",
     "Diagnostics — every SoC drop and why": "Diagnose — jeder SoC-Abfall und warum",
     "Most SoC drops are drives the frozen odometer hid — these are the ones the table above excludes, shown here with the reason.": "Die meisten SoC-Abfälle sind Fahrten, die der eingefrorene Odometer verdeckt — genau die schließt die Tabelle oben aus, hier mit Begründung.",
+    "Most SoC drops are drives the frozen odometer hid — shown here with the reason each was kept or excluded.": "Die meisten SoC-Abfälle sind Fahrten, die der eingefrorene Odometer verdeckt — hier mit Begründung, warum jeder behalten oder ausgeschlossen wurde.",
     "Place": "Ort",
     "Verdict": "Urteil",
     "Drive (not a drain)": "Fahrt (kein Verlust)",
