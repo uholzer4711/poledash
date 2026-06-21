@@ -3,6 +3,38 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.42.0] — 2026-06-21
+
+### Added — Push feedback for manual vehicle-control commands
+
+- `/api/control` now confirms verifiable commands (lock, unlock, windows,
+  climate, pre-cleaning, charge start/stop) server-side after firing them, and
+  pushes the result via ntfy/Telegram (`notify(kind="control_result", …)`):
+  *"{command} confirmed"* or *"{command} not confirmed"*.
+- The dashboard's in-page status line (`control.js`) already polled
+  `/api/control/verify` for ✓/✗ feedback, but that only works while the tab
+  stays foregrounded — iOS Safari pauses JS timers as soon as you switch apps
+  or lock the phone mid-poll (windows take ~10 s to actuate), so the manual
+  click path could silently never report a result. The new server-side check
+  reuses `verify_command_with_retries` (already trusted by the automation
+  engine's one-tap confirm) in a `BackgroundTasks` job, so confirmation arrives
+  over a channel iOS can't pause.
+- Non-verifiable commands (flash, honk, wake, precleaning, set_target_soc) are
+  unaffected — same `verified=None` "sent — can't verify" behaviour as before.
+
+### Changed — basic_auth no longer prompts from the VPN/LAN
+
+- Deployment-only (`/etc/caddy/Caddyfile` on the host, not tracked in this
+  repo): `poledash.example.com` already 403s everyone outside an IP allow-list
+  (VPN subnet, LAN, six named admin IPs) *before* `basic_auth` even runs — so
+  the password prompt added no security for trusted networks, just friction.
+  WebKit/Safari on iOS is known to drop or forget Keychain-stored Basic-Auth
+  credentials across network changes (e.g. VPN) and in Home-Screen/PWA mode,
+  which is what was actually being worked around. Scoped `basic_auth` to a
+  `@needs_auth` matcher that excludes the VPN/LAN ranges — those clients now
+  reach the app with zero prompt; the six external admin IPs still need the
+  password.
+
 ## [1.41.0] — 2026-06-19
 
 ### Changed — Charging hero rebuilt to the UJH design system (no glows, no gradients)

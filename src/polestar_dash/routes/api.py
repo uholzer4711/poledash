@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import json
 import logging
+import uuid
 from datetime import UTC, date, datetime, timedelta
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, or_
@@ -36,6 +38,7 @@ from ..db.models import (
 )
 from ..db.session import get_engine
 from ..i18n import SUPPORTED_LANGS, get_language, set_language
+from ..i18n import t as t_  # plain `t` collides with this file's trip loop variable
 from ..idle_drain import diagnose_idle_drains, standby_baseline
 from ..insights_extras import (
     compute_air_exposure,
@@ -64,9 +67,10 @@ from ..journey_import import (
     tag_co2_for_imports,
     upsert,
 )
+from ..notify import notify
 from ..polestar.c3 import c3_dict_to_row, get_c3_snapshot
 from ..polestar.c3_control import run_command
-from ..polestar.control_verify import verify_command, verify_command_with_retries
+from ..polestar.control_verify import is_verifiable, verify_command, verify_command_with_retries
 from ..routes_stats import list_routes, trips_for_route
 from ..tripbook import detect_trips
 from ..util import fmt_local, utcnow
@@ -439,10 +443,50 @@ class ControlRequest(BaseModel):
     params: dict | None = None
 
 
+# English source strings only — keys for translations_de.py.
+_COMMAND_LABELS: dict[str, str] = {
+    "lock": "Lock", "unlock": "Unlock", "unlock_trunk": "Unlock trunk",
+    "windows_open": "Open windows", "windows_close": "Close windows",
+    "climate_start": "Start climate", "climate_stop": "Stop climate",
+    "precleaning_start": "Start air pre-cleaning", "precleaning_stop": "Stop pre-cleaning",
+    "charge_start": "Start charging", "charge_stop": "Stop charging",
+}
+
+
+async def _notify_control_result(command: str, params: dict, key: str) -> None:
+    """Confirm a manually-fired command server-side and push it via ntfy/Telegram.
+
+    The dashboard's in-page status line (control.js) polls /api/control/verify
+    itself, but that poll dies the moment iOS Safari backgrounds the tab (lock
+    the phone, switch apps while the window rolls down) — its JS timers just
+    stop. This runs the same verify_command_with_retries the automation engine
+    already trusts, so the result reaches you over a channel iOS can't pause.
+    """
+    verified = await verify_command_with_retries(command, params)
+    if verified is None:
+        return  # not verifiable, or inconclusive after every retry — nothing to report
+    label = t_(_COMMAND_LABELS.get(command, command))
+    if verified:
+        title, tags, priority = t_("{cmd} confirmed", cmd=label), ["white_check_mark", "car"], "default"
+    else:
+        title, tags, priority = t_("{cmd} not confirmed", cmd=label), ["warning", "car"], "high"
+    await asyncio.to_thread(
+        notify, kind="control_result", key=key, title=title,
+        body=t_("Triggered from the dashboard."), priority=priority, tags=tags,
+    )
+
+
 @router.post("/control")
-async def control(req: ControlRequest) -> dict:
-    """Fire one C3 write command (lock, windows, climate, …). Real car effect."""
-    return await run_command(req.command, req.params)
+async def control(req: ControlRequest, background_tasks: BackgroundTasks) -> dict:
+    """Fire one C3 write command (lock, windows, climate, …). Real car effect.
+
+    For verifiable commands, also confirms in the background and notifies —
+    see `_notify_control_result`.
+    """
+    res = await run_command(req.command, req.params)
+    if res.get("ok") and is_verifiable(req.command):
+        background_tasks.add_task(_notify_control_result, req.command, req.params or {}, uuid.uuid4().hex)
+    return res
 
 
 @router.get("/log")

@@ -739,6 +739,9 @@ TRANSLATIONS_DE: dict[str, str] = {
     "not confirmed": "nicht bestätigt",
     "sent — can't verify": "gesendet — nicht prüfbar",
     "Run": "Ausführen",
+    "{cmd} confirmed": "{cmd} bestätigt",
+    "{cmd} not confirmed": "{cmd} nicht bestätigt",
+    "Triggered from the dashboard.": "Vom Dashboard ausgelöst.",
     # --- Confirm page (confirm.html) ---
     "Confirm action": "Aktion bestätigen",
     "CONFIRM": "BESTÄTIGEN",
