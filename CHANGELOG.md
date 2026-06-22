@@ -3,6 +3,40 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.44.0] — 2026-06-22
+
+### Fixed — full codebase audit
+
+- **`chargingStatus` GraphQL patch was dead and actively regressive.** The
+  2026-05-21 schema patch rewrote `QUERY_TELEMATICS_V2` to drop the field
+  Polestar removed — but pypolestar has since shipped its own fix upstream
+  (`chargingStatusV2`, read by `CarBatteryData.from_dict`). Our rewritten
+  query shadowed that fix with a stale copy lacking `chargingStatusV2`,
+  permanently nulling `charging_status` from the GraphQL path (silently
+  papered over by the gRPC/power-based fallback in `fetcher.py`). Removed
+  the query rewrite and the now-pointless `from_dict` shim; kept the
+  unrelated gRPC battery-field-widening patch in `polestar/client.py`.
+- **Notification dedup keys used UTC date instead of local date** in
+  `c3_anomalies._day_key` and `automations._run_autonomous`/
+  `_emit_suggestion` — unlike `anomalies.py`, which already uses
+  `fmt_local()`. Since Vienna's UTC offset rolls the date over at
+  01:00–02:00 local, *inside* the overnight 20:00–06:00 alert window, a
+  window left open continuously from 23:00–05:00 local crossed the UTC-date
+  boundary and fired a second "left open" / automation notification for the
+  same still-open condition. Both now key on `fmt_local(...)`.
+- **Stored XSS in the weekly digest email**: `digest.py` interpolated the
+  free-text charging-session note (`ChargeSession.note`, user-editable via
+  `POST /api/sessions/{id}`) straight into the HTML email body. A note like
+  `<img src=x onerror=...>` would execute in the recipient's mail client.
+  Now passed through `html.escape()` — missed by the 1.43.0 hardening pass,
+  which covered the same pattern in `anomalies.py`/`c3_anomalies.py` but not
+  this email path.
+- Dev dependency: added `httpx2` to silence Starlette's `TestClient`
+  deprecation warning (`httpx` backend is being phased out in favor of it).
+- Doc cleanup: removed stale `the project conventions` references to a `planner.py`/
+  `prices.py` charge-planner module that never existed in this repo's
+  history — pure documentation drift.
+
 ## [1.43.0] — 2026-06-22
 
 ### Fixed — code-review hardening pass

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from html import escape as _esc
 
 from sqlmodel import Session, select
 
@@ -87,7 +88,7 @@ def _build_html(
 
     session_rows = ""
     for cs in sessions[:5]:
-        station = cs.note or "—"
+        station = _esc(cs.note) if cs.note else "—"
         kwh = f"{cs.energy_kwh:.1f}" if cs.energy_kwh else "—"
         soc_range = f"{cs.soc_start} → {cs.soc_end}%" if cs.soc_start is not None else "—"
         eff_price = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else price_ct

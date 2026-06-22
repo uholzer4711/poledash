@@ -37,7 +37,7 @@ from .notify import notify
 from .pending_actions import create_pending
 from .polestar.c3_control import run_command
 from .polestar.control_verify import verify_command_with_retries
-from .util import utcnow
+from .util import fmt_local, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -170,7 +170,7 @@ def _parts(ctx: dict) -> str:
 
 
 async def _run_autonomous(rule: Rule, row: C3Snapshot, ctx: dict) -> None:
-    day = f"{row.vin}-{row.fetched_at:%Y-%m-%d}-auto-{rule.id}"
+    day = f"{row.vin}-{fmt_local(row.fetched_at, '%Y-%m-%d')}-auto-{rule.id}"
     if not _claim_once(f"auto_{rule.id}", day, row.vin):
         return  # already acted on this condition today
     res = await run_command(rule.command, rule.params)
@@ -196,7 +196,7 @@ async def _run_autonomous(rule: Rule, row: C3Snapshot, ctx: dict) -> None:
 
 
 async def _emit_suggestion(rule: Rule, row: C3Snapshot, ctx: dict) -> None:
-    day = f"{row.vin}-{row.fetched_at:%Y-%m-%d}-suggest-{rule.id}"
+    day = f"{row.vin}-{fmt_local(row.fetched_at, '%Y-%m-%d')}-suggest-{rule.id}"
     if not _claim_once(f"auto_{rule.id}_suggest", day, row.vin):
         return
     token = create_pending(rule.id, rule.command, rule.params, vin=row.vin)

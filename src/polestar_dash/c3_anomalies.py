@@ -96,7 +96,7 @@ def _is_parked(row: C3Snapshot) -> bool:
 
 
 def _day_key(row: C3Snapshot, part: str) -> str:
-    return f"{row.vin}-{row.fetched_at:%Y-%m-%d}-{part}"
+    return f"{row.vin}-{fmt_local(row.fetched_at, '%Y-%m-%d')}-{part}"
 
 
 def _opened(row: C3Snapshot, prev: C3Snapshot | None, attr: str) -> bool:

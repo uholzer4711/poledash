@@ -8,78 +8,29 @@ log = logging.getLogger(__name__)
 
 
 def _patch_pypolestar_schema() -> None:
-    """Drop `chargingStatus` from the BatteryV2 GraphQL query.
+    """Widen the gRPC battery decode with extra proto fields.
 
-    Polestar removed the field on 2026-05-21, breaking every poll. Until
-    pypolestar ships a fix upstream, we rewrite the query at import time and
-    make the battery model's from_dict tolerant of the missing key. Charging
-    status is then derived in our own fetcher from charging-power / connector
-    state.
+    Polestar dropped `chargingStatus` from the BatteryV2 GraphQL query on
+    2026-05-21; pypolestar has since shipped its own fix upstream
+    (`chargingStatusV2` in `QUERY_TELEMATICS_V2`, read by
+    `CarBatteryData.from_dict`), so we no longer need to rewrite that query
+    ourselves — doing so would just shadow pypolestar's fix with a stale
+    copy that lacks `chargingStatusV2` and permanently null out
+    `charging_status` from this path. The fetcher's gRPC/power-based
+    fallback (see `fetcher.py`) remains regardless.
     """
     try:
-        from gql import gql
-        from pypolestar import api as _pp_api
-        from pypolestar import graphql as _pp_gql
-        from pypolestar import models as _pp_models
+        from pypolestar import grpc_client as _pp_grpc
     except Exception:
         log.exception("pypolestar import failed; cannot apply schema patch")
         return
-
-    new_query = gql(
-        """
-        query CarTelematicsV2($vins: [String!]!) {
-            carTelematicsV2(vins: $vins) {
-                health {
-                    vin
-                    brakeFluidLevelWarning
-                    daysToService
-                    distanceToServiceKm
-                    engineCoolantLevelWarning
-                    oilLevelWarning
-                    serviceWarning
-                    timestamp { seconds nanos }
-                }
-                battery {
-                    vin
-                    batteryChargeLevelPercentage
-                    estimatedChargingTimeToFullMinutes
-                    estimatedDistanceToEmptyKm
-                    timestamp { seconds nanos }
-                }
-                odometer {
-                    vin
-                    odometerMeters
-                    timestamp { seconds nanos }
-                }
-            }
-        }
-        """
-    )
-    _pp_gql.QUERY_TELEMATICS_V2 = new_query
-    _pp_api.QUERY_TELEMATICS_V2 = new_query
-
-    BatteryData = getattr(_pp_models, "CarBatteryData", None)
-    if BatteryData is not None:
-        original_from_dict = BatteryData.from_dict.__func__
-
-        @classmethod
-        def from_dict_safe(cls, data):
-            if isinstance(data, dict) and "chargingStatus" not in data:
-                data = {**data, "chargingStatus": "CHARGING_STATUS_UNSPECIFIED"}
-            return original_from_dict(cls, data)
-
-        BatteryData.from_dict = from_dict_safe
 
     # Pull extra battery fields the proto exposes but pypolestar's
     # `_parse_battery` drops on the floor (total energy consumption variants,
     # per-mode averages, miles, charger power status). We attach them to the
     # frozen `GrpcBatteryData` via object.__setattr__ so dataclasses.asdict()
     # still sees only the declared fields.
-    try:
-        from pypolestar import grpc_client as _pp_grpc
-    except Exception:
-        _pp_grpc = None
-    if _pp_grpc is not None and hasattr(_pp_grpc, "_parse_battery"):
+    if hasattr(_pp_grpc, "_parse_battery"):
         _orig_parse = _pp_grpc._parse_battery
 
         def _none_if_zero(v):
@@ -110,7 +61,7 @@ def _patch_pypolestar_schema() -> None:
 
         _pp_grpc._parse_battery = _parse_battery_with_extras
 
-    log.warning("Applied pypolestar schema patch: dropped BatteryV2.chargingStatus; widened gRPC battery decode")
+    log.info("Applied pypolestar schema patch: widened gRPC battery decode")
 
 
 _patch_pypolestar_schema()
