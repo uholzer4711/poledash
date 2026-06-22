@@ -24,7 +24,7 @@ from .db.models import C3Snapshot
 from .db.session import get_engine
 from .i18n import t
 from .notify import notify
-from .util import fmt_local
+from .util import fmt_local, to_local
 
 log = logging.getLogger(__name__)
 
@@ -85,17 +85,7 @@ def _local_hour(row: C3Snapshot) -> int:
     """The snapshot's local (Europe/Vienna) hour. Quiet-hour windows for the
     "left open / unlocked" nags are configured per-alert in settings — only
     alert overnight by default, when the car is parked and the owner can act."""
-    try:
-        from zoneinfo import ZoneInfo
-
-        ts = row.fetched_at
-        # Only stamp UTC when naive; otherwise we'd clobber the caller's tz.
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=ZoneInfo("UTC"))
-        local = ts.astimezone(ZoneInfo("Europe/Vienna"))
-    except Exception:  # noqa: BLE001
-        local = row.fetched_at
-    return local.hour
+    return to_local(row.fetched_at).hour
 
 
 def _is_parked(row: C3Snapshot) -> bool:

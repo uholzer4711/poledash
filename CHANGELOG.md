@@ -3,6 +3,26 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.43.0] — 2026-06-22
+
+### Fixed — code-review hardening pass
+
+- **Self-XSS in address-label warnings**: `settings.html` rendered the
+  too-broad-pattern hint via `t(...)|safe` with the operator-entered
+  `pattern`/`label` text interpolated unescaped. Now escaped (`|e`) before
+  going through `t()`, so the surrounding translated markup still renders but
+  the user-controlled text can't inject HTML.
+- **Vehicle-image upload accepted any `image/*` content-type**, including
+  `image/svg+xml` — an SVG can carry `<script>`. `/api/car-image` now allow-lists
+  `image/jpeg`, `image/png`, `image/webp` only.
+- **Duplicated UTC→Europe/Vienna conversion** in `anomalies._check_low_soc_unplugged`
+  and `c3_anomalies._local_hour` reimplemented what `util.to_local()` already
+  does — both now call the shared helper; removed the now-stale "hardcoded
+  zone" comment in `util.py`.
+- **i18n gap**: `anomalies.check_battery_trend()` was the one alert still
+  emitting hardcoded German strings instead of `t("…")` — brought in line with
+  the rest of the codebase, German catalog entry added.
+
 ## [1.42.0] — 2026-06-21
 
 ### Added — Push feedback for manual vehicle-control commands

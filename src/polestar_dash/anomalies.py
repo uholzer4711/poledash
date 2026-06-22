@@ -17,7 +17,7 @@ from .db.session import get_engine
 from .i18n import t
 from .notify import notify
 from .polestar.fetcher import Snapshot
-from .util import fmt_local, utcnow
+from .util import fmt_local, to_local, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -184,17 +184,7 @@ def _check_low_soc_unplugged(snap: Snapshot) -> None:
     if snap.charger_connection_status == "Connected":
         return
     # Local-time hour window (Europe/Vienna). Avoid 3 am nags.
-    try:
-        from zoneinfo import ZoneInfo
-
-        ts = snap.fetched_at
-        # Only stamp UTC when the datetime is naive; otherwise we'd silently
-        # clobber whatever timezone the caller already attached.
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=ZoneInfo("UTC"))
-        local = ts.astimezone(ZoneInfo("Europe/Vienna"))
-    except Exception:  # noqa: BLE001
-        local = snap.fetched_at
+    local = to_local(snap.fetched_at)
     if not in_alert_window("low_soc_unplugged", local.hour):
         return
     day = local.strftime("%Y-%m-%d")
@@ -257,11 +247,13 @@ def check_battery_trend() -> None:
     _alert(
         kind="battery_trend",
         key=f"battery-trend-{week_key}",
-        title=f"Range-Faktor sinkt: −{drop_pct:.0f}%",
-        body=(
-            f"4-Wochen-Schnitt: {avg_recent:.0f} km bei 100%\n"
-            f"12-Wochen-Schnitt: {avg_baseline:.0f} km bei 100%\n"
-            f"Mögliche Ursachen: Kälte, Reifendruck, Degradation."
+        title=t("Range factor dropping: −{drop:.0f}%", drop=drop_pct),
+        body=t(
+            "4-week avg: {recent:.0f} km at 100%\n"
+            "12-week avg: {baseline:.0f} km at 100%\n"
+            "Possible causes: cold, tyre pressure, degradation.",
+            recent=avg_recent,
+            baseline=avg_baseline,
         ),
         vin="",
     )

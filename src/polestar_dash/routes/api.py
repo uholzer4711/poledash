@@ -1427,9 +1427,10 @@ async def car_image_upload(file: UploadFile = File(...)) -> dict:
     """Upload a vehicle image shown on the dashboard. Stored in the data dir."""
     from ..app_settings import set_setting
 
+    allowed_types = {"image/jpeg", "image/png", "image/webp"}
     ct = (file.content_type or "").lower()
-    if not ct.startswith("image/"):
-        raise HTTPException(400, "expected an image file")
+    if ct not in allowed_types:
+        raise HTTPException(400, "expected a JPEG, PNG or WEBP image file")
     max_size = 5 * 1024 * 1024
     data = await file.read(max_size + 1)
     if not data:

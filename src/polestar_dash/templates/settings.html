@@ -289,7 +289,7 @@
         <div class="mono-xs" style="margin-bottom:6px"><span class="accent">{{ t("Too-broad patterns") }}</span></div>
         {% for label, pats in label_warnings.items() %}
           {% for pat, n in pats.items() %}
-            <div class="mono-xs muted">{{ t("Pattern <code class=\"accent\">{pattern}</code> under <code>{label}</code> matches {n} different addresses — it collapses distinct places into one label.", pattern=pat, label=label, n=n)|safe }}</div>
+            <div class="mono-xs muted">{{ t("Pattern <code class=\"accent\">{pattern}</code> under <code>{label}</code> matches {n} different addresses — it collapses distinct places into one label.", pattern=pat|e, label=label|e, n=n)|safe }}</div>
           {% endfor %}
         {% endfor %}
       </div>

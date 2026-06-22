@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 # App-wide local timezone for human-facing clock decisions (quiet hours, night
-# throttling). Matches the hardcoded zone in c3_anomalies' overnight nags.
+# throttling).
 LOCAL_TZ = ZoneInfo("Europe/Vienna")
 
 

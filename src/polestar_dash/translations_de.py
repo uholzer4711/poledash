@@ -67,6 +67,14 @@ TRANSLATIONS_DE: dict[str, str] = {
         "Batterie niedrig · {soc}% und nicht angesteckt",
     "~{range} km of range left. Consider plugging in tonight.":
         "~{range} km Reichweite übrig. Heute Nacht laden.",
+    "Range factor dropping: −{drop:.0f}%":
+        "Reichweitenfaktor sinkt: −{drop:.0f}%",
+    "4-week avg: {recent:.0f} km at 100%\n"
+    "12-week avg: {baseline:.0f} km at 100%\n"
+    "Possible causes: cold, tyre pressure, degradation.":
+        "4-Wochen-Schnitt: {recent:.0f} km bei 100%\n"
+        "12-Wochen-Schnitt: {baseline:.0f} km bei 100%\n"
+        "Mögliche Ursachen: Kälte, Reifendruck, Degradation.",
     " — need \"Label: pattern\"": " — \"Label: Muster\" erforderlich",
     "(e.g. P5.1.9).": "(z. B. P5.1.9).",
     "(empty)": "(leer)",
