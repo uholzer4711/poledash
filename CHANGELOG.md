@@ -3,6 +3,16 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.45.1] — 2026-06-24
+
+### Added
+
+- **Climate + cabin-air-pre-clean tiles in the "Doors, windows & openings"
+  card.** Vehicle State already had a separate Climate stat card, but the
+  owner asked for everything we know about climate/fan activity collected in
+  one place — the same card where door/window state lives. Reuses the
+  existing opening-tile styling (orange highlight when active).
+
 ## [1.45.0] — 2026-06-24
 
 ### Added

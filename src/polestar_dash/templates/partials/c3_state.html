@@ -100,6 +100,7 @@
       <div id="c3_open_summary" class="openings-summary">—</div>
       <div id="c3_open_grid" class="openings-grid"></div>
     </div>
+    <div class="openings-grid mt-4" id="c3_clim_grid"></div>
   </div>
 
 <details class="veh-acc mb-6">
@@ -168,6 +169,13 @@
       speed: {{ t("speed") | tojson }},
       posFrom: {{ t("Position from") | tojson }},
       currentPos: {{ t("Current position") | tojson }},
+      climateName: {{ t("Climate") | tojson }},
+      climateOn: {{ t("ON") | tojson }},
+      climateOff: {{ t("off") | tojson }},
+      airName: {{ t("Cabin air pre-clean") | tojson }},
+      airRunning: {{ t("running") | tojson }},
+      airIdle: {{ t("idle") | tojson }},
+      minutesShort: {{ t("min") | tojson }},
       parts: {
         door_fl: {{ t("Door FL") | tojson }}, door_fr: {{ t("Door FR") | tojson }},
         door_rl: {{ t("Door RL") | tojson }}, door_rr: {{ t("Door RR") | tojson }},
@@ -258,6 +266,34 @@
       });
       document.getElementById('c3_open_grid').innerHTML =
         cells || '<span class="muted">—</span>';
+    }
+
+    // Climate + cabin-air-pre-clean tiles, in the same card as the openings
+    // grid — these aren't "open/closed" but the owner wants every bit of known
+    // vehicle activity in one place, since the official Polestar app gives no
+    // feedback when a remote climate-start command actually lands.
+    function renderClimateGrid(j) {
+      var host = document.getElementById('c3_clim_grid');
+      if (!host) return;
+      var climKnown = j.climate_active !== undefined && j.climate_active !== null;
+      var climOn = !!j.climate_active;
+      var climState = [];
+      if (j.climate_action) climState.push(esc(j.climate_action));
+      if (j.climate_running) climState.push(esc(j.climate_running));
+      if (j.climate_time_remaining) climState.push(j.climate_time_remaining + ' ' + LBL.minutesShort);
+      var climText = climKnown
+        ? (climOn ? LBL.climateOn : LBL.climateOff) + (climState.length ? ' · ' + climState.join(' · ') : '')
+        : '—';
+      var airKnown = j.air_running !== undefined && j.air_running !== null;
+      var airOn = !!j.air_running;
+      var airText = airKnown ? (airOn ? LBL.airRunning : LBL.airIdle) : '—';
+      host.innerHTML =
+        '<div class="opening' + (climOn ? ' is-open' : '') + '">' +
+          '<span class="opening-name">' + LBL.climateName + '</span>' +
+          '<span class="opening-state">' + climText + '</span></div>' +
+        '<div class="opening' + (airOn ? ' is-open' : '') + '">' +
+          '<span class="opening-name">' + LBL.airName + '</span>' +
+          '<span class="opening-state">' + airText + '</span></div>';
     }
 
     // Status chips placed around the car photo (frunk top, four corners,
@@ -395,6 +431,7 @@
       // Openings panel (lock state is shown by the photo frame + Locked card)
       renderOpenings(j);
       renderChips(j);
+      renderClimateGrid(j);
 
       // Locked stat card — unknown lock state stays "—", never a false "Unlocked".
       var lockEl = document.getElementById('c3_locked');
