@@ -3,6 +3,18 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.45.4] — 2026-06-24
+
+### Fixed
+
+- **"Start/Stop climate" showed "not confirmed" (red) far more often than
+  every other control button.** The dashboard's client-side verify backoff
+  (`control.js`) only waited 18 s (3/6/9 s) before giving up — fine for
+  lock/unlock/windows, which the car reports back quickly, but
+  `climate_active` routinely takes longer to show up on a fresh C3 read.
+  `climate_start`/`climate_stop` now get a longer, 4-step backoff
+  (5/10/15/20 s, 50 s total) before the UI calls it unconfirmed.
+
 ## [1.45.3] — 2026-06-24
 
 ### Added

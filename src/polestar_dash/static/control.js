@@ -17,6 +17,12 @@
   // ~10 s). Each tick forces one fresh C3 read (shared rate-limit bucket), so
   // keep it to three, never a tight loop.
   var VERIFY_DELAYS_MS = [3000, 6000, 9000];
+  // Climate takes noticeably longer than locks/windows to show up as
+  // climate_active in a C3 read-back — the default 18 s window was flagging
+  // it "not confirmed" (red) far more often than other commands. Give it
+  // more time and more attempts before giving up.
+  var VERIFY_DELAYS_CLIMATE_MS = [5000, 10000, 15000, 20000];
+  var SLOW_VERIFY_COMMANDS = { climate_start: true, climate_stop: true };
 
   function txt(key) { return I18N[key] || key; }
 
@@ -56,6 +62,7 @@
   }
 
   function verify(command, params, statusEl, label) {
+    var delays = SLOW_VERIFY_COMMANDS[command] ? VERIFY_DELAYS_CLIMATE_MS : VERIFY_DELAYS_MS;
     var attempt = 0;
     var last = null; // best-known verified value across attempts
     function tick() {
@@ -73,8 +80,8 @@
         }).catch(function () { next(); });
     }
     function next() {
-      if (attempt >= VERIFY_DELAYS_MS.length) { showVerdict(statusEl, label, last); return; }
-      var d = VERIFY_DELAYS_MS[attempt++];
+      if (attempt >= delays.length) { showVerdict(statusEl, label, last); return; }
+      var d = delays[attempt++];
       setStatus(statusEl, escHtml(label) + ' · ' + escHtml(txt('verifying')));
       setTimeout(tick, d);
     }
