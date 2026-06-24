@@ -205,6 +205,39 @@ def _check_health(row: C3Snapshot, prev: C3Snapshot | None) -> None:
         )
 
 
+def _check_climate(row: C3Snapshot, prev: C3Snapshot | None) -> None:
+    """Confirm climate/preconditioning start and stop with a push notification —
+    the official Polestar app gives no delivery feedback for a remote-start
+    command, so this is the only confirmation the owner gets that the car
+    actually reacted (regardless of which app sent the command). Fires once per
+    transition; ``notify()``'s dedup then guards repeats within the same minute."""
+    if not alert_enabled("c3_climate"):
+        return
+    now_active = bool(row.climate_active)
+    was_active = bool(prev.climate_active) if prev is not None else False
+    if now_active == was_active:
+        return
+    key = f"{row.vin}-{row.fetched_at:%Y%m%d-%H%M%S}"
+    if now_active:
+        notify(
+            kind="c3_climate",
+            key=key,
+            title=t("Climate started"),
+            body=t("Preconditioning is running ({action}).", action=t(row.climate_action or "climate")),
+            vin=row.vin,
+            tags=["car"],
+        )
+    else:
+        notify(
+            kind="c3_climate",
+            key=key,
+            title=t("Climate stopped"),
+            body=t("Preconditioning has finished or was stopped."),
+            vin=row.vin,
+            tags=["car"],
+        )
+
+
 def _windows_open(row: C3Snapshot) -> list[str]:
     """Labels of any open windows / sunroof (the openings rain can get through)."""
     parts = {
@@ -348,3 +381,4 @@ def run_c3_anomaly_checks(row: C3Snapshot, *, prev: C3Snapshot | None = None) ->
     _check_openings(row, prev)
     _check_unlocked(row, prev)
     _check_health(row, prev)
+    _check_climate(row, prev)

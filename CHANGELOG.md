@@ -3,6 +3,27 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.45.0] — 2026-06-24
+
+### Added
+
+- **Spritmonitor.de export.** New `/spritmonitor` tab (web + mobile bottom-nav
+  "More" sheet): manual and automatic export of `ChargeSession`s to
+  Spritmonitor as EV "fuelings", via a new `spritmonitor.py` API client.
+  Settings for bearer/app token, vehicle + tank lookup, and an auto-export
+  toggle live under the new tab; pending vs. already-exported sessions are
+  listed separately. `ChargeSession` gained `odometer_km` (stamped at close
+  for the export's trip-distance field) and `spritmonitor_exported_at`.
+- **Climate/preconditioning start+stop confirmation.** The official Polestar
+  app gives no delivery feedback when you remote-start preconditioning — so
+  `c3_anomalies._check_climate` now fires a push notification (ntfy/Telegram)
+  on every `climate_active` transition (off→on = "Climate started", on→off =
+  "Climate stopped"), regardless of which app issued the command. New alert
+  toggle `c3_climate` under `/settings` (default: on, no quiet hours).
+- Per-poll C3 logging now includes climate state (`climate=<active>/<running>`)
+  in `/log`, so a remote-start attempt can be cross-checked against the car's
+  actual telemetry after the fact.
+
 ## [1.44.0] — 2026-06-22
 
 ### Fixed — full codebase audit

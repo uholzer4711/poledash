@@ -144,6 +144,12 @@ class ChargeSession(SQLModel, table=True):
     lng: float | None = None
     outside_temp_c: float | None = None  # on-car temperature while charging
     air_pm25: float | None = None  # cabin PM2.5 while charging
+    # Odometer at close (nearest VehicleSnapshot), used for the Spritmonitor
+    # export's "trip" field (km driven since the previous session).
+    odometer_km: float | None = None
+    # When this session was last successfully pushed to Spritmonitor.de as a
+    # fueling — None means never exported. See spritmonitor.py.
+    spritmonitor_exported_at: datetime | None = None
 
     is_complete: bool = Field(default=False, index=True)  # set True when charging_status transitions to Done/Idle
     # True for sessions opened heuristically from a SoC rise (the API never

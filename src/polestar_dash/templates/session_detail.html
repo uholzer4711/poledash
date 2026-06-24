@@ -15,6 +15,14 @@
   </div>
 
   <div class="card mb-6">
+    <div class="flex gap-4" style="align-items:center;flex-wrap:wrap">
+      <button class="btn ghost" id="sm_export_btn" onclick="smExportThisSession()">{{ t("Export to Spritmonitor") }} <span class="arrow">→</span></button>
+      <span id="sm_export_status" class="mono-xs muted"></span>
+      <a class="mono-xs muted" href="/spritmonitor" style="margin-left:auto">{{ t("Spritmonitor setup") }} →</a>
+    </div>
+  </div>
+
+  <div class="card mb-6">
     <div class="flex-between">
       <div class="mono-xs" id="s_meta">—</div>
       <div class="mono-xs" id="s_type">—</div>
@@ -83,6 +91,18 @@
         `${fmtDt(s.started_at)} → ${fmtDt(s.ended_at)} · ${st.samples} {{ t("samples") }}`;
       document.getElementById('s_type').textContent =
         `${st.charging_type ?? {{ t("unknown") | tojson }}} · ${s.effective_price_ct_per_kwh.toFixed(1)} ct/kWh · ${s.is_complete ? {{ t("complete") | tojson }} : {{ t("LIVE") | tojson }}}`;
+
+      const exportBtn = document.getElementById('sm_export_btn');
+      const exportStatus = document.getElementById('sm_export_status');
+      if (s.spritmonitor_exported_at) {
+        exportBtn.disabled = true;
+        exportBtn.textContent = {{ t("Exported to Spritmonitor") | tojson }};
+        exportStatus.textContent = fmtDt(s.spritmonitor_exported_at);
+      } else if (!s.is_complete) {
+        exportBtn.disabled = true;
+        exportBtn.textContent = {{ t("Export to Spritmonitor") | tojson }};
+        exportStatus.textContent = {{ t("finish charging first") | tojson }};
+      }
 
       // Build datasets
       const tPoints = c.map(x => x.t);
@@ -191,6 +211,19 @@
 
       // If live, re-poll every 30s — repaint just the data.
       if (!s.is_complete) setTimeout(() => location.reload(), 30000);
+    }
+
+    async function smExportThisSession() {
+      const btn = document.getElementById('sm_export_btn');
+      const st = document.getElementById('sm_export_status');
+      btn.disabled = true;
+      st.textContent = {{ t("exporting…") | tojson }};
+      try {
+        const r = await fetch(`/api/sessions/${SID}/export-spritmonitor`, { method: 'POST' });
+        if (!r.ok) { st.textContent = {{ t("error: ") | tojson }} + (await r.text()).slice(0, 160); btn.disabled = false; return; }
+        st.textContent = {{ t("exported") | tojson }};
+        btn.textContent = {{ t("Exported to Spritmonitor") | tojson }};
+      } catch (e) { st.textContent = {{ t("error: ") | tojson }} + e; btn.disabled = false; }
     }
 
     function start() {

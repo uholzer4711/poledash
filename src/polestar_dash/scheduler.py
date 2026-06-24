@@ -195,6 +195,15 @@ async def poll_once(client: PolestarClient) -> None:
                 await asyncio.to_thread(_maybe_notify, snap, closed)
             except Exception:  # noqa: BLE001
                 log.exception("Notify failed for VIN %s", vin)
+            if closed is not None:
+                try:
+                    from .app_settings import get_spritmonitor_auto_export
+                    from .spritmonitor import auto_export_latest
+
+                    if get_spritmonitor_auto_export():
+                        await asyncio.to_thread(auto_export_latest, closed)
+                except Exception:  # noqa: BLE001
+                    log.exception("Spritmonitor auto-export failed for VIN %s", vin)
             try:
                 schedule_publish(snap)
             except Exception:  # noqa: BLE001
@@ -569,8 +578,8 @@ async def c3_poll_once() -> None:
             await asyncio.to_thread(_maybe_notify_c3_software, vin, data)
         except Exception:  # noqa: BLE001
             log.exception("C3 software-update notify failed for VIN %s", vin)
-        log.info("Stored C3 snapshot for VIN %s (locked=%s, charging=%s)",
-                 vin, row.is_locked, charging)
+        log.info("Stored C3 snapshot for VIN %s (locked=%s, charging=%s, climate=%s/%s)",
+                 vin, row.is_locked, charging, row.climate_active, row.climate_running)
     except Exception:  # noqa: BLE001
         log.exception("c3_poll_once: unexpected error — rescheduling anyway")
     finally:

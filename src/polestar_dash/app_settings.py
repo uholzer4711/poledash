@@ -140,6 +140,7 @@ ALERT_DEFAULTS: dict[str, dict] = {
     "c3_level": {"enabled": True, "from": None, "to": None},
     "c3_rain_windows": {"enabled": True, "from": None, "to": None},
     "c3_disconnected": {"enabled": True, "from": None, "to": None},
+    "c3_climate": {"enabled": True, "from": None, "to": None},
     "anomaly_soc_drop": {"enabled": True, "from": None, "to": None},
     "anomaly_power_collapse": {"enabled": True, "from": None, "to": None},
     "anomaly_range_factor": {"enabled": True, "from": None, "to": None},
@@ -157,6 +158,7 @@ ALERT_LABELS: dict[str, str] = {
     "c3_level": "Fluid / level warning",
     "c3_rain_windows": "Rain & windows open",
     "c3_disconnected": "Vehicle connection lost / restored",
+    "c3_climate": "Climate / preconditioning started / stopped",
     "anomaly_soc_drop": "Unexpected SoC drop",
     "anomaly_power_collapse": "Charging power collapse",
     "anomaly_range_factor": "Low range factor",
@@ -301,6 +303,105 @@ def set_automation_config(
         set_setting(f"automation.{rule_id}.mode", mode)
     if after is not None:
         set_setting(f"automation.{rule_id}.after", _hour_str(after))
+
+
+# --- Spritmonitor.de export integration -------------------------------------
+# Credentials + vehicle/tank mapping + auto-detected lookup IDs, all stored as
+# plain AppSetting rows. Business logic (HTTP calls, field mapping) lives in
+# spritmonitor.py; this is just persistence, mirroring the rest of this file.
+SPRITMONITOR_BEARER_KEY = "spritmonitor_bearer_token"
+SPRITMONITOR_APP_TOKEN_KEY = "spritmonitor_app_token"
+SPRITMONITOR_VEHICLE_ID_KEY = "spritmonitor_vehicle_id"
+SPRITMONITOR_VEHICLE_NAME_KEY = "spritmonitor_vehicle_name"
+SPRITMONITOR_TANK_ID_KEY = "spritmonitor_tank_id"
+SPRITMONITOR_AUTO_EXPORT_KEY = "spritmonitor_auto_export"
+SPRITMONITOR_FUELSORT_ID_KEY = "spritmonitor_fuelsort_id"
+SPRITMONITOR_QUANTITYUNIT_ID_KEY = "spritmonitor_quantityunit_id"
+SPRITMONITOR_CURRENCY_ID_KEY = "spritmonitor_currency_id"
+SPRITMONITOR_FIRST_DONE_KEY = "spritmonitor_first_export_done"
+
+
+def get_spritmonitor_credentials() -> tuple[str, str] | None:
+    bearer = get_setting(SPRITMONITOR_BEARER_KEY, None)
+    app_token = get_setting(SPRITMONITOR_APP_TOKEN_KEY, None)
+    if not bearer or not app_token:
+        return None
+    return str(bearer), str(app_token)
+
+
+def set_spritmonitor_credentials(bearer_token: str, app_token: str) -> None:
+    if not bearer_token.strip() or not app_token.strip():
+        raise ValueError("Bearer token and app token must not be empty")
+    set_setting(SPRITMONITOR_BEARER_KEY, bearer_token.strip())
+    set_setting(SPRITMONITOR_APP_TOKEN_KEY, app_token.strip())
+
+
+def get_spritmonitor_vehicle() -> dict | None:
+    vid = get_setting(SPRITMONITOR_VEHICLE_ID_KEY, None)
+    tid = get_setting(SPRITMONITOR_TANK_ID_KEY, None)
+    if not vid or not tid:
+        return None
+    return {
+        "vehicle_id": str(vid),
+        "tank_id": str(tid),
+        "vehicle_name": get_setting(SPRITMONITOR_VEHICLE_NAME_KEY, None),
+    }
+
+
+def set_spritmonitor_vehicle(
+    vehicle_id: str, tank_id: str, vehicle_name: str | None = None
+) -> None:
+    set_setting(SPRITMONITOR_VEHICLE_ID_KEY, vehicle_id)
+    set_setting(SPRITMONITOR_TANK_ID_KEY, tank_id)
+    if vehicle_name:
+        set_setting(SPRITMONITOR_VEHICLE_NAME_KEY, vehicle_name)
+
+
+def get_spritmonitor_lookup_ids() -> dict | None:
+    fs = get_setting(SPRITMONITOR_FUELSORT_ID_KEY, None)
+    qu = get_setting(SPRITMONITOR_QUANTITYUNIT_ID_KEY, None)
+    cur = get_setting(SPRITMONITOR_CURRENCY_ID_KEY, None)
+    if fs is None or qu is None or cur is None:
+        return None
+    try:
+        return {
+            "fuelsort_id": int(fs),
+            "quantityunit_id": int(qu),
+            "currency_id": int(cur),
+        }
+    except (TypeError, ValueError):
+        return None
+
+
+def set_spritmonitor_lookup_ids(
+    fuelsort_id: int, quantityunit_id: int, currency_id: int
+) -> None:
+    set_setting(SPRITMONITOR_FUELSORT_ID_KEY, int(fuelsort_id))
+    set_setting(SPRITMONITOR_QUANTITYUNIT_ID_KEY, int(quantityunit_id))
+    set_setting(SPRITMONITOR_CURRENCY_ID_KEY, int(currency_id))
+
+
+def get_spritmonitor_auto_export() -> bool:
+    return _as_bool(get_setting(SPRITMONITOR_AUTO_EXPORT_KEY, None), False)
+
+
+def set_spritmonitor_auto_export(value: bool) -> None:
+    set_setting(SPRITMONITOR_AUTO_EXPORT_KEY, "1" if value else "0")
+
+
+def get_spritmonitor_first_export_done() -> bool:
+    return _as_bool(get_setting(SPRITMONITOR_FIRST_DONE_KEY, None), False)
+
+
+def set_spritmonitor_first_export_done() -> None:
+    set_setting(SPRITMONITOR_FIRST_DONE_KEY, "1")
+
+
+def spritmonitor_is_configured() -> bool:
+    return (
+        get_spritmonitor_credentials() is not None
+        and get_spritmonitor_vehicle() is not None
+    )
 
 
 def blended_price_ct(days: int = 90) -> tuple[float, str]:

@@ -432,6 +432,127 @@ def app_settings_set_language(value: str = Query(...)) -> dict:
     return {"language": get_language()}
 
 
+# --- Spritmonitor.de export ----------------------------------------------------
+# Manual + automatic export of ChargeSessions as Spritmonitor "fuelings". See
+# spritmonitor.py for the API client + field mapping.
+
+
+@router.get("/spritmonitor/status")
+def spritmonitor_status() -> dict:
+    from ..app_settings import (
+        get_spritmonitor_auto_export,
+        get_spritmonitor_credentials,
+        get_spritmonitor_lookup_ids,
+        get_spritmonitor_vehicle,
+    )
+
+    creds = get_spritmonitor_credentials()
+    vehicle = get_spritmonitor_vehicle()
+    return {
+        "credentials_set": creds is not None,
+        "vehicle": vehicle,
+        "lookup_ids": get_spritmonitor_lookup_ids(),
+        "auto_export": get_spritmonitor_auto_export(),
+        "configured": creds is not None and vehicle is not None,
+    }
+
+
+@router.post("/spritmonitor/credentials")
+def spritmonitor_set_credentials(
+    bearer_token: str = Query(...), app_token: str = Query(...)
+) -> dict:
+    from ..app_settings import set_spritmonitor_credentials
+
+    try:
+        set_spritmonitor_credentials(bearer_token, app_token)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    return {"credentials_set": True}
+
+
+@router.post("/spritmonitor/test")
+def spritmonitor_test() -> dict:
+    from ..app_settings import get_spritmonitor_credentials
+    from ..spritmonitor import SpritmonitorError, test_connection
+
+    creds = get_spritmonitor_credentials()
+    if creds is None:
+        raise HTTPException(400, "Save bearer token + app token first")
+    try:
+        vehicles = test_connection(*creds)
+    except SpritmonitorError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"vehicles": vehicles}
+
+
+@router.get("/spritmonitor/tanks")
+def spritmonitor_tanks(vehicle_id: str = Query(...)) -> dict:
+    from ..app_settings import get_spritmonitor_credentials
+    from ..spritmonitor import SpritmonitorError, list_tanks
+
+    creds = get_spritmonitor_credentials()
+    if creds is None:
+        raise HTTPException(400, "Save bearer token + app token first")
+    try:
+        tanks = list_tanks(*creds, vehicle_id)
+    except SpritmonitorError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"tanks": tanks}
+
+
+@router.post("/spritmonitor/vehicle")
+def spritmonitor_set_vehicle(
+    vehicle_id: str = Query(...),
+    tank_id: str = Query(...),
+    vehicle_name: str | None = Query(None),
+) -> dict:
+    from ..app_settings import get_spritmonitor_credentials, set_spritmonitor_vehicle
+    from ..spritmonitor import SpritmonitorError, detect_lookup_ids
+
+    set_spritmonitor_vehicle(vehicle_id, tank_id, vehicle_name)
+    creds = get_spritmonitor_credentials()
+    lookup = None
+    if creds is not None:
+        try:
+            lookup = detect_lookup_ids(*creds)
+        except SpritmonitorError as e:
+            # Vehicle/tank are saved either way; surface the detection
+            # failure so the settings UI can explain what to check.
+            raise HTTPException(502, str(e)) from e
+    return {"vehicle_id": vehicle_id, "tank_id": tank_id, "lookup_ids": lookup}
+
+
+@router.post("/spritmonitor/auto-export")
+def spritmonitor_set_auto_export(value: bool = Query(...)) -> dict:
+    from ..app_settings import set_spritmonitor_auto_export
+
+    set_spritmonitor_auto_export(value)
+    return {"auto_export": value}
+
+
+@router.get("/spritmonitor/sessions")
+def spritmonitor_sessions_list() -> dict:
+    from ..spritmonitor import exported_sessions, pending_sessions
+
+    default_price = get_default_price_ct()
+    pending = [_session_to_dict(cs, default_price) for cs in pending_sessions()]
+    exported = [_session_to_dict(cs, default_price) for cs in exported_sessions()]
+    return {"pending": pending, "exported": exported}
+
+
+@router.post("/sessions/{session_id}/export-spritmonitor")
+def spritmonitor_export_session(session_id: int) -> dict:
+    from ..spritmonitor import SpritmonitorError, SpritmonitorNotConfigured, export_session
+
+    try:
+        result = export_session(session_id)
+    except SpritmonitorNotConfigured as e:
+        raise HTTPException(400, str(e)) from e
+    except SpritmonitorError as e:
+        raise HTTPException(502, str(e)) from e
+    return {"status": "exported", "result": result}
+
+
 # --- C3 remote control (shared by dashboard + Battery&Charging panels) --------
 # The canonical command endpoint. `run_command` carries its own allowlist
 # (c3_control._COMMANDS), so an unknown command is rejected there — this stays a

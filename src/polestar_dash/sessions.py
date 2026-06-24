@@ -409,6 +409,8 @@ def update_session(
                 cs.soc_end = max(cs.soc_end or 0, snap.soc_percent)
             if snap.range_km is not None:
                 cs.range_end_km = max(cs.range_end_km or 0, snap.range_km)
+            if cs.odometer_km is None and snap.odometer_km is not None:
+                cs.odometer_km = snap.odometer_km
             # Final pass over the full session window in case the latest tick
             # delivered the actual peak/avg samples.
             avg_w, peak_w = _power_aggregates(

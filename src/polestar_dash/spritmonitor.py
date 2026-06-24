@@ -1,0 +1,353 @@
+"""Spritmonitor.de export integration.
+
+Spritmonitor (https://www.spritmonitor.de) has no concept of "charging" of
+its own — an EV charge is modeled as a "fueling" with a few EV-specific
+fields (percent after charge, charging power/duration, AC/DC + source). There
+is no official SDK; this is a thin httpx wrapper around the public REST API
+(https://api.spritmonitor.de/v1, documented at https://api.spritmonitor.de/doc),
+following the same sync-httpx-client pattern as notify.py.
+
+Auth needs two tokens, both generated on spritmonitor.de by the user:
+- a personal bearer token (Settings -> Password page)
+- an app token (App-Token request page) tied to "poledash" as a registered app
+"""
+
+from __future__ import annotations
+
+import contextlib
+import logging
+from datetime import datetime
+
+import httpx
+from sqlmodel import Session, select
+
+from .app_settings import (
+    get_default_price_ct,
+    get_spritmonitor_credentials,
+    get_spritmonitor_first_export_done,
+    get_spritmonitor_lookup_ids,
+    get_spritmonitor_vehicle,
+    set_spritmonitor_first_export_done,
+    set_spritmonitor_lookup_ids,
+)
+from .db.models import ChargeSession, VehicleSnapshot
+from .db.session import get_engine
+from .util import to_local, utcnow
+
+log = logging.getLogger(__name__)
+
+SM_API_URL = "https://api.spritmonitor.de/v1"
+_TIMEOUT = httpx.Timeout(connect=5.0, read=15.0, write=5.0, pool=5.0)
+_USER_AGENT = "poledash (https://github.com/uh4711/psapi)"
+
+
+class SpritmonitorError(Exception):
+    """Any failure talking to the Spritmonitor API."""
+
+
+class SpritmonitorNotConfigured(SpritmonitorError):
+    """Credentials or vehicle/tank mapping not set up yet."""
+
+
+# --- low-level HTTP -----------------------------------------------------------
+
+
+def _headers(bearer: str, app_token: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {bearer}",
+        "Application-ID": app_token,
+        "User-Agent": _USER_AGENT,
+    }
+
+
+def _get(path: str, bearer: str, app_token: str, params: dict | None = None) -> object:
+    url = f"{SM_API_URL}/{path}"
+    try:
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            r = client.get(url, headers=_headers(bearer, app_token), params=params)
+            r.raise_for_status()
+            return r.json()
+    except httpx.HTTPStatusError as e:
+        raise SpritmonitorError(
+            f"Spritmonitor API error {e.response.status_code}: {e.response.text[:300]}"
+        ) from e
+    except (httpx.TimeoutException, httpx.TransportError) as e:
+        raise SpritmonitorError(f"Spritmonitor connection failed: {e}") from e
+
+
+def _as_list(data: object) -> list[dict]:
+    """Spritmonitor wraps list responses inconsistently across endpoints —
+    sometimes a bare list, sometimes a dict with the list under some key."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        for v in data.values():
+            if isinstance(v, list):
+                return v
+    return []
+
+
+def list_vehicles(bearer: str, app_token: str) -> list[dict]:
+    return _as_list(_get("vehicle.json", bearer, app_token))
+
+
+def list_tanks(bearer: str, app_token: str, vehicle_id: str) -> list[dict]:
+    return _as_list(_get(f"vehicle/{vehicle_id}/tank.json", bearer, app_token))
+
+
+def list_fuelsorts(bearer: str, app_token: str) -> list[dict]:
+    return _as_list(_get("fuelsorts.json", bearer, app_token))
+
+
+def list_quantityunits(bearer: str, app_token: str) -> list[dict]:
+    return _as_list(_get("quantityunits.json", bearer, app_token))
+
+
+def list_currencies(bearer: str, app_token: str) -> list[dict]:
+    return _as_list(_get("currencies.json", bearer, app_token))
+
+
+def test_connection(bearer: str, app_token: str) -> list[dict]:
+    """Validates credentials by listing vehicles. Raises SpritmonitorError on
+    bad creds/network failure; returns the vehicle list on success."""
+    return list_vehicles(bearer, app_token)
+
+
+def add_fueling(
+    bearer: str,
+    app_token: str,
+    vehicle_id: str,
+    tank_id: str,
+    *,
+    date_str: str,
+    fueling_type: str,
+    odometer: float,
+    trip: float,
+    quantity: float,
+    quantityunit_id: int,
+    fuelsort_id: int,
+    price_eur: float,
+    currency_id: int,
+    percent: int,
+    charge_power_kw: float,
+    charge_duration_min: int,
+    charge_info: str,
+) -> dict:
+    """POST-equivalent: Spritmonitor's own sample code issues a GET with all
+    fields as query params for this endpoint (verified against
+    https://github.com/FundF/Spritmonitor-API-sample-code) — not a REST
+    convention we'd choose, but it's what the API expects."""
+    params = {
+        "date": date_str,
+        "type": fueling_type,
+        "odometer": odometer,
+        "trip": trip,
+        "quantity": quantity,
+        "quantityunitid": quantityunit_id,
+        "fuelsortid": fuelsort_id,
+        "price": price_eur,
+        "currencyid": currency_id,
+        "percent": percent,
+        "charging_power": charge_power_kw,
+        "charging_duration": charge_duration_min,
+        "charge_info": charge_info,
+    }
+    return _get(
+        f"vehicle/{vehicle_id}/tank/{tank_id}/fueling.json",
+        bearer,
+        app_token,
+        params=params,
+    )  # type: ignore[return-value]
+
+
+# --- lookup-ID auto-detection --------------------------------------------------
+
+
+def _find(items: list[dict], *needles: str) -> dict | None:
+    for it in items:
+        name = str(it.get("name") or it.get("title") or "").lower()
+        if any(n in name for n in needles):
+            return it
+    return None
+
+
+def detect_lookup_ids(bearer: str, app_token: str) -> dict:
+    """Auto-detect + cache the electricity fuel sort, kWh unit and EUR currency
+    IDs from the account's own reference lists, so the user never has to look
+    up raw Spritmonitor IDs by hand."""
+    fuelsorts = list_fuelsorts(bearer, app_token)
+    units = list_quantityunits(bearer, app_token)
+    currencies = list_currencies(bearer, app_token)
+    fs = _find(fuelsorts, "strom", "electric", "ev")
+    qu = _find(units, "kwh")
+    cur = _find(currencies, "eur", "€")
+    if fs is None or qu is None or cur is None:
+        raise SpritmonitorError(
+            "Could not auto-detect the electricity fuel sort / kWh unit / EUR "
+            "currency from your Spritmonitor account — check that your vehicle "
+            "is set up as electric there."
+        )
+    set_spritmonitor_lookup_ids(fs["id"], qu["id"], cur["id"])
+    return {"fuelsort": fs, "quantityunit": qu, "currency": cur}
+
+
+def _resolve_lookup_ids(bearer: str, app_token: str) -> tuple[int, int, int]:
+    cached = get_spritmonitor_lookup_ids()
+    if cached is not None:
+        return (
+            cached["fuelsort_id"],
+            cached["quantityunit_id"],
+            cached["currency_id"],
+        )
+    detect_lookup_ids(bearer, app_token)
+    cached = get_spritmonitor_lookup_ids()
+    if cached is None:  # pragma: no cover — detect_lookup_ids always sets it
+        raise SpritmonitorError("Lookup ID detection failed unexpectedly")
+    return cached["fuelsort_id"], cached["quantityunit_id"], cached["currency_id"]
+
+
+# --- ChargeSession -> Spritmonitor fueling -------------------------------------
+
+
+def _resolve_charge_info(vin: str, started_at: datetime, ended_at: datetime) -> str:
+    """Best-effort AC/DC for Spritmonitor's `charge_info`. Falls back to AC —
+    the overwhelming majority of home/destination charges — when the API
+    never reported a type for this window."""
+    with Session(get_engine()) as s:
+        row = s.exec(
+            select(VehicleSnapshot.charging_type)
+            .where(VehicleSnapshot.vin == vin)
+            .where(VehicleSnapshot.fetched_at >= started_at)
+            .where(VehicleSnapshot.fetched_at <= ended_at)
+            .where(VehicleSnapshot.charging_type.is_not(None))
+            .limit(1)
+        ).first()
+    mode = str(row).lower() if row else "ac"
+    if mode not in ("ac", "dc"):
+        mode = "ac"
+    return f"{mode},source_vehicle"
+
+
+def _previous_odometer(vin: str, exclude_id: int, before: datetime) -> float | None:
+    with Session(get_engine()) as s:
+        return s.exec(
+            select(ChargeSession.odometer_km)
+            .where(ChargeSession.vin == vin)
+            .where(ChargeSession.id != exclude_id)
+            .where(ChargeSession.started_at < before)
+            .where(ChargeSession.odometer_km.is_not(None))
+            .order_by(ChargeSession.started_at.desc())
+            .limit(1)
+        ).first()
+
+
+def export_session(session_id: int) -> dict:
+    """Push one completed ChargeSession to Spritmonitor as an EV fueling.
+
+    Raises SpritmonitorNotConfigured if credentials/vehicle aren't set up,
+    SpritmonitorError on any validation or API failure. On success, stamps
+    `spritmonitor_exported_at` so a re-run / auto-export pass skips it.
+    """
+    creds = get_spritmonitor_credentials()
+    vehicle = get_spritmonitor_vehicle()
+    if creds is None or vehicle is None:
+        raise SpritmonitorNotConfigured("Spritmonitor is not configured yet")
+    bearer, app_token = creds
+    vehicle_id, tank_id = vehicle["vehicle_id"], vehicle["tank_id"]
+
+    with Session(get_engine()) as s:
+        cs = s.get(ChargeSession, session_id)
+        if cs is None:
+            raise SpritmonitorError(f"Session {session_id} not found")
+        if cs.spritmonitor_exported_at is not None:
+            return {"status": "already exported", "at": cs.spritmonitor_exported_at.isoformat()}
+        if not cs.is_complete or cs.ended_at is None:
+            raise SpritmonitorError("Session is still open — wait until charging finishes")
+        if not cs.energy_kwh or cs.energy_kwh <= 0:
+            raise SpritmonitorError("Session has no energy reading — nothing to export")
+        if cs.odometer_km is None:
+            raise SpritmonitorError(
+                "Session has no odometer reading — too old to export (added after this "
+                "feature shipped) or the car never reported one during the session"
+            )
+
+        prev_odo = _previous_odometer(cs.vin, cs.id, cs.started_at)
+        trip = round(cs.odometer_km - prev_odo) if prev_odo is not None else 0
+        trip = max(trip, 0)
+
+        price_ct = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else get_default_price_ct()
+        price_eur = round(cs.energy_kwh * price_ct / 100.0, 2)
+
+        first = not get_spritmonitor_first_export_done()
+        fueling_type = "first" if first else "notfull"
+        date_str = to_local(cs.started_at).strftime("%d.%m.%Y")  # type: ignore[union-attr]
+        duration_min = max(0, int((cs.ended_at - cs.started_at).total_seconds() // 60))
+        charge_info = _resolve_charge_info(cs.vin, cs.started_at, cs.ended_at)
+        charge_power_kw = round((cs.avg_power_w or cs.peak_power_w or 0) / 1000, 1)
+
+        fuelsort_id, quantityunit_id, currency_id = _resolve_lookup_ids(bearer, app_token)
+
+        result = add_fueling(
+            bearer,
+            app_token,
+            vehicle_id,
+            tank_id,
+            date_str=date_str,
+            fueling_type=fueling_type,
+            odometer=round(cs.odometer_km),
+            trip=trip,
+            quantity=round(cs.energy_kwh, 2),
+            quantityunit_id=quantityunit_id,
+            fuelsort_id=fuelsort_id,
+            price_eur=price_eur,
+            currency_id=currency_id,
+            percent=cs.soc_end or 0,
+            charge_power_kw=charge_power_kw,
+            charge_duration_min=duration_min,
+            charge_info=charge_info,
+        )
+
+        cs.spritmonitor_exported_at = utcnow()
+        s.add(cs)
+        s.commit()
+        if first:
+            set_spritmonitor_first_export_done()
+        log.info("Exported charge session %s to Spritmonitor (%.1f kWh)", session_id, cs.energy_kwh)
+        return result
+
+
+def pending_sessions(limit: int = 100) -> list[ChargeSession]:
+    """Completed, not-yet-exported sessions, newest first."""
+    with Session(get_engine()) as s:
+        stmt = (
+            select(ChargeSession)
+            .where(ChargeSession.is_complete.is_(True))
+            .where(ChargeSession.spritmonitor_exported_at.is_(None))
+            .order_by(ChargeSession.started_at.desc())
+            .limit(limit)
+        )
+        return list(s.exec(stmt).all())
+
+
+def exported_sessions(limit: int = 50) -> list[ChargeSession]:
+    """Already-exported sessions, most recently exported first."""
+    with Session(get_engine()) as s:
+        stmt = (
+            select(ChargeSession)
+            .where(ChargeSession.spritmonitor_exported_at.is_not(None))
+            .order_by(ChargeSession.spritmonitor_exported_at.desc())
+            .limit(limit)
+        )
+        return list(s.exec(stmt).all())
+
+
+def auto_export_latest(closed_session: ChargeSession) -> None:
+    """Called right after a session closes when auto-export is enabled.
+    Swallows SpritmonitorNotConfigured silently (auto-export shouldn't be on
+    without configuration, but a stale toggle from before a credential reset
+    shouldn't spam the log); other errors propagate to the caller's
+    try/except, same isolation as every other post-poll step."""
+    if closed_session.id is None:
+        return
+    with contextlib.suppress(SpritmonitorNotConfigured):
+        export_session(closed_session.id)

@@ -54,6 +54,8 @@ def _ensure_columns(engine) -> None:
             ("chargesession", "lng", "FLOAT"),
             ("chargesession", "outside_temp_c", "FLOAT"),
             ("chargesession", "air_pm25", "FLOAT"),
+            ("chargesession", "odometer_km", "FLOAT"),
+            ("chargesession", "spritmonitor_exported_at", "DATETIME"),
         ]
     if "journeyimport" in tables:
         plan += [

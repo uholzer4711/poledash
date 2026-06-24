@@ -2,7 +2,7 @@
    icons (the one owner-approved exception to the no-icons rule) + text labels.
    4 primary tabs + a pure-CSS "More" sheet (<details>) for the rest. #}
 {% set path = request.url.path %}
-{% set more_paths = ['/routes', '/software', '/log', '/settings', '/lab'] %}
+{% set more_paths = ['/routes', '/software', '/spritmonitor', '/log', '/settings', '/lab'] %}
 <nav class="bottom-nav" aria-label="{{ t('Primary') }}">
   <a class="bn-tab {% if path == '/' %}active{% endif %}" href="/">
     <svg class="bn-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7"/><rect x="13.5" y="3.5" width="7" height="7"/><rect x="3.5" y="13.5" width="7" height="7"/><rect x="13.5" y="13.5" width="7" height="7"/></svg>
@@ -28,6 +28,7 @@
     <div class="bn-more-panel">
       <a class="{% if path == '/routes' %}active{% endif %}" href="/routes">{{ t("Routes") }}</a>
       <a class="{% if path == '/software' %}active{% endif %}" href="/software">{{ t("Software") }}</a>
+      <a class="{% if path == '/spritmonitor' %}active{% endif %}" href="/spritmonitor">{{ t("Spritmonitor") }}</a>
       <a class="{% if path == '/log' %}active{% endif %}" href="/log">{{ t("Log") }}</a>
       <a class="{% if path == '/settings' %}active{% endif %}" href="/settings">{{ t("Settings") }}</a>
       {% if demo_mode %}

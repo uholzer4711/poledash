@@ -371,6 +371,27 @@ def history_page(request: Request):
     return templates.TemplateResponse(request, "history.html", {})
 
 
+@router.get("/spritmonitor", response_class=HTMLResponse)
+def spritmonitor_page(request: Request):
+    from ..app_settings import (
+        get_spritmonitor_auto_export,
+        get_spritmonitor_credentials,
+        get_spritmonitor_lookup_ids,
+        get_spritmonitor_vehicle,
+    )
+
+    return templates.TemplateResponse(
+        request,
+        "spritmonitor.html",
+        {
+            "sm_configured_creds": get_spritmonitor_credentials() is not None,
+            "sm_vehicle": get_spritmonitor_vehicle(),
+            "sm_lookup_ids": get_spritmonitor_lookup_ids(),
+            "sm_auto_export": get_spritmonitor_auto_export(),
+        },
+    )
+
+
 @router.get("/log", response_class=HTMLResponse)
 def log_page(request: Request):
     """Live activity log — everything the app's own loggers emit."""
