@@ -57,6 +57,13 @@
             <span class="battery-target-label mono-xs">{{ s.target_soc_percent }}%</span>
           </div>
         {% endif %}
+        {% if charge_live and charge_live.soc_start is not none %}
+          {# Where this session started charging from — so the bar reads as
+             "charged from X% to now", not just "currently at Y%". #}
+          <div class="battery-start" style="--start: {{ charge_live.soc_start }}">
+            <span class="battery-start-label mono-xs">{{ t("from") }} {{ charge_live.soc_start }}%</span>
+          </div>
+        {% endif %}
       </div>
     </div>
 

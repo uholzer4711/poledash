@@ -210,6 +210,7 @@ def live_charge_energy(
             "kwh_so_far": round(so_far, 1),
             "kwh_to_target": None,
             "projected_total": None,
+            "soc_start": cs.soc_start,
         }
         span = (soc_now - cs.soc_start) if (soc_now is not None
                                             and cs.soc_start is not None) else None

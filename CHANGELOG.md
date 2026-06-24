@@ -3,6 +3,17 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.45.3] — 2026-06-24
+
+### Added
+
+- **Session-start SoC marker on the charging-hero battery bar.** The bar
+  already marked the target SoC; it now also marks where this charge began
+  (`ChargeSession.soc_start`, surfaced via a new `soc_start` key on
+  `sessions.live_charge_energy`) — a thin "FROM {n}%" marker below the bar,
+  mirroring the target marker above it, so it's obvious at a glance how much
+  of the bar is *this* session vs. battery already there before plugging in.
+
 ## [1.45.2] — 2026-06-24
 
 ### Fixed

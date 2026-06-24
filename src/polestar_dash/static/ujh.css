@@ -925,6 +925,27 @@ html.view-mobile .veh-acc > .card { margin-bottom: 0; }
   color: var(--ujh-ink-4);
 }
 
+/* Session-start SoC marker — where this charge began. Mirrors .battery-target
+   (same thin line + mono-xs label) but sits below the bar so the two never
+   collide when start and target are close together. */
+.battery-start {
+  position: absolute;
+  top: -2px; bottom: -8px;
+  left: calc(var(--start) * 1%);
+  width: 2px;
+  background: var(--ujh-ink-4);
+  z-index: 2;
+  pointer-events: none;
+}
+.battery-start-label {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--ujh-ink-4);
+}
+
 /* VU meter gauges */
 .vu-row {
   display: flex;
