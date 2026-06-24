@@ -104,7 +104,7 @@
             <select id="cmd_rear_seat">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
           <label class="mono-xs">{{ t("Steering wheel") }}<br>
             <select id="cmd_steer">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></label>
-          <button class="btn accent" type="button" onclick="sendCmd('climate_start')">{{ t("Start climate") }} <span class="arrow">→</span></button>
+          <button class="btn" type="button" onclick="sendCmd('climate_start')">{{ t("Start climate") }}</button>
           <button class="btn" type="button" onclick="sendCmd('climate_stop')">{{ t("Stop climate") }}</button>
           <button class="btn" type="button" onclick="sendCmd('precleaning_start')">{{ t("Start air pre-cleaning") }}</button>
           <button class="btn" type="button" onclick="sendCmd('precleaning_stop')">{{ t("Stop pre-cleaning") }}</button>

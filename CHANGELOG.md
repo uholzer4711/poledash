@@ -3,6 +3,18 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.45.5] — 2026-06-24
+
+### Changed
+
+- **"Start climate" no longer uses the solid orange accent button style.**
+  It was the only button in the Climate control group styled as a filled CTA
+  (`btn accent`, like "Start charging") while every sibling (Stop climate,
+  Lock, Unlock, …) is an outlined "ghost" button — the 1.45.4 investigation
+  traced repeated "why is it red?!" reports to this single button standing
+  out, not an actual error state. Switched to `btn ghost` in both
+  `control_vehicle.html` and `lab.html` to match its siblings.
+
 ## [1.45.4] — 2026-06-24
 
 ### Fixed

@@ -41,7 +41,7 @@
         <select data-pkey="steering_wheel">{% for v, lbl in heat_opts %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}</select></div>
     </div>
     <div class="control-actions">
-      <button class="btn accent" type="button" data-cmd="climate_start" data-label="{{ t('Start climate') }}">{{ t("Start climate") }} <span class="arrow">→</span></button>
+      <button class="btn ghost" type="button" data-cmd="climate_start" data-label="{{ t('Start climate') }}">{{ t("Start climate") }}</button>
       <button class="btn ghost" type="button" data-cmd="climate_stop" data-label="{{ t('Stop climate') }}">{{ t("Stop climate") }}</button>
       <button class="btn ghost" type="button" data-cmd="precleaning_start" data-verifiable="false" data-label="{{ t('Start air pre-cleaning') }}">{{ t("Start air pre-cleaning") }}</button>
       <button class="btn ghost" type="button" data-cmd="precleaning_stop" data-verifiable="false" data-label="{{ t('Stop pre-cleaning') }}">{{ t("Stop pre-cleaning") }}</button>
