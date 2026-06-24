@@ -492,6 +492,17 @@ html.view-mobile .lab-acc-body { padding: var(--ujh-s-4); }
 .opening.is-open .opening-name,
 .opening.is-open .opening-state { color: var(--ujh-orange); }
 
+/* Climate + cabin-air-pre-clean status — a single calm line under the photo
+   (or the SVG fallback diagram), always visible regardless of which one is
+   shown. Mirrors .openings-summary's "accent when active" treatment. */
+.climate-line {
+  margin-top: var(--ujh-s-4); font: 500 13px/1.5 var(--ujh-sans); color: var(--ujh-ink-2);
+}
+.climate-line .mono-xs { margin-right: var(--ujh-s-2); }
+.climate-line .climate-line-sep { margin-left: var(--ujh-s-5); }
+.climate-line.is-active { color: var(--ujh-orange); }
+.climate-line.is-active .mono-xs { color: var(--ujh-orange); }
+
 /* ---------- Status chips placed around the car photo ---------- */
 .car-chips { position: absolute; inset: 0; pointer-events: none; }
 .car-chip {

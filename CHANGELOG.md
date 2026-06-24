@@ -3,6 +3,18 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.45.2] — 2026-06-24
+
+### Fixed
+
+- **1.45.1's climate/cabin-air tiles were invisible for anyone with an
+  uploaded car photo** — they landed inside `.openings`, which
+  `.openings.is-fallback { display: none }` hides whenever a photo replaces
+  the SVG diagram (the common case). Replaced with a single always-visible
+  "Climate … · Cabin air …" status line directly under the photo/diagram
+  (`.climate-line`, orange when either is active), instead of a second
+  near-empty tile grid.
+
 ## [1.45.1] — 2026-06-24
 
 ### Added
