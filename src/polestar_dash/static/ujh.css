@@ -759,7 +759,7 @@ details.month-acc > table.index thead th { border-top: 1px solid var(--ujh-line)
    fully expanded with no summary chrome, so the dashboard looks byte-for-byte
    identical to before — only html.view-mobile turns these into collapsibles. */
 html:not(.view-mobile) .veh-acc > summary { display: none; }
-html:not(.view-mobile) .veh-acc > :not(summary) { display: block !important; }
+html:not(.view-mobile) .veh-acc > :not(summary):not(script) { display: block !important; }
 .veh-acc > summary {
   cursor: pointer; list-style: none;
   display: flex; align-items: baseline; gap: var(--ujh-s-3);

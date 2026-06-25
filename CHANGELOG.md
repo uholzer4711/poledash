@@ -3,6 +3,21 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.45.6] — 2026-06-25
+
+### Fixed
+
+- **"Vehicle control" showed its raw `<script>` source as visible text on
+  desktop/web.** The `<details class="veh-acc">` Chromium-content-visibility
+  fix (`html:not(.view-mobile) .veh-acc > :not(summary) { display: block
+  !important; }`) targeted every direct child except `<summary>` — including
+  the inline `<script>` tags that `control_vehicle.html` inserts as siblings
+  of the control card. Overriding the browser's default `script {
+  display:none }` made their text content visible as a block. Mobile was
+  unaffected (the rule is scoped to `html:not(.view-mobile)`), which is why
+  it only showed up on the laptop/desktop view. Excluded `script` from the
+  selector.
+
 ## [1.45.5] — 2026-06-24
 
 ### Changed
