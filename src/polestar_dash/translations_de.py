@@ -536,6 +536,8 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Climate": "Klima",
     "GPS — net-new vs pypolestar": "GPS — neu ggü. pypolestar",
     "Locked": "Verriegelt",
+    "Central lock": "Zentralverriegelung",
+    "Air": "Luft",
     "Cabin air (PM2.5 / AQI)": "Kabinenluft (PM2.5 / AQI)",
     "Weather at car": "Wetter am Auto",
     "Doors, windows & openings": "Türen, Fenster & Öffnungen",

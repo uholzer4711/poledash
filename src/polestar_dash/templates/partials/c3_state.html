@@ -173,8 +173,10 @@
       climateOn: {{ t("ON") | tojson }},
       climateOff: {{ t("off") | tojson }},
       airName: {{ t("Cabin air pre-clean") | tojson }},
+      airShort: {{ t("Air") | tojson }},
       airRunning: {{ t("running") | tojson }},
       airIdle: {{ t("idle") | tojson }},
+      lockTitle: {{ t("Central lock") | tojson }},
       minutesShort: {{ t("min") | tojson }},
       parts: {
         door_fl: {{ t("Door FL") | tojson }}, door_fr: {{ t("Door FR") | tojson }},
@@ -290,7 +292,7 @@
       el.className = 'climate-line' + ((climOn || airOn) ? ' is-active' : '');
       el.innerHTML =
         '<span class="mono-xs">' + LBL.climateName + '</span> ' + climText +
-        '<span class="mono-xs climate-line-sep">' + LBL.airName + '</span> ' + airText;
+        ' <span class="mono-xs climate-line-sep">' + LBL.airName + '</span> ' + airText;
     }
 
     // Status chips placed around the car photo (frunk top, four corners,
@@ -332,6 +334,32 @@
         html += '<div class="car-chip chip-' + c.g + (anyOpen ? ' is-open' : '') + '">' +
           '<div class="chip-title">' + c.title + '</div>' + rowsHtml + '</div>';
       });
+      // Lock chip (interior, no leader line)
+      var lockCls = 'car-chip chip-lock';
+      if (j.is_locked === true) lockCls += ' is-locked';
+      else if (j.is_locked === false) lockCls += ' is-unlocked';
+      var lockVal = j.is_locked === true ? LBL.locked : (j.is_locked === false ? LBL.unlocked : '—');
+      html += '<div class="' + lockCls + '">' +
+        '<div class="chip-title">' + LBL.lockTitle + '</div>' +
+        '<div class="chip-row"><span class="rk"></span><span class="rv">' + esc(lockVal) + '</span></div></div>';
+
+      // Climate + cabin-air chip (interior, no leader line)
+      var climActive = !!j.climate_active || !!j.air_running;
+      var climCls = 'car-chip chip-clim' + (climActive ? ' is-open' : '');
+      var climKnown = j.climate_active !== undefined && j.climate_active !== null;
+      var climVal = climKnown ? (j.climate_active ? LBL.climateOn : LBL.climateOff) : '—';
+      if (j.climate_action) climVal += ' · ' + esc(j.climate_action);
+      var airKnown = j.air_running !== undefined && j.air_running !== null;
+      var airVal = airKnown ? (j.air_running ? LBL.airRunning : LBL.airIdle) : '—';
+      html += '<div class="' + climCls + '">' +
+        '<div class="chip-title">' + LBL.climateName + '</div>' +
+        '<div class="chip-row' + (j.climate_active ? ' is-open' : '') + '">' +
+          '<span class="rk">' + LBL.climateName + '</span>' +
+          '<span class="rv">' + climVal + '</span></div>' +
+        '<div class="chip-row' + (j.air_running ? ' is-open' : '') + '">' +
+          '<span class="rk">' + LBL.airShort + '</span>' +
+          '<span class="rv">' + airVal + '</span></div></div>';
+
       host.innerHTML = html;
       document.querySelectorAll('.ov-leader, .ov-dot').forEach(function (el) {
         el.classList.toggle('is-open', !!openGroups[el.getAttribute('data-leader')]);

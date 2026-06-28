@@ -134,15 +134,15 @@
         <div><div class="stat num" id="sb_eur">—</div>
           <div class="stat-sub">{{ t("at your price") }}</div></div>
       </div>
-      <div class="mono-xs muted mt-2" id="sb_note"></div>
+      <div class="muted mt-2" style="font-size:13px" id="sb_note"></div>
     </div>
 
     {# Neutral: energy that went into pre-conditioning (comfort / pre-heating).
        Intentional and usually range-positive — shown as info, never as cost. #}
-    <div id="precond_block" class="mono-xs muted mt-3" style="display:none"></div>
+    <div id="precond_block" class="muted mt-3" style="font-size:13px;display:none"></div>
 
     {# Calm empty state when there isn't yet enough confirmed-parked time. #}
-    <div id="drain_empty" class="mono-xs muted mt-3" style="display:none"></div>
+    <div id="drain_empty" class="muted mt-3" style="font-size:13px;display:none"></div>
 
     {# Every SoC drop and why it was kept or excluded (most are drives the
        frozen odometer hid). The discrete events live here only now. Collapsed. #}
