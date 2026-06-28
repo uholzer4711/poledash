@@ -529,9 +529,11 @@ html.view-mobile .lab-acc-body { padding: var(--ujh-s-4); }
 .car-chip.chip-rl    { left: 0.5%; top: 57%; }
 .car-chip.chip-rr    { right: 0.5%; top: 57%; }
 .car-chip.chip-boot  { left: 39%; top: 88%; }
-/* Interior chips — lock state + climate — float over the cabin area. */
-.car-chip.chip-lock  { left: 26%; top: 32%; }
-.car-chip.chip-clim  { right: 0.5%; top: 10%; }
+/* Lock: left outer edge between frunk and fl. Climate: top-right, compact. */
+.car-chip.chip-lock  { left: 0.5%; top: 22%; }
+.car-chip.chip-clim  { right: 0.5%; top: 10%; padding: 3px 5px; min-width: 58px; }
+.car-chip.chip-clim .chip-title { font-size: 7px; }
+.car-chip.chip-clim .rv         { font-size: 10px; }
 /* Lock chip uses ok/alert instead of orange — independent of is-open. */
 .car-chip.chip-lock.is-locked   { border-color: var(--ujh-ok); }
 .car-chip.chip-lock.is-locked   .rv { color: var(--ujh-ok); }
