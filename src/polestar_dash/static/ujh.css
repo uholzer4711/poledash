@@ -531,7 +531,7 @@ html.view-mobile .lab-acc-body { padding: var(--ujh-s-4); }
 .car-chip.chip-boot  { left: 39%; top: 88%; }
 /* Interior chips — lock state + climate — float over the cabin area. */
 .car-chip.chip-lock  { left: 26%; top: 32%; }
-.car-chip.chip-clim  { left: 26%; top: 54%; }
+.car-chip.chip-clim  { right: 0.5%; top: 10%; }
 /* Lock chip uses ok/alert instead of orange — independent of is-open. */
 .car-chip.chip-lock.is-locked   { border-color: var(--ujh-ok); }
 .car-chip.chip-lock.is-locked   .rv { color: var(--ujh-ok); }
