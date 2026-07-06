@@ -3,6 +3,41 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.46.0] — 2026-07-06
+
+### Added
+
+- **C3 field history Lab section** — new accordion frame in `/lab` with
+  three Chart.js charts for historical analysis of previously uncaptured
+  C3 fields: vehicle usage mode, tyre pressure kPa, and TCU connectivity.
+  Lazy-loaded; day-range selector (7 / 30 / 90 days).
+
+- **`usage_mode` + `unavailable_reason`** from `Availability` persisted per
+  C3 poll. `usage_mode` encodes the car's own activity state
+  (`abandoned` / `inactive` / `convenience` / `active` / `driving` /
+  `engine on` / `engine off`) — a more reliable driving signal than the
+  speed+GPS-movement heuristic. `unavailable_reason` explains why the car
+  is unreachable (`no internet` / `power saving` / `car in use` / …).
+
+- **Per-wheel tyre pressure kPa** (`tyre_fl/fr/rl/rr_kpa`) from `Health`
+  persisted per poll. Always null on P2 (no TPMS); will populate on models
+  that support it.
+
+- **TCU connectivity** (`tcu_status` / `tcu_network` / `tcu_signal`)
+  from `get_connectivity()` persisted per poll. Always null on P2
+  (`DashboardService/GetLatestDashboard` UNIMPLEMENTED); reserved for
+  models that support it.
+
+- **`GET /api/c3/field-history?days=N`** — new endpoint returning a
+  time-series of the above fields for Lab charts.
+
+- DB migration: 9 new `ALTER TABLE` columns on `c3snapshot`
+  (`usage_mode`, `unavailable_reason`, `tyre_fl/fr/rl/rr_kpa`,
+  `tcu_status`, `tcu_network`, `tcu_signal`).
+
+- Live status panel in Lab now shows `usage_mode`, `unavailable_reason`
+  and TCU fields alongside the existing battery/availability rows.
+
 ## [1.45.6] — 2026-06-25
 
 ### Fixed
