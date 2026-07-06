@@ -3,6 +3,20 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.46.1] — 2026-07-06
+
+### Changed
+
+- **`usage_mode` now feeds the C3 poll cadence, not just the Lab chart.**
+  `c3_poll_once`'s drive detection ORs in `usage_mode == "driving"` alongside
+  the existing speed/GPS-movement/frozen-fix heuristics — catches drives none
+  of those see yet (e.g. a short hop before SoC has moved or GPS is stale
+  enough to compare). `_c3_rest_state` (drives night/idle poll throttling)
+  now checks the car's own `usage_mode` first (`driving`/`active`/`engine on`
+  → in_use, `abandoned`/`inactive` → at_rest) before falling back to the
+  inferred lock/GPS/speed checks, which stay in place for rows/cars where
+  `usage_mode` isn't populated.
+
 ## [1.46.0] — 2026-07-06
 
 ### Added

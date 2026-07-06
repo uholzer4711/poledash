@@ -339,12 +339,17 @@ def _known_c3_vin() -> str | None:
         ).first()
 
 
+_USAGE_MODE_IN_USE = {"driving", "active", "engine on"}
+_USAGE_MODE_AT_REST = {"abandoned", "inactive"}
+
+
 def _c3_rest_state() -> str:
     """Best-effort 'is the car in use?' from the two latest C3 snapshots.
 
-    Returns 'in_use' (unlocked, or moved since the last fix — covers cars that
-    auto-lock at speed), 'at_rest' (locked and not moving), or 'unknown' (no C3
-    data, e.g. C3 disabled). Drives the night/idle poll throttling.
+    Returns 'in_use' (unlocked, moved since the last fix, or the car's own
+    usage_mode says so), 'at_rest' (locked, not moving, and usage_mode agrees),
+    or 'unknown' (no C3 data, e.g. C3 disabled). Drives the night/idle poll
+    throttling.
     """
     from sqlmodel import select
 
@@ -359,6 +364,12 @@ def _c3_rest_state() -> str:
     if not rows:
         return "unknown"
     latest = rows[0]
+    # Direct car-reported signal first — no need to infer from lock/GPS when
+    # the car already told us. Availability.usage_mode was only added in
+    # v1.46.0, so keep the inferred checks below as the fallback for older
+    # rows / cars that never populate it.
+    if latest.usage_mode in _USAGE_MODE_IN_USE:
+        return "in_use"
     if latest.is_locked is False:
         return "in_use"
     if len(rows) > 1:
@@ -378,6 +389,8 @@ def _c3_rest_state() -> str:
     if (latest.speed or 0) >= 3:
         return "in_use"
     if latest.is_locked is True:
+        return "at_rest"
+    if latest.usage_mode in _USAGE_MODE_AT_REST:
         return "at_rest"
     return "unknown"
 
@@ -521,6 +534,9 @@ async def c3_poll_once() -> None:
         # fires — the frozen fix + falling SoC is exactly that situation. A
         # pre-conditioning car can also match (SoC drop while parked); the fast
         # cadence then simply lasts until the SoC stabilises, which is fine.
+        # Fourth signal: the car's own usage_mode says "driving" directly —
+        # catches drives none of the above heuristics see (e.g. short hop,
+        # no SoC change yet, GPS not stale enough to compare).
         speed = row.speed or 0
         moved = (
             prev is not None
@@ -535,7 +551,10 @@ async def c3_poll_once() -> None:
             and row.charge_level < prev.charge_level
             and row.gps_ts is not None and row.gps_ts == prev.gps_ts
         )
-        driving = speed >= 3 or moved or soc_dropping_fix_frozen
+        driving = (
+            speed >= 3 or moved or soc_dropping_fix_frozen
+            or row.usage_mode == "driving"
+        )
         try:
             with Session(get_engine()) as s:
                 s.add(row)

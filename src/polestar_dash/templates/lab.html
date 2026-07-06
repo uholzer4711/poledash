@@ -842,7 +842,9 @@
           return;
         }
         const pts = j.points || [];
-        if (meta) meta.textContent = `${pts.length} ${{{ t("data points") | tojson }}} · ${days} ${{{ t("days") | tojson }}}`;
+        const fhDataPointsLabel = {{ t("data points") | tojson }};
+        const fhDaysLabel = {{ t("days") | tojson }};
+        if (meta) meta.textContent = `${pts.length} ${fhDataPointsLabel} · ${days} ${fhDaysLabel}`;
 
         const labels = pts.map(p => new Date(p.ts).toLocaleString());
 
