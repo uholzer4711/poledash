@@ -1657,6 +1657,50 @@ def c3_coverage(days: int = Query(7, ge=1, le=90), vin: str | None = None) -> di
     }
 
 
+@router.get("/c3/field-history")
+def c3_field_history(
+    days: int = Query(30, ge=1, le=365), vin: str | None = None
+) -> dict:
+    """Time-series history of usage_mode, tyre pressures and TCU connectivity
+    from C3Snapshot. Used by the Lab charts."""
+    since = utcnow() - timedelta(days=days)
+    with Session(get_engine()) as s:
+        stmt = (
+            select(
+                C3Snapshot.fetched_at,
+                C3Snapshot.usage_mode,
+                C3Snapshot.unavailable_reason,
+                C3Snapshot.tyre_fl_kpa,
+                C3Snapshot.tyre_fr_kpa,
+                C3Snapshot.tyre_rl_kpa,
+                C3Snapshot.tyre_rr_kpa,
+                C3Snapshot.tcu_status,
+                C3Snapshot.tcu_network,
+                C3Snapshot.tcu_signal,
+            )
+            .where(C3Snapshot.fetched_at >= since)
+            .order_by(C3Snapshot.fetched_at.asc())
+        )
+        if vin:
+            stmt = stmt.where(C3Snapshot.vin == vin)
+        rows = s.exec(stmt).all()
+    points = []
+    for ts, mode, reason, fl, fr, rl, rr, tcu_st, tcu_net, tcu_sig in rows:
+        points.append({
+            "ts": ts.isoformat(),
+            "usage_mode": mode,
+            "unavailable_reason": reason,
+            "tyre_fl_kpa": fl,
+            "tyre_fr_kpa": fr,
+            "tyre_rl_kpa": rl,
+            "tyre_rr_kpa": rr,
+            "tcu_status": tcu_st,
+            "tcu_network": tcu_net,
+            "tcu_signal": tcu_sig,
+        })
+    return {"days": days, "points": points}
+
+
 @router.delete("/journey-imports")
 def journey_imports_clear(vin: str | None = None) -> dict:
     with Session(get_engine()) as s:

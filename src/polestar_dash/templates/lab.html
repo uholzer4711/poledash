@@ -81,6 +81,47 @@
     </div>
   </details>
 
+  {# ====================== C3 FIELD HISTORY (usage / tyres / TCU) ====================== #}
+  <details class="card lab-acc" data-loader="labLoadFieldHistory">
+    <summary>
+      <span class="lab-acc-title">{{ t("C3 field history — usage mode, tyres, connectivity") }}</span>
+      <span class="lab-acc-meta mono-xs muted" id="fh_meta">—</span>
+      <span class="lab-acc-mark" aria-hidden="true"></span>
+    </summary>
+    <div class="lab-acc-body">
+      <p class="muted mono-xs mb-4">
+        {{ t("Historical C3 fields persisted per poll: vehicle usage mode (driving/idle/…), tyre pressure kPa, and TCU connectivity. All null until a new poll runs after this deploy.") }}
+      </p>
+      <div class="flex gap-4 mb-6" style="align-items:center;flex-wrap:wrap">
+        <label class="mono-xs">{{ t("Days") }}<br>
+          <select id="fh_days" onchange="window.labLoadFieldHistory()">
+            <option value="7">7</option>
+            <option value="30" selected>30</option>
+            <option value="90">90</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="card mb-6">
+        <div class="card-label">{{ t("Usage mode") }}</div>
+        <canvas id="fh_usage_canvas" height="120"></canvas>
+        <div id="fh_usage_summary" class="mono-xs muted mt-2"></div>
+      </div>
+
+      <div class="card mb-6">
+        <div class="card-label">{{ t("Tyre pressure (kPa)") }}</div>
+        <canvas id="fh_tyre_canvas" height="180"></canvas>
+        <div class="mono-xs muted mt-2">{{ t("FL = front-left, FR = front-right, RL = rear-left, RR = rear-right. 0 kPa = not reported by this car model (P2 has no TPMS).") }}</div>
+      </div>
+
+      <div class="card mb-6">
+        <div class="card-label">{{ t("TCU connectivity") }}</div>
+        <canvas id="fh_tcu_canvas" height="120"></canvas>
+        <div id="fh_tcu_summary" class="mono-xs muted mt-2"></div>
+      </div>
+    </div>
+  </details>
+
   {# ============================ CONTROL (writes) ============================ #}
   {% set heat_opts = [(0, t("leave")), (1, t("off")), (2, t("Level 1")), (3, t("Level 2")), (4, t("Level 3"))] %}
   <details class="card lab-acc lab-acc-danger no-print">
@@ -510,6 +551,11 @@
           [{{ t("Days to service") | tojson }}, h.days_to_service != null ? h.days_to_service : '—'],
           [{{ t("Distance to service") | tojson }}, h.distance_to_service_km != null ? h.distance_to_service_km + ' km' : '—'],
           [{{ t("Available") | tojson }}, (j.availability && j.availability.status) || '—'],
+          [{{ t("Usage mode") | tojson }}, (j.availability && j.availability.usage_mode) || '—'],
+          [{{ t("Unavailable reason") | tojson }}, (j.availability && j.availability.unavailable_reason) || '—'],
+          [{{ t("TCU status") | tojson }}, (j.connectivity && j.connectivity.status) || '—'],
+          [{{ t("TCU network") | tojson }}, (j.connectivity && j.connectivity.network) || '—'],
+          [{{ t("TCU signal") | tojson }}, (j.connectivity && j.connectivity.signal) || '—'],
         ];
         document.getElementById('tst_extra').innerHTML = rows.map(
           ([k, val]) => `<div><span class="muted">${escHtml(k)}:</span> ${escHtml(val)}</div>`).join('');
@@ -778,6 +824,184 @@
         if (!r.ok) { alert(await r.text()); return; }
         document.getElementById('noteInput').value = '';
         window.loadNotes();
+      };
+
+      // ============================ C3 field history ============================
+      let fhUsageChart = null, fhTyreChart = null, fhTcuChart = null;
+
+      window.labLoadFieldHistory = async function () {
+        const days = document.getElementById('fh_days')?.value || 30;
+        const meta = document.getElementById('fh_meta');
+        if (meta) meta.textContent = {{ t("loading…") | tojson }};
+        let j;
+        try {
+          const r = await fetch(`/api/c3/field-history?days=${days}`);
+          j = await r.json();
+        } catch (e) {
+          if (meta) meta.textContent = {{ t("network error: ") | tojson }} + e;
+          return;
+        }
+        const pts = j.points || [];
+        if (meta) meta.textContent = `${pts.length} ${{{ t("data points") | tojson }}} · ${days} ${{{ t("days") | tojson }}}`;
+
+        const labels = pts.map(p => new Date(p.ts).toLocaleString());
+
+        // ---- Usage mode chart (categorical → numeric mapping) ----
+        const USAGE_ORDER = ['—', 'abandoned', 'inactive', 'convenience', 'active', 'driving', 'engine on', 'engine off'];
+        const usageNums = pts.map(p => USAGE_ORDER.indexOf(p.usage_mode ?? '—'));
+        const usageTicks = Object.fromEntries(USAGE_ORDER.map((v, i) => [i, v]));
+        const usageSummary = document.getElementById('fh_usage_summary');
+        if (pts.length === 0) {
+          if (usageSummary) usageSummary.textContent = {{ t("No data yet.") | tojson }};
+        } else {
+          const counts = {};
+          pts.forEach(p => { const k = p.usage_mode || '—'; counts[k] = (counts[k] || 0) + 1; });
+          if (usageSummary) usageSummary.textContent = Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([k,v]) => `${k}: ${v}`).join(' · ');
+        }
+        const ink = cssVar('--ujh-ink');
+        const orange = cssVar('--ujh-orange');
+        const ink3 = cssVar('--ujh-ink-3');
+        const ok = cssVar('--ujh-ok');
+        const alert = cssVar('--ujh-alert');
+        const bg2 = cssVar('--ujh-bg-2');
+
+        const usageCtx = document.getElementById('fh_usage_canvas');
+        if (usageCtx) {
+          if (fhUsageChart) fhUsageChart.destroy();
+          fhUsageChart = new Chart(usageCtx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [{
+                label: {{ t("Usage mode") | tojson }},
+                data: usageNums,
+                borderColor: orange,
+                backgroundColor: orange + '22',
+                stepped: true,
+                pointRadius: 0,
+                borderWidth: 2,
+              }]
+            },
+            options: {
+              animation: false,
+              plugins: { legend: { labels: { color: ink } } },
+              scales: {
+                x: { display: false },
+                y: {
+                  ticks: {
+                    color: ink3,
+                    callback: v => usageTicks[v] ?? v,
+                    stepSize: 1,
+                  },
+                  grid: { color: bg2 },
+                  min: 0, max: USAGE_ORDER.length - 1,
+                }
+              }
+            }
+          });
+        }
+
+        // ---- Tyre pressure chart ----
+        const tCols = [
+          { key: 'tyre_fl_kpa', label: 'FL', color: orange },
+          { key: 'tyre_fr_kpa', label: 'FR', color: ok },
+          { key: 'tyre_rl_kpa', label: 'RL', color: alert },
+          { key: 'tyre_rr_kpa', label: 'RR', color: ink3 },
+        ];
+        const tyreCtx = document.getElementById('fh_tyre_canvas');
+        if (tyreCtx) {
+          if (fhTyreChart) fhTyreChart.destroy();
+          fhTyreChart = new Chart(tyreCtx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: tCols.map(c => ({
+                label: c.label,
+                data: pts.map(p => p[c.key]),
+                borderColor: c.color,
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                borderWidth: 2,
+                spanGaps: false,
+              }))
+            },
+            options: {
+              animation: false,
+              plugins: { legend: { labels: { color: ink } } },
+              scales: {
+                x: { display: false },
+                y: {
+                  ticks: { color: ink3, callback: v => v + ' kPa' },
+                  grid: { color: bg2 },
+                }
+              }
+            }
+          });
+        }
+
+        // ---- TCU connectivity chart ----
+        const TCU_STATUS_ORDER = ['not used', 'unavailable', 'disconnected', 'connected'];
+        const TCU_SIGNAL_ORDER = ['—', 'unknown', 'poor', 'good', 'strong'];
+        const tcuStatusNums = pts.map(p => TCU_STATUS_ORDER.indexOf(p.tcu_status ?? 'not used'));
+        const tcuSignalNums = pts.map(p => TCU_SIGNAL_ORDER.indexOf(p.tcu_signal ?? '—'));
+        const tcuSummary = document.getElementById('fh_tcu_summary');
+        if (pts.length > 0 && tcuSummary) {
+          const netCounts = {};
+          pts.forEach(p => { const k = p.tcu_network || '—'; netCounts[k] = (netCounts[k] || 0) + 1; });
+          tcuSummary.textContent = {{ t("Network types: ") | tojson }} +
+            Object.entries(netCounts).sort((a,b) => b[1]-a[1]).map(([k,v]) => `${k}: ${v}`).join(' · ');
+        }
+        const tcuCtx = document.getElementById('fh_tcu_canvas');
+        if (tcuCtx) {
+          if (fhTcuChart) fhTcuChart.destroy();
+          fhTcuChart = new Chart(tcuCtx, {
+            type: 'line',
+            data: {
+              labels,
+              datasets: [
+                {
+                  label: {{ t("Status") | tojson }},
+                  data: tcuStatusNums,
+                  borderColor: ok,
+                  backgroundColor: 'transparent',
+                  stepped: true,
+                  pointRadius: 0,
+                  borderWidth: 2,
+                  yAxisID: 'yStatus',
+                },
+                {
+                  label: {{ t("Signal") | tojson }},
+                  data: tcuSignalNums,
+                  borderColor: orange,
+                  backgroundColor: 'transparent',
+                  stepped: true,
+                  pointRadius: 0,
+                  borderWidth: 2,
+                  yAxisID: 'ySignal',
+                },
+              ]
+            },
+            options: {
+              animation: false,
+              plugins: { legend: { labels: { color: ink } } },
+              scales: {
+                x: { display: false },
+                yStatus: {
+                  position: 'left',
+                  ticks: { color: ink3, callback: v => TCU_STATUS_ORDER[v] ?? v, stepSize: 1 },
+                  grid: { color: bg2 },
+                  min: 0, max: TCU_STATUS_ORDER.length - 1,
+                },
+                ySignal: {
+                  position: 'right',
+                  ticks: { color: ink3, callback: v => TCU_SIGNAL_ORDER[v] ?? v, stepSize: 1 },
+                  grid: { drawOnChartArea: false },
+                  min: 0, max: TCU_SIGNAL_ORDER.length - 1,
+                },
+              }
+            }
+          });
+        }
       };
 
       // ============================ Lazy-load wiring ============================

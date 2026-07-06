@@ -38,6 +38,14 @@ _CLIMA = {0: "—", 1: "idle", 2: "starting", 3: "starting (delay)",
           4: "external power", 5: "active", 6: "active + pre-cleaning",
           7: "pre-cleaning only", 8: "heater active", 9: "deleting timer"}
 _AVAIL = {0: "—", 1: "available", 2: "unavailable"}
+_USAGE_MODE = {0: "—", 1: "abandoned", 2: "inactive", 3: "convenience",
+               4: "active", 5: "driving", 6: "engine on", 7: "engine off"}
+_UNAVAIL_REASON = {0: "—", 1: "no internet", 2: "power saving", 3: "car in use",
+                   4: "OTA in progress", 5: "stolen tracking", 6: "service mode"}
+_TCU_STATUS = {0: "not used", 1: "unavailable", 2: "disconnected", 3: "connected"}
+_TCU_NETWORK = {0: "—", 1: "unknown", 2: "CDMA 1X", 3: "CDMA EVDO",
+                4: "WCDMA", 5: "GSM", 6: "LTE"}
+_TCU_SIGNAL = {0: "—", 1: "unknown", 2: "poor", 3: "good", 4: "strong"}
 _SERVICE = {0: "—", 1: "no warning", 2: "unknown", 3: "maintenance soon",
             4: "engine-hours soon", 5: "distance soon", 6: "maintenance due",
             7: "engine-hours due", 8: "distance due"}
@@ -244,6 +252,10 @@ async def _collect() -> dict:
         "washer_fluid": _WARN.get(int(_g(r, "washer_fluid_level_warning", default=0)), "?"),
         "low_voltage_battery": _WARN.get(int(_g(r, "low_voltage_battery_warning", default=0)), "?"),
         "failed_lights": _failed_lights(r),
+        "tyre_fl_kpa": _g(r, "front_left_tyre_pressure_kpa") or None,
+        "tyre_fr_kpa": _g(r, "front_right_tyre_pressure_kpa") or None,
+        "tyre_rl_kpa": _g(r, "rear_left_tyre_pressure_kpa") or None,
+        "tyre_rr_kpa": _g(r, "rear_right_tyre_pressure_kpa") or None,
     })
     await grab("battery", "get_battery", lambda r: {
         "charge_level": _g(r, "charge_level"),
@@ -278,6 +290,13 @@ async def _collect() -> dict:
     await grab("availability", "get_availability", lambda r: {
         "is_available": bool(_g(r, "is_available", default=False)),
         "status": _AVAIL.get(int(_g(r, "availability_status", default=0)), "?"),
+        "usage_mode": _USAGE_MODE.get(int(_g(r, "usage_mode", default=0)), "?"),
+        "unavailable_reason": _UNAVAIL_REASON.get(int(_g(r, "unavailable_reason", default=0)), "?"),
+    })
+    await grab("connectivity", "get_connectivity", lambda r: {
+        "status": _TCU_STATUS.get(int(_g(r, "status", default=0)), "?"),
+        "network": _TCU_NETWORK.get(int(_g(r, "network_type", default=0)), "?"),
+        "signal": _TCU_SIGNAL.get(int(_g(r, "signal_strength", default=0)), "?"),
     })
     # Odometer + the car's own trip meters, from one get_odometer call. Keep
     # `odometer_km` as a scalar (c3_dict_to_row persists it); trips are net-new.
@@ -397,6 +416,7 @@ def c3_dict_to_row(data: dict) -> dict | None:
     h = data.get("health") or {}
     bat = data.get("battery") or {}
     avail = data.get("availability") or {}
+    conn = data.get("connectivity") or {}
 
     def _door(name: str) -> str | None:
         d = doors.get(name)
@@ -463,4 +483,13 @@ def c3_dict_to_row(data: dict) -> dict | None:
         "amp_limit": data.get("amp_limit"),
         "odometer_km": data.get("odometer_km"),
         "availability_status": avail.get("status"),
+        "usage_mode": avail.get("usage_mode"),
+        "unavailable_reason": avail.get("unavailable_reason"),
+        "tyre_fl_kpa": h.get("tyre_fl_kpa"),
+        "tyre_fr_kpa": h.get("tyre_fr_kpa"),
+        "tyre_rl_kpa": h.get("tyre_rl_kpa"),
+        "tyre_rr_kpa": h.get("tyre_rr_kpa"),
+        "tcu_status": conn.get("status"),
+        "tcu_network": conn.get("network"),
+        "tcu_signal": conn.get("signal"),
     }

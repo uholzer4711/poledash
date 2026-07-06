@@ -390,6 +390,19 @@ class C3Snapshot(SQLModel, table=True):
     amp_limit: float | None = None
     odometer_km: float | None = None
     availability_status: str | None = None
+    usage_mode: str | None = None
+    unavailable_reason: str | None = None
+
+    # Tyre pressure kPa (0.0 from proto3 defaults → stored NULL)
+    tyre_fl_kpa: float | None = None
+    tyre_fr_kpa: float | None = None
+    tyre_rl_kpa: float | None = None
+    tyre_rr_kpa: float | None = None
+
+    # TCU connectivity
+    tcu_status: str | None = None
+    tcu_network: str | None = None
+    tcu_signal: str | None = None
 
     __table_args__ = (
         Index("ix_c3snapshot_vin_fetched", "vin", "fetched_at"),

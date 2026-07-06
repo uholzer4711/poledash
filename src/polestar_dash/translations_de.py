@@ -2,6 +2,26 @@
 from __future__ import annotations
 
 TRANSLATIONS_DE: dict[str, str] = {
+    # --- C3 field history (lab.html: usage mode, tyres, connectivity) ---
+    "C3 field history — usage mode, tyres, connectivity":
+        "C3-Feldverlauf — Nutzungsmodus, Reifen, Konnektivität",
+    "Historical C3 fields persisted per poll: vehicle usage mode (driving/idle/…), "
+    "tyre pressure kPa, and TCU connectivity. All null until a new poll runs after this deploy.":
+        "Historische C3-Felder je Abfrage: Fahrzeug-Nutzungsmodus (fährt/steht/…), "
+        "Reifendruck kPa, TCU-Konnektivität. Alle null bis zum ersten Poll nach diesem Update.",
+    "Usage mode": "Nutzungsmodus",
+    "Tyre pressure (kPa)": "Reifendruck (kPa)",
+    "FL = front-left, FR = front-right, RL = rear-left, RR = rear-right. "
+    "0 kPa = not reported by this car model (P2 has no TPMS).":
+        "VL = vorne links, VR = vorne rechts, HL = hinten links, HR = hinten rechts. "
+        "0 kPa = vom Fahrzeugmodell nicht gemeldet (P2 hat kein TPMS).",
+    "TCU connectivity": "TCU-Konnektivität",
+    "data points": "Datenpunkte",
+    "Network types: ": "Netzwerktypen: ",
+    "Unavailable reason": "Nicht-verfügbar-Grund",
+    "TCU status": "TCU-Status",
+    "TCU network": "TCU-Netzwerk",
+    "TCU signal": "TCU-Signal",
     # --- Consolidated Lab tab (lab.html: live C3 + raw + control + discovery) ---
     "08 / LAB": "08 / LABOR",
     "& diagnostics": "& Diagnose",
