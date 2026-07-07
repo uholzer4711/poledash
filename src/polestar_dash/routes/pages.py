@@ -219,6 +219,27 @@ def tripbook_page(
     imp_cost = round(imp_kwh * price_ct / 100.0, 2)
     imp_avg = round(imp_kwh * 100 / imp_km, 1) if imp_km > 0 else None
 
+    # Same month-accordion treatment for the journey log: a long window used
+    # to render every imported leg as one endless flat table.
+    imp_months_map: dict[str, list] = {}
+    for j in imports:
+        imp_months_map.setdefault(j.started_at.strftime("%Y-%m"), []).append(j)
+    import_months = []
+    for key in sorted(imp_months_map, reverse=True):
+        entries = sorted(imp_months_map[key], key=lambda x: x.started_at, reverse=True)
+        m_km = round(sum((j.distance_km or 0) for j in entries), 1)
+        m_kwh = round(sum((j.consumption_kwh or 0) for j in entries), 2)
+        import_months.append({
+            "key": key,
+            "entries": entries,
+            "totals": {
+                "trips": len(entries),
+                "km": m_km,
+                "kwh": m_kwh,
+                "cost_eur": round(m_kwh * price_ct / 100.0, 2),
+            },
+        })
+
     # Odometer gap detection: between two consecutive imported trips the
     # start odometer of the later trip should equal the end odometer of the
     # earlier one. A positive jump means km were driven that the journey log
@@ -261,6 +282,7 @@ def tripbook_page(
             "battery_kwh": battery_kwh,
             "days": days,
             "imports": imports,
+            "import_months": import_months,
             "imp_km": imp_km,
             "imp_kwh": imp_kwh,
             "imp_cost": imp_cost,

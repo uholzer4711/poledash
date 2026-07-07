@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ t("Lab") }} · poledash{% endblock %}
 {% block content %}
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 
   <div class="section-head">
     <div class="num-tag">{{ t("08 / LAB") }}</div>
@@ -383,7 +383,7 @@
     </div>
   </details>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/vendor/leaflet/leaflet.js"></script>
   <script src="/static/map.js"></script>
   <script>
     // Capture Leaflet immediately (date-fns on other pages reassigns window.L).

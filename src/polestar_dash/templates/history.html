@@ -46,12 +46,20 @@
   <div class="card-label mb-4">{{ t("Daily driving") }}</div>
   <div class="card mb-6"><canvas id="dailyChart" height="100"></canvas></div>
 
-  <div id="sohWrap" style="display:none">
-    <div class="card-label mb-4">{{ t("Battery health") }} <span class="muted">· {{ t("estimate") }}</span></div>
-    <div class="card mb-6">
-      <canvas id="sohChart" height="100"></canvas>
-      <div class="mono-xs muted mt-3">{{ t("The car reports no SoH, so this is estimated from charge & drive energy vs the SoC change. AC charging losses bias it high, so a healthy pack reads ~100% until real degradation appears.") }}</div>
-    </div>
+  {# Collapsed by default: a healthy pack draws a flat ~100 % line, so the
+     chart earns its full-width slot only when the owner asks for it. #}
+  <div id="sohWrap" class="mb-6" style="display:none">
+    <details class="card lab-acc" id="sohAcc">
+      <summary>
+        <span class="lab-acc-title">{{ t("Battery health") }}</span>
+        <span class="lab-acc-meta mono-xs muted" id="sohMeta">{{ t("estimate") }}</span>
+        <span class="lab-acc-mark" aria-hidden="true"></span>
+      </summary>
+      <div class="lab-acc-body">
+        <canvas id="sohChart" height="100"></canvas>
+        <div class="mono-xs muted mt-3">{{ t("The car reports no SoH, so this is estimated from charge & drive energy vs the SoC change. Wall energy is corrected by your charging-loss factor (Settings), so remaining bias is small.") }}</div>
+      </div>
+    </details>
   </div>
 
   <div id="sessions" class="section-head" style="margin-top:48px">
@@ -156,7 +164,7 @@
             </div>
             <div>
               <div class="mono-xs">${ {{ t("Cost") | tojson }} }</div>
-              <div class="stat num" style="font-size:24px">€ <em class="accent">${s.cost_eur.toFixed(2)}</em></div>
+              <div class="stat num" style="font-size:24px">€ ${s.cost_eur.toFixed(2)}</div>
               <div class="stat-sub">${s.effective_price_ct_per_kwh.toFixed(1)} ct/kWh · <span class="${s.price_source==='session' ? 'accent' : 'muted'}">${s.price_source}</span></div>
             </div>
           </div>
@@ -295,11 +303,15 @@
       const days = document.getElementById('days').value;
       const r = await fetch(`/api/daily?days=${days}`);
       const rows = await r.json();
+      // Ink tones only — orange is a signal colour, not a series colour
+      // (design rule: ≤ 5 % orange surface). Solid vs outlined bars keep the
+      // two series apart without a second hue.
       const data = {
         labels: rows.map(d => d.day),
         datasets: [
           { label: {{ t("km/day") | tojson }}, data: rows.map(d => d.km), backgroundColor: INK },
-          { label: {{ t("kWh (est)") | tojson }}, data: rows.map(d => d.kwh_est), backgroundColor: ORANGE, yAxisID: 'y1' },
+          { label: {{ t("kWh (est)") | tojson }}, data: rows.map(d => d.kwh_est),
+            backgroundColor: 'transparent', borderColor: INK3, borderWidth: 1.5, yAxisID: 'y1' },
         ]
       };
       if (daily) daily.destroy();
@@ -310,20 +322,32 @@
           scales: {
             x: { ticks: { color: INK3, font:{family:'JetBrains Mono', size:10} }, grid: { color: LINE } },
             y: { ticks: { color: INK3, font:{family:'JetBrains Mono', size:10} }, grid: { color: LINE }, title: { display: true, text: 'km', color:INK3 } },
-            y1: { position: 'right', ticks: { color: ORANGE, font:{family:'JetBrains Mono', size:10} }, grid: { display: false }, title: { display: true, text: 'kWh', color:ORANGE } }
+            y1: { position: 'right', ticks: { color: INK3, font:{family:'JetBrains Mono', size:10} }, grid: { display: false }, title: { display: true, text: 'kWh', color:INK3 } }
           },
           plugins: { legend: { labels: { color: INK, font:{family:'JetBrains Mono', size:10} } } }
         }
       });
     }
+    // The accordion starts closed; Chart.js can't size a hidden canvas, so the
+    // fetch only decides visibility + summary and the chart draws on first open.
+    let _sohData = null;
     async function loadSoh() {
-      readTheme();
       const wrap = document.getElementById('sohWrap');
       let j;
       try { j = await (await fetch('/api/soh-history')).json(); }
       catch (e) { wrap.style.display = 'none'; return; }
       if (!j.points || !j.points.length) { wrap.style.display = 'none'; return; }
+      _sohData = j;
       wrap.style.display = '';
+      const last = j.points[j.points.length - 1];
+      document.getElementById('sohMeta').textContent =
+        {{ t("estimate") | tojson }} + ' · ' + last.soh + ' %';
+      if (document.getElementById('sohAcc').open) drawSoh();
+    }
+    function drawSoh() {
+      if (!_sohData) return;
+      readTheme();
+      const j = _sohData;
       if (sohChart) sohChart.destroy();
       sohChart = new Chart(document.getElementById('sohChart'), {
         type: 'line',
@@ -344,6 +368,9 @@
       });
     }
     function refresh() { load(); loadDaily(); loadSoh(); }
+    document.getElementById('sohAcc').addEventListener('toggle', function () {
+      if (this.open) drawSoh();
+    });
     document.getElementById('field').addEventListener('change', load);
     document.getElementById('days').addEventListener('change', refresh);
     window.addEventListener('load', () => setTimeout(refresh, 200));

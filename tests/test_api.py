@@ -137,15 +137,19 @@ def test_soh_estimate(tmp_db):
     now = utcnow()
     with Session(get_engine()) as s:
         for i in range(5):
-            # ~75 kWh implied (30 kWh over a 40% SoC span) — a healthy pack.
+            # 30 kWh wall energy over a 40% SoC span: ~75 kWh at the plug,
+            # ~67 kWh in the pack after the default 1.12 charging-loss factor.
             s.add(ChargeSession(
                 vin="VIN1", started_at=now - timedelta(days=i),
                 soc_start=30, soc_end=70, energy_kwh=30.0, is_complete=True,
             ))
         s.commit()
 
+    from polestar_dash.app_settings import get_charging_loss_factor
+    expected = round(30.0 / 0.40 / get_charging_loss_factor(), 1)
+
     soh = compute_soh()
     assert soh["enough_data"] is True
     assert soh["samples"] >= 3
     assert soh["soh_pct"] is not None and 0 < soh["soh_pct"] <= 100  # never > 100
-    assert soh["implied_kwh"] == 75.0
+    assert soh["implied_kwh"] == expected

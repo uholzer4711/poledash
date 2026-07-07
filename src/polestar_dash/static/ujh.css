@@ -101,9 +101,13 @@ h3 { font-size: 16px; line-height: 1.2; font-weight: 500; }
   display: inline-flex; align-items: center; gap: 4px;
   font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.14em;
 }
-.lang-switch a { color: var(--ujh-ink-3); cursor: pointer; padding: 2px 1px; }
-.lang-switch a:hover { color: var(--ujh-ink); }
-.lang-switch a.active { color: var(--ujh-orange); }
+/* <button> so the switch is keyboard-focusable; styled like the old links. */
+.lang-switch button {
+  background: none; border: 0; font: inherit; letter-spacing: inherit;
+  color: var(--ujh-ink-3); cursor: pointer; padding: 2px 1px;
+}
+.lang-switch button:hover { color: var(--ujh-ink); }
+.lang-switch button.active { color: var(--ujh-orange); }
 .lang-switch .sep { color: var(--ujh-line-2); }
 .live-dot {
   display: inline-block; width: 6px; height: 6px;
@@ -141,6 +145,21 @@ h3 { font-size: 16px; line-height: 1.2; font-weight: 500; }
 
 main { padding: var(--ujh-s-8) 0 var(--ujh-s-9); }
 .section { margin-bottom: var(--ujh-s-8); }
+
+/* ---------- In-page jump nav (long settings-style pages) ---------- */
+.subnav {
+  position: sticky; top: 0; z-index: 30;
+  display: flex; gap: var(--ujh-s-5);
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  padding: var(--ujh-s-3) 0;
+  background: var(--ujh-bg);
+  border-bottom: 1px solid var(--ujh-line);
+  font: 500 10px/1 var(--ujh-mono); letter-spacing: 0.14em; text-transform: uppercase;
+}
+.subnav a { color: var(--ujh-ink-3); white-space: nowrap; padding: 4px 0; }
+.subnav a:hover { color: var(--ujh-ink); }
+/* Anchor targets land below the sticky bar instead of underneath it. */
+.anchor-target { scroll-margin-top: 56px; }
 .section-head {
   display: flex; flex-direction: column; gap: 4px;
   margin-bottom: var(--ujh-s-6);
@@ -447,6 +466,8 @@ html.view-mobile .lab-acc-body { padding: var(--ujh-s-4); }
 .badge.ok .dot { background: var(--ujh-ok); }
 .badge.alert { color: var(--ujh-alert); border-color: var(--ujh-alert); }
 .badge.alert .dot { background: var(--ujh-alert); }
+/* Inline alert text (functional vehicle state, e.g. "4 windows open"). */
+.txt-alert { color: var(--ujh-alert); }
 
 /* ---------- Car state diagram (top-view) ---------- */
 .car-diagram { display: flex; align-items: center; justify-content: center; padding: var(--ujh-s-4) 0; }

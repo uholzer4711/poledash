@@ -4,7 +4,7 @@
    C3Snapshot via /api/c3/latest + /api/c3/track (no live backend hit on render).
    Included once, statically — it self-refreshes on a timer (not via htmx swap),
    so the SVG and map are built once and only their state is repainted. #}
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 
 <div class="section-head mt-8">
   <div class="num-tag">{{ t("02 / VEHICLE") }}</div>
@@ -139,7 +139,7 @@
   </div>
 </details>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/vendor/leaflet/leaflet.js"></script>
 <script src="/static/map.js"></script>
 <script>
   (function () {
@@ -164,6 +164,8 @@
       stClosed: {{ t("closed") | tojson }},
       stAjar: {{ t("ajar") | tojson }},
       doorOpen: {{ t("a door is open!") | tojson }},
+      oneWindowOpen: {{ t("1 window open") | tojson }},
+      nWindowsOpen: {{ t("{n} windows open") | tojson }},
       central: {{ t("central") | tojson }},
       heading: {{ t("heading") | tojson }},
       speed: {{ t("speed") | tojson }},
@@ -237,15 +239,38 @@
       return esc(val);
     }
 
-    // Build the openings panel: a status summary line + a calm grid where only
-    // OPEN parts carry the orange accent (closed parts stay muted).
-    function renderOpenings(j) {
-      var openKeys = [], closedKeys = [];
+    // Split every known part (doors, windows, sunroof, frunk, boot, charge
+    // port) into open vs closed — shared by the openings panel and the
+    // Locked-card summary so the two can never contradict each other.
+    function openPartKeys(j) {
+      var open = [], closed = [];
       Object.keys(LBL.parts).forEach(function (k) {
         var v = j[k];
         if (v === undefined || v === null || v === '—' || v === '?') return;
-        (OPEN_STATES.indexOf(v) >= 0 ? openKeys : closedKeys).push(k);
+        (OPEN_STATES.indexOf(v) >= 0 ? open : closed).push(k);
       });
+      return { open: open, closed: closed };
+    }
+
+    // Human wording for "what is open": doors alarm first, then windows
+    // (the common case) called out by name, then a generic count.
+    function openSummaryText(j, parts) {
+      if (j.any_door_open) return LBL.doorOpen;
+      if (parts.open.length === 0) return null;
+      var allWin = parts.open.every(function (k) { return k.indexOf('win_') === 0; });
+      if (allWin) {
+        return parts.open.length === 1
+          ? LBL.oneWindowOpen
+          : LBL.nWindowsOpen.replace('{n}', parts.open.length);
+      }
+      return parts.open.length + ' ' + LBL.openWord;
+    }
+
+    // Build the openings panel: a status summary line + a calm grid where only
+    // OPEN parts carry the orange accent (closed parts stay muted).
+    function renderOpenings(j) {
+      var split = openPartKeys(j);
+      var openKeys = split.open, closedKeys = split.closed;
       var sum = document.getElementById('c3_open_summary');
       if (openKeys.length === 0 && closedKeys.length === 0) {
         // No part state at all (C3 throttled / not yet polled) — say so instead
@@ -463,9 +488,23 @@
       if (j.is_locked === true) lockEl.innerHTML = '<span class="accent">' + LBL.locked + '</span>';
       else if (j.is_locked === false) lockEl.textContent = LBL.unlocked;
       else lockEl.textContent = '—';
-      document.getElementById('c3_locked_sub').textContent = j.is_locked == null
-        ? '—'
-        : (j.any_door_open ? LBL.doorOpen : LBL.allClosed) + ' · ' + LBL.central + ': ' + esc(j.central_lock);
+      // Sub-line counts EVERY opening (windows, sunroof, boot, …), not just
+      // doors — "all closed" while four windows are down was a real bug.
+      var lockSub = document.getElementById('c3_locked_sub');
+      if (j.is_locked == null) {
+        lockSub.textContent = '—';
+      } else {
+        var lockParts = openPartKeys(j);
+        var openTxt = openSummaryText(j, lockParts);
+        var central = LBL.central + ': ' + esc(j.central_lock);
+        if (openTxt) {
+          lockSub.innerHTML = '<span class="txt-alert">' + openTxt + '</span> · ' + central;
+        } else if (lockParts.closed.length === 0) {
+          lockSub.textContent = LBL.noState + ' · ' + central;
+        } else {
+          lockSub.textContent = LBL.allClosed + ' · ' + central;
+        }
+      }
 
       // Climate
       document.getElementById('c3_clim').textContent = j.climate_active ? {{ t("ON") | tojson }} : {{ t("off") | tojson }};

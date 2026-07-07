@@ -6,7 +6,17 @@
     <h1>{{ t("Status &") }} <em class="accent">{{ t("integrations") }}</em></h1>
   </div>
 
-  <div class="section-head mt-8">
+  {# Sticky jump-nav: the page is six long sections — without this, finding a
+     setting means blind scrolling. Anchors pair with .anchor-target below. #}
+  <nav class="subnav" aria-label="{{ t('Settings sections') }}">
+    <a href="#sec-alerts">{{ t("Alerts") }}</a>
+    <a href="#sec-pricing">{{ t("Pricing") }}</a>
+    <a href="#sec-locations">{{ t("Locations") }}</a>
+    <a href="#sec-vehicle">{{ t("Vehicle") }}</a>
+    <a href="#sec-ops">{{ t("Integrations") }}</a>
+  </nav>
+
+  <div class="section-head mt-8 anchor-target" id="sec-alerts">
     <div class="num-tag">{{ t("06.1 / ALERTS & AUTOMATION") }}</div>
     <h1>{{ t("Alerts &") }} <em class="accent">{{ t("automations") }}</em></h1>
   </div>
@@ -107,7 +117,7 @@
     }
   </script>
 
-  <div class="section-head mt-8">
+  <div class="section-head mt-8 anchor-target" id="sec-pricing">
     <div class="num-tag">{{ t("06.2 / PRICING & ENERGY") }}</div>
     <h1>{{ t("Pricing &") }} <em class="accent">{{ t("energy") }}</em></h1>
   </div>
@@ -119,7 +129,7 @@
         <label>{{ t("Default price (ct / kWh)") }}</label>
         <input id="default_price" type="number" min="0" max="500" step="0.1" value="{{ "%.1f"|format(default_price_ct) }}">
       </div>
-      <button class="btn accent" onclick="savePrice()">{{ t("Save") }} <span class="arrow">→</span></button>
+      <button class="btn ghost" onclick="savePrice()">{{ t("Save") }} <span class="arrow">→</span></button>
       <span id="price_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">{{ t("saved") }}</span>
     </div>
     <div class="stat-sub mt-4">
@@ -144,7 +154,7 @@
         <label>{{ t("Factor (1.0 = no loss, 1.12 = 12 %)") }}</label>
         <input id="loss_factor" type="number" min="1.0" max="1.5" step="0.01" value="{{ "%.2f"|format(charging_loss_factor) }}">
       </div>
-      <button class="btn accent" onclick="saveLossFactor()">{{ t("Save") }} <span class="arrow">→</span></button>
+      <button class="btn ghost" onclick="saveLossFactor()">{{ t("Save") }} <span class="arrow">→</span></button>
       <span id="loss_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">{{ t("saved") }}</span>
     </div>
     <div class="stat-sub mt-4">
@@ -177,7 +187,7 @@
         <label>{{ t("CO₂ g/km") }}</label>
         <input id="petrol_co2" type="number" min="0" max="500" step="1" value="{{ petrol.co2_g_per_km }}">
       </div>
-      <button class="btn accent" onclick="savePetrol()">{{ t("Save") }} <span class="arrow">→</span></button>
+      <button class="btn ghost" onclick="savePetrol()">{{ t("Save") }} <span class="arrow">→</span></button>
       <span id="petrol_saved" class="mono-xs muted" style="opacity:0;transition:opacity .3s">{{ t("saved") }}</span>
     </div>
     <div class="stat-sub mt-4">
@@ -199,7 +209,7 @@
     }
   </script>
 
-  <div class="section-head mt-8">
+  <div class="section-head mt-8 anchor-target" id="sec-locations">
     <div class="num-tag">{{ t("06.3 / LOCATIONS & TRIPS") }}</div>
     <h1>{{ t("Locations &") }} <em class="accent">{{ t("trips") }}</em></h1>
   </div>
@@ -220,7 +230,7 @@
         <label>{{ t("Price (ct/kWh)") }}</label>
         <input type="number" min="0" max="500" step="0.1" id="cs_new_price">
       </div>
-      <button class="btn accent" onclick="addStation(this)">{{ t("Add") }} <span class="arrow">&rarr;</span></button>
+      <button class="btn ghost" onclick="addStation(this)">{{ t("Add") }} <span class="arrow">&rarr;</span></button>
     </div>
   </div>
   <script>
@@ -298,7 +308,7 @@
       <textarea id="al_text" rows="6" style="width:100%;font-family:var(--ujh-mono);font-size:14px">{% for label, patterns in address_labels.items() %}{{ label }}: {{ patterns|join(', ') }}
 {% endfor %}</textarea>
       <div class="flex gap-4 mt-4" style="align-items:center">
-        <button class="btn accent" type="submit">{{ t("Save") }} <span class="arrow">→</span></button>
+        <button class="btn ghost" type="submit">{{ t("Save") }} <span class="arrow">→</span></button>
         <span id="al_result" class="mono-xs muted"></span>
       </div>
     </form>
@@ -337,7 +347,7 @@
       <textarea id="gf_text" rows="4" style="width:100%;font-family:var(--ujh-mono);font-size:14px">{% for label, geo in address_geofences.items() %}{{ label }}: {{ "%g"|format(geo.lat) }}, {{ "%g"|format(geo.lng) }}, {{ "%g"|format(geo.radius_m) }}
 {% endfor %}</textarea>
       <div class="flex gap-4 mt-4" style="align-items:center">
-        <button class="btn accent" type="submit">{{ t("Save") }} <span class="arrow">→</span></button>
+        <button class="btn ghost" type="submit">{{ t("Save") }} <span class="arrow">→</span></button>
         <span id="gf_result" class="mono-xs muted"></span>
       </div>
     </form>
@@ -386,11 +396,11 @@
       </label>
       <span id="am_stats" class="mono-xs muted"></span>
     </div>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
     <div id="am_map" style="width:100%;height:480px;background:var(--ujh-bg-elev)"></div>
     <div id="am_msg" class="mono-xs muted mt-2"></div>
   </div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/vendor/leaflet/leaflet.js"></script>
   <script>
     // Capture Leaflet immediately — date-fns (deferred, runs before
     // DOMContentLoaded) reassigns window.L to its Locale helper, which would
@@ -445,7 +455,7 @@
             <input id="am_lbl_new" type="text" placeholder="{{ t("e.g. Arbeit") }}" style="width:100%;margin-bottom:6px">
             <label class="mono-xs">{{ t("pattern (stored as substring)") }}</label>
             <input id="am_pat" type="text" value="${safe}" style="width:100%;margin-bottom:8px">
-            <button class="btn accent" onclick="amAssign('${safe.replace(/'/g, "\\'")}')">{{ t("Save") }} <span class="arrow">→</span></button>
+            <button class="btn ghost" onclick="amAssign('${safe.replace(/'/g, "\\'")}')">{{ t("Save") }} <span class="arrow">→</span></button>
             <span id="am_pop_msg" class="mono-xs muted" style="margin-left:8px"></span>
           </div>`;
       }
@@ -856,7 +866,7 @@
           <label>{{ t("TZ offset (h)") }}</label>
           <input type="number" name="tz_offset_hours" step="0.5" value="2" title="{{ t("CSV times are local; subtract this many hours to normalise to UTC. Vienna summer = 2, winter = 1.") }}">
         </div>
-        <button class="btn accent" type="submit">{{ t("Import") }} <span class="arrow">→</span></button>
+        <button class="btn ghost" type="submit">{{ t("Import") }} <span class="arrow">→</span></button>
         <span id="ji_result" class="mono-xs muted"></span>
       </div>
     </form>
@@ -878,7 +888,7 @@
     }
   </script>
 
-  <div class="section-head mt-8">
+  <div class="section-head mt-8 anchor-target" id="sec-vehicle">
     <div class="num-tag">{{ t("06.4 / APPEARANCE & VEHICLE") }}</div>
     <h1>{{ t("Appearance &") }} <em class="accent">{{ t("vehicle") }}</em></h1>
   </div>
@@ -898,7 +908,7 @@
           <label>{{ t("Image file") }}</label>
           <input type="file" name="file" accept="image/*" required>
         </div>
-        <button class="btn accent" type="submit">{{ t("Upload") }} <span class="arrow">→</span></button>
+        <button class="btn ghost" type="submit">{{ t("Upload") }} <span class="arrow">→</span></button>
         <button class="btn ghost" type="button" onclick="removeCarImage()">{{ t("Remove") }}</button>
         <span id="ci_result" class="mono-xs muted"></span>
       </div>
@@ -924,7 +934,7 @@
     }
   </script>
 
-  <div class="section-head mt-8">
+  <div class="section-head mt-8 anchor-target" id="sec-ops">
     <div class="num-tag">{{ t("06.5 / INTEGRATIONS & OPS") }}</div>
     <h1>{{ t("Integrations &") }} <em class="accent">{{ t("ops") }}</em></h1>
   </div>
@@ -953,7 +963,7 @@
         <h2 style="margin:0 0 4px">Polestar · poledash</h2>
         <div class="stat-sub mb-2">{{ t("The original. 15 panels: SoC, power, range, consumption, odometer, service due, AC/DC current &amp; voltage, charging timeline, power-vs-SoC scatter, heatmap.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana-dashboard.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana-dashboard.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana-dashboard.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
@@ -963,7 +973,7 @@
         <h2 style="margin:0 0 4px">Cockpit</h2>
         <div class="stat-sub mb-2">{{ t("Big-screen showcase. Giant SoC gauge centerpiece, hero stats, smooth SoC trajectory, charging timeline. Built for demos &amp; presentations.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/cockpit.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/cockpit.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana/cockpit.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
@@ -973,7 +983,7 @@
         <h2 style="margin:0 0 4px">Charging Lab</h2>
         <div class="stat-sub mb-2">{{ t("Charging forensics: P×SoC curve, power-density heatmap, voltage/current/power waveforms, AC↔DC state strip, P=U·I sanity check, ΔSoC bars, minutes-to-full prediction.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/charging-lab.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/charging-lab.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana/charging-lab.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
@@ -983,7 +993,7 @@
         <h2 style="margin:0 0 4px">Fleet Pulse</h2>
         <div class="stat-sub mb-2">{{ t("30-day rhythm view: long charging timeline, hour-of-day activity &amp; SoC heatmaps, weekly min/avg/max SoC band, sessions/24h, polling cadence bars.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/fleet-pulse.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/fleet-pulse.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana/fleet-pulse.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
@@ -993,7 +1003,7 @@
         <h2 style="margin:0 0 4px">Eco Impact</h2>
         <div class="stat-sub mb-2">{{ t("kWh delivered, efficiency score gauge, consumption trend with 7d-avg overlay, range-factor (km/% SoC), CO₂ saved vs petrol, €-equivalent. The \"look how much we saved\" board.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/eco-impact.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/eco-impact.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana/eco-impact.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
@@ -1003,7 +1013,7 @@
         <h2 style="margin:0 0 4px">Mission Control</h2>
         <div class="stat-sub mb-2">{{ t("Dense cyberpunk grid: 24 panels, 8 micro-stats, status strip, sparklines, twin scatter+heatmap, gauges for U/I/P, service countdown. 10s refresh.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana/mission-control.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana/mission-control.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana/mission-control.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>
@@ -1013,7 +1023,7 @@
         <h2 style="margin:0 0 4px">C3 Command Center</h2>
         <div class="stat-sub mb-2">{{ t("Everything the C3 backend adds: doors/windows/openings state-timeline, lock &amp; security, climate, cabin PM2.5, on-car weather, live location geomap, plus charging, SoC, range &amp; service. 27 panels, 30s refresh.") }}</div>
         <div class="flex gap-4" style="flex-wrap:wrap">
-          <a class="btn accent" href="/static/grafana-dashboard-c3.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
+          <a class="btn ghost" href="/static/grafana-dashboard-c3.json" download>{{ t("Download") }} <span class="arrow">→</span></a>
           <a class="btn ghost" href="/static/grafana-dashboard-c3.json" target="_blank">{{ t("View raw") }} <span class="arrow">→</span></a>
         </div>
       </div>

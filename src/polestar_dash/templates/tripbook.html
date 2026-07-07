@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Tripbook · poledash{% endblock %}
 {% block head_extra %}
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  <script src="/static/vendor/leaflet/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin defer></script>
   <script src="/static/map.js" defer></script>
 {% endblock %}
@@ -151,88 +151,6 @@
       <div class="card"><div class="card-label">{{ t("Energy (real)") }}</div><div class="stat num">{{ "%.2f"|format(imp_kwh) }}<span class="unit">kWh</span></div>{% if imp_avg_kwh_per_100km %}<div class="stat-sub"><span class="accent">{{ imp_avg_kwh_per_100km }}</span> kWh/100km</div>{% endif %}</div>
       <div class="card"><div class="card-label">{{ t("Cost") }}</div><div class="stat num">€ <em class="accent">{{ "%.2f"|format(imp_cost) }}</em></div><div class="stat-sub">@ {{ "%.1f"|format(price_ct) }} ct/kWh</div></div>
     </div>
-    <table class="index trip-table">
-      <thead><tr><th>{{ t("Start") }}</th><th>{{ t("End") }}</th><th>{{ t("From → To") }}</th><th class="right">km</th><th class="right">kWh</th><th class="right">{{ t("SoC") }}</th><th class="right">kWh/100km</th><th>{{ t("Note") }}</th></tr></thead>
-      <tbody>
-        {% for j in imports %}
-          {% set start_lbl = j.start_address|address_label %}
-          {% set end_lbl = j.end_address|address_label %}
-          {% set show_cat = j.category and j.category != 'Uncategorized' %}
-          {% set show_type = j.trip_type and j.trip_type != 'SINGLE' %}
-          <tr>
-            <td class="mono" data-label="{{ t('Start') }}">{{ j.started_at|localtime }}</td>
-            <td class="mono" data-label="{{ t('End') }}">{{ j.ended_at|localtime('%H:%M') }}</td>
-            <td class="cell-block" data-label="{{ t('From → To') }}">
-              {% if j.start_address %}
-                <span {% if start_lbl %}class="accent" title="{{ start_lbl }}"{% endif %}>{{ j.start_address.split(',')[0] }}</span>
-              {% else %}—{% endif %}
-              <span class="muted">→</span>
-              {% if j.end_address %}
-                <span {% if end_lbl %}class="accent" title="{{ end_lbl }}"{% endif %}>{{ j.end_address.split(',')[0] }}</span>
-              {% else %}—{% endif %}
-            </td>
-            <td class="right tnum" data-label="km">{{ "%.1f"|format(j.distance_km or 0) }}</td>
-            <td class="right tnum" data-label="kWh">{{ "%.2f"|format(j.consumption_kwh or 0) }}</td>
-            <td class="right tnum" data-label="{{ t('SoC') }}">{% if j.soc_start is not none and j.soc_end is not none %}{{ j.soc_start }} → {{ j.soc_end }}%{% else %}—{% endif %}</td>
-            <td class="right tnum" data-label="kWh/100km">{% if j.distance_km and j.consumption_kwh and j.distance_km > 0.5 %}<span class="accent">{{ "%.1f"|format(j.consumption_kwh * 100 / j.distance_km) }}</span>{% else %}—{% endif %}</td>
-            <td class="cell-block" data-label="{{ t('Note') }}">
-              {% if show_cat %}<span class="badge">{{ j.category }}</span> {% endif %}
-              {% if show_type %}<span class="mono-xs muted">{{ j.trip_type }}</span> {% endif %}
-              {% if j.comments %}<span class="mono-xs">{{ j.comments }}</span>{% endif %}
-              {% if not show_cat and not show_type and not j.comments %}<span class="muted">—</span>{% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {# Mobile: one compact, tappable line per imported trip. #}
-    <div class="trip-list">
-      {% for j in imports %}
-        {% set start_lbl = j.start_address|address_label %}
-        {% set end_lbl = j.end_address|address_label %}
-        <details class="trip-row">
-          <summary>
-            <span class="trip-row-mark">→</span>
-            <span class="trip-sum-time">{{ j.started_at|localtime('%d.%m. %H:%M') }} → {{ j.ended_at|localtime('%H:%M') }}</span>
-            <span class="trip-sum-stats">
-              <span>{{ "%.1f"|format(j.distance_km or 0) }} km</span>
-              <span>{{ "%.2f"|format(j.consumption_kwh or 0) }} kWh</span>
-            </span>
-          </summary>
-          <div class="trip-row-body">
-            <span class="trip-kv"><span class="k">{{ t('From → To') }}</span><span class="v">
-              {%- if j.start_address %}<span {% if start_lbl %}class="accent"{% endif %}>{{ j.start_address.split(',')[0] }}</span>{% else %}—{% endif %}
-              → {% if j.end_address %}<span {% if end_lbl %}class="accent"{% endif %}>{{ j.end_address.split(',')[0] }}</span>{% else %}—{% endif -%}
-            </span></span>
-            <span class="trip-kv"><span class="k">{{ t('SoC') }}</span><span class="v">{% if j.soc_start is not none and j.soc_end is not none %}{{ j.soc_start }} → {{ j.soc_end }}%{% else %}—{% endif %}</span></span>
-            <span class="trip-kv"><span class="k">kWh/100km</span><span class="v">{% if j.distance_km and j.consumption_kwh and j.distance_km > 0.5 %}<span class="accent">{{ "%.1f"|format(j.consumption_kwh * 100 / j.distance_km) }}</span>{% else %}—{% endif %}</span></span>
-            {% if j.comments %}<span class="trip-kv"><span class="k">{{ t('Note') }}</span><span class="v">{{ j.comments }}</span></span>{% endif %}
-          </div>
-        </details>
-      {% endfor %}
-    </div>
-
-    {% if odo_gaps %}
-      <div class="card-label mt-8 mb-4">{{ t("Untracked km") }} <span class="muted">{{ t("(odometer gaps)") }}</span></div>
-      <p class="muted mb-4">{{ t("{n} km were driven between logged trips but never appeared in the journey log — most likely trips the Polestar app didn't record.", n=untracked_km) }}</p>
-      <table class="index">
-        <thead><tr><th>{{ t("After") }}</th><th>{{ t("Before") }}</th><th>{{ t("Between") }}</th><th class="right">{{ t("Gap km") }}</th></tr></thead>
-        <tbody>
-          {% for g in odo_gaps %}
-            <tr>
-              <td class="mono" data-label="{{ t('After') }}">{{ g.from_at|localtime }}</td>
-              <td class="mono" data-label="{{ t('Before') }}">{{ g.to_at|localtime }}</td>
-              <td class="cell-block" data-label="{{ t('Between') }}">
-                {% if g.from_addr %}{{ g.from_addr.split(',')[0] }}{% else %}—{% endif %}
-                <span class="muted">→</span>
-                {% if g.to_addr %}{{ g.to_addr.split(',')[0] }}{% else %}—{% endif %}
-              </td>
-              <td class="right tnum" data-label="{{ t('Gap km') }}"><span class="accent">{{ g.km }}</span></td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endif %}
 
     {% set mappable = imports|selectattr('start_lat')|selectattr('end_lat')|list %}
     {% if mappable or charge_locations %}
@@ -354,5 +272,105 @@
         });
       </script>
     {% endif %}
+    {# Month accordions (newest open) — a 90/365-day window used to render one
+       endless flat table here. #}
+    {% for m in import_months %}
+    <details class="month-acc"{% if loop.first %} open{% endif %}>
+      <summary>
+        <span class="month-acc-mark">→</span>
+        <span class="month-acc-key">{{ m.key }}</span>
+        <span class="month-acc-stats">
+          <span>{{ m.totals.trips }} {{ t("Trips") }}</span>
+          <span>{{ "%.1f"|format(m.totals.km) }} km</span>
+          <span>{{ "%.2f"|format(m.totals.kwh) }} kWh</span>
+          {% if m.totals.cost_eur %}<span>€ {{ "%.2f"|format(m.totals.cost_eur) }}</span>{% endif %}
+        </span>
+      </summary>
+    <table class="index trip-table">
+      <thead><tr><th>{{ t("Start") }}</th><th>{{ t("End") }}</th><th>{{ t("From → To") }}</th><th class="right">km</th><th class="right">kWh</th><th class="right">{{ t("SoC") }}</th><th class="right">kWh/100km</th><th>{{ t("Note") }}</th></tr></thead>
+      <tbody>
+        {% for j in m.entries %}
+          {% set start_lbl = j.start_address|address_label %}
+          {% set end_lbl = j.end_address|address_label %}
+          {% set show_cat = j.category and j.category != 'Uncategorized' %}
+          {% set show_type = j.trip_type and j.trip_type != 'SINGLE' %}
+          <tr>
+            <td class="mono" data-label="{{ t('Start') }}">{{ j.started_at|localtime }}</td>
+            <td class="mono" data-label="{{ t('End') }}">{{ j.ended_at|localtime('%H:%M') }}</td>
+            <td class="cell-block" data-label="{{ t('From → To') }}">
+              {% if j.start_address %}
+                <span {% if start_lbl %}class="accent" title="{{ start_lbl }}"{% endif %}>{{ j.start_address.split(',')[0] }}</span>
+              {% else %}—{% endif %}
+              <span class="muted">→</span>
+              {% if j.end_address %}
+                <span {% if end_lbl %}class="accent" title="{{ end_lbl }}"{% endif %}>{{ j.end_address.split(',')[0] }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="right tnum" data-label="km">{{ "%.1f"|format(j.distance_km or 0) }}</td>
+            <td class="right tnum" data-label="kWh">{{ "%.2f"|format(j.consumption_kwh or 0) }}</td>
+            <td class="right tnum" data-label="{{ t('SoC') }}">{% if j.soc_start is not none and j.soc_end is not none %}{{ j.soc_start }} → {{ j.soc_end }}%{% else %}—{% endif %}</td>
+            <td class="right tnum" data-label="kWh/100km">{% if j.distance_km and j.consumption_kwh and j.distance_km > 0.5 %}<span class="accent">{{ "%.1f"|format(j.consumption_kwh * 100 / j.distance_km) }}</span>{% else %}—{% endif %}</td>
+            <td class="cell-block" data-label="{{ t('Note') }}">
+              {% if show_cat %}<span class="badge">{{ j.category }}</span> {% endif %}
+              {% if show_type %}<span class="mono-xs muted">{{ j.trip_type }}</span> {% endif %}
+              {% if j.comments %}<span class="mono-xs">{{ j.comments }}</span>{% endif %}
+              {% if not show_cat and not show_type and not j.comments %}<span class="muted">—</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {# Mobile: one compact, tappable line per imported trip. #}
+    <div class="trip-list">
+      {% for j in m.entries %}
+        {% set start_lbl = j.start_address|address_label %}
+        {% set end_lbl = j.end_address|address_label %}
+        <details class="trip-row">
+          <summary>
+            <span class="trip-row-mark">→</span>
+            <span class="trip-sum-time">{{ j.started_at|localtime('%d.%m. %H:%M') }} → {{ j.ended_at|localtime('%H:%M') }}</span>
+            <span class="trip-sum-stats">
+              <span>{{ "%.1f"|format(j.distance_km or 0) }} km</span>
+              <span>{{ "%.2f"|format(j.consumption_kwh or 0) }} kWh</span>
+            </span>
+          </summary>
+          <div class="trip-row-body">
+            <span class="trip-kv"><span class="k">{{ t('From → To') }}</span><span class="v">
+              {%- if j.start_address %}<span {% if start_lbl %}class="accent"{% endif %}>{{ j.start_address.split(',')[0] }}</span>{% else %}—{% endif %}
+              → {% if j.end_address %}<span {% if end_lbl %}class="accent"{% endif %}>{{ j.end_address.split(',')[0] }}</span>{% else %}—{% endif -%}
+            </span></span>
+            <span class="trip-kv"><span class="k">{{ t('SoC') }}</span><span class="v">{% if j.soc_start is not none and j.soc_end is not none %}{{ j.soc_start }} → {{ j.soc_end }}%{% else %}—{% endif %}</span></span>
+            <span class="trip-kv"><span class="k">kWh/100km</span><span class="v">{% if j.distance_km and j.consumption_kwh and j.distance_km > 0.5 %}<span class="accent">{{ "%.1f"|format(j.consumption_kwh * 100 / j.distance_km) }}</span>{% else %}—{% endif %}</span></span>
+            {% if j.comments %}<span class="trip-kv"><span class="k">{{ t('Note') }}</span><span class="v">{{ j.comments }}</span></span>{% endif %}
+          </div>
+        </details>
+      {% endfor %}
+    </div>
+    </details>
+    {% endfor %}
+
+    {% if odo_gaps %}
+      <div class="card-label mt-8 mb-4">{{ t("Untracked km") }} <span class="muted">{{ t("(odometer gaps)") }}</span></div>
+      <p class="muted mb-4">{{ t("{n} km were driven between logged trips but never appeared in the journey log — most likely trips the Polestar app didn't record.", n=untracked_km) }}</p>
+      <table class="index">
+        <thead><tr><th>{{ t("After") }}</th><th>{{ t("Before") }}</th><th>{{ t("Between") }}</th><th class="right">{{ t("Gap km") }}</th></tr></thead>
+        <tbody>
+          {% for g in odo_gaps %}
+            <tr>
+              <td class="mono" data-label="{{ t('After') }}">{{ g.from_at|localtime }}</td>
+              <td class="mono" data-label="{{ t('Before') }}">{{ g.to_at|localtime }}</td>
+              <td class="cell-block" data-label="{{ t('Between') }}">
+                {% if g.from_addr %}{{ g.from_addr.split(',')[0] }}{% else %}—{% endif %}
+                <span class="muted">→</span>
+                {% if g.to_addr %}{{ g.to_addr.split(',')[0] }}{% else %}—{% endif %}
+              </td>
+              <td class="right tnum" data-label="{{ t('Gap km') }}"><span class="accent">{{ g.km }}</span></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+
+
   {% endif %}
 {% endblock %}

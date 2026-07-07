@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
@@ -76,6 +78,17 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(PKG_DIR / "static")), name="static")
 
+    # The service worker must be served from the root path to get root scope
+    # (a /static/sw.js could only control /static/*). no-cache so a deploy's
+    # new worker is picked up on the next visit instead of after 24 h.
+    @app.get("/sw.js", include_in_schema=False)
+    def service_worker() -> FileResponse:
+        return FileResponse(
+            PKG_DIR / "static" / "sw.js",
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
+
     # HTML pages carried no cache headers, so browsers (esp. iOS Safari / a
     # home-screen PWA) could pin a stale page indefinitely — old markup pointing
     # at an old ?v= CSS, hiding every deploy until a manual hard-refresh. Force
@@ -87,6 +100,30 @@ def create_app() -> FastAPI:
         if ctype.startswith("text/html"):
             response.headers["Cache-Control"] = "no-cache, must-revalidate"
         return response
+
+    # CSRF guard: the reverse proxy's basic-auth credentials are attached by
+    # the browser to *any* form POST targeting this origin, so a foreign page
+    # could fire our query-param POSTs (settings, credentials, uploads).
+    # Browsers stamp cross-site requests with Sec-Fetch-Site / Origin; requests
+    # without either header (curl, ntfy action buttons, htmx GETs) pass. This
+    # is not in-app auth — that stays with the proxy per the README.
+    @app.middleware("http")
+    async def _csrf_origin_guard(request, call_next):
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            site = request.headers.get("sec-fetch-site")
+            if site is not None:
+                if site not in ("same-origin", "none"):
+                    return JSONResponse(
+                        {"detail": "cross-site request blocked"}, status_code=403
+                    )
+            else:
+                # Origin "null" (sandboxed iframe) counts as foreign too.
+                origin = request.headers.get("origin")
+                if origin and urlsplit(origin).netloc != request.headers.get("host", ""):
+                    return JSONResponse(
+                        {"detail": "cross-site request blocked"}, status_code=403
+                    )
+        return await call_next(request)
 
     return app
 

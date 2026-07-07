@@ -3,6 +3,52 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.47.0] — 2026-07-07
+
+### Fixed
+
+- **"All closed" lie on the Locked card.** The dashboard's lock-status
+  sub-line only checked `any_door_open`, so four open windows still read
+  "all closed · central: locked". It now counts every opening (windows,
+  sunroof, frunk, boot, charge port) via the same part-split as the openings
+  grid and shows e.g. "4 Fenster offen" in alert red.
+- **SoH estimate no longer pinned at 100 %.** Charge-derived capacity samples
+  are AC/wall energy; they're now divided by the configured charging-loss
+  factor (Settings, default 1.12) so the implied pack size is realistic
+  instead of reading ~10 % high and being capped.
+
+### Security
+
+- **CSRF origin guard.** Unsafe methods (POST/PUT/PATCH/DELETE) from a
+  foreign site are rejected (403) via `Sec-Fetch-Site`/`Origin` checks —
+  the reverse proxy's basic-auth is ambient browser state, so cross-site
+  form posts to query-param endpoints (settings, Spritmonitor credentials,
+  uploads) were possible. Header-less clients (curl, ntfy) are unaffected.
+  Covered by `tests/test_csrf.py`.
+
+### Changed
+
+- **All CDN assets vendored** under `/static/vendor` (htmx, Chart.js,
+  date-fns + adapter, Leaflet incl. images, Inter Tight/JetBrains Mono
+  woff2). No more unpkg/jsdelivr/Google-Fonts dependency — the dashboard
+  renders on flaky mobile networks and keeps fonts GDPR-local. Leaflet
+  files hash-verified against the previous SRI pins.
+- **Minimal service worker** (`/sw.js`, root scope): stale-while-revalidate
+  for `/static/*`, network-only pages/API with a small offline notice.
+- **Settings got a sticky jump-nav** (Alarme · Preise · Orte · Fahrzeug ·
+  Integrationen) — the page is six sections and ~7000 px tall.
+- **Tripbook journey log folds into month accordions** (newest open), same
+  pattern as detected trips; the map moved up next to the summary cards.
+- **Orange budget trimmed** per UJH rule: settings Save/Download buttons are
+  ghost now, daily-driving kWh bars are outlined ink instead of orange fill,
+  session cost values lost the accent.
+- **Battery-health chart on /history is collapsed by default** (lazy-drawn
+  on first open) — a healthy pack is a flat line not worth the space.
+- Language switcher is now real `<button>`s (keyboard-focusable).
+- German catalog: added missing `Days`/`Signal`/`Status`/`No data yet.`
+  (Lab) plus keys for the new UI strings.
+- Removed unused `httpx2` dev dependency.
+
 ## [1.46.1] — 2026-07-06
 
 ### Changed

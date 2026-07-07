@@ -250,10 +250,16 @@ def compute_soh(min_soc_span: int = 12, window: int = 12) -> dict:
                 .where(ChargeSession.soc_end.is_not(None))
             ).all()
         )
+    # energy_kwh is AC-side (wall) energy — divide by the user's charging-loss
+    # factor so charge-derived samples estimate what actually reached the pack
+    # instead of reading ~10 % high (which pinned the SoH at a capped 100 %).
+    from .app_settings import get_charging_loss_factor
+
+    loss = get_charging_loss_factor()
     for c in charges:
         span = (c.soc_end or 0) - (c.soc_start or 0)
         if span >= min_soc_span and c.energy_kwh and c.energy_kwh > 0:
-            samples.append((c.started_at, c.energy_kwh / (span / 100.0)))
+            samples.append((c.started_at, c.energy_kwh / (span / 100.0) / loss))
     # Monthly driving aggregate (no charging losses → a cleaner second source).
     for pt in compute_battery_trend(min_soc_drop=4, min_bucket_drop=min_soc_span)["points"]:
         samples.append((datetime.strptime(pt["month"], "%Y-%m"), float(pt["kwh"])))

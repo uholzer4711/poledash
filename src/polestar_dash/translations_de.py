@@ -25,6 +25,16 @@ TRANSLATIONS_DE: dict[str, str] = {
     # --- Consolidated Lab tab (lab.html: live C3 + raw + control + discovery) ---
     "08 / LAB": "08 / LABOR",
     "& diagnostics": "& Diagnose",
+    # --- Settings jump-nav ---
+    "Settings sections": "Einstellungs-Bereiche",
+    "Alerts": "Alarme",
+    "Pricing": "Preise",
+    "Locations": "Orte",
+    "Integrations": "Integrationen",
+    "Days": "Tage",
+    "Signal": "Signal",
+    "Status": "Status",
+    "No data yet.": "Noch keine Daten.",
     "Consolidated developer view: live C3 state, the raw API payload, write "
     "controls and field-discovery tooling — one section per frame.":
         "Konsolidierte Entwickler-Ansicht: Live-C3-Status, die rohe API-Antwort, "
@@ -574,6 +584,8 @@ TRANSLATIONS_DE: dict[str, str] = {
     "no GPS in this response": "kein GPS in dieser Antwort",
     "Unlocked": "Entriegelt",
     "a door is open!": "eine Tür ist offen!",
+    "1 window open": "1 Fenster offen",
+    "{n} windows open": "{n} Fenster offen",
     "all closed": "alles geschlossen",
     "no state data": "keine Statusdaten",
     "C3 not connected — showing last known state from {time}. The car account may need re-pairing.": "C3 nicht verbunden — zeige letzten bekannten Stand von {time}. Das Fahrzeugkonto muss evtl. neu gekoppelt werden.",
@@ -915,11 +927,11 @@ TRANSLATIONS_DE: dict[str, str] = {
     "≈ {kwh} kWh usable of {nom} kWh · {n} measurements":
         "≈ {kwh} kWh nutzbar von {nom} kWh · {n} Messungen",
     "The car reports no SoH, so this is estimated from charge & drive energy vs "
-    "the SoC change. AC charging losses bias it high, so a healthy pack reads "
-    "~100% until real degradation appears.":
+    "the SoC change. Wall energy is corrected by your charging-loss factor "
+    "(Settings), so remaining bias is small.":
         "Das Auto meldet keinen SoH-Wert; geschätzt aus Lade- & Fahrenergie "
-        "gegen die SoC-Änderung. AC-Ladeverluste verzerren nach oben, daher "
-        "zeigt ein gesunder Akku ~100 %, bis echte Degradation auftritt.",
+        "gegen die SoC-Änderung. Wandenergie wird um deinen Ladeverlust-Faktor "
+        "(Einstellungen) korrigiert, die verbleibende Verzerrung ist klein.",
     "Needs a few charges or trips with a noticeable SoC change.":
         "Braucht ein paar Ladungen oder Fahrten mit merklicher SoC-Änderung.",
     "≈ {kwh} kWh measured · {nom} kWh nominal · {n} samples":

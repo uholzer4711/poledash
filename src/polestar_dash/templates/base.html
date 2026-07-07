@@ -10,10 +10,10 @@
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
   <link rel="apple-touch-icon" href="/static/icon.svg">
   <title>{% block title %}poledash{% endblock %}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/ujh.css?v=20260628c">
+  {# All fonts + JS are vendored under /static/vendor — a CDN outage or an
+     offline phone in the car must not take the dashboard down. #}
+  <link rel="stylesheet" href="/static/vendor/fonts/fonts.css">
+  <link rel="stylesheet" href="/static/ujh.css?v=20260707a">
   <script>
     /* Pre-paint: resolve mobile vs web layout before first paint (no FOUC).
        localStorage['view-mode'] = 'mobile' | 'web' | unset(=auto by width).
@@ -30,10 +30,10 @@
       } catch (e) {}
     })();
   </script>
-  <script src="https://unpkg.com/htmx.org@2.0.3" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/date-fns@3.6.0/cdn.min.js" defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js" defer></script>
+  <script src="/static/vendor/htmx.min.js" defer></script>
+  <script src="/static/vendor/chart.umd.min.js" defer></script>
+  <script src="/static/vendor/date-fns.min.js" defer></script>
+  <script src="/static/vendor/chartjs-adapter-date-fns.bundle.min.js" defer></script>
   {% block head_extra %}{% endblock %}
 </head>
 <body{% if demo_mode %} data-demo="1"{% endif %}>
@@ -46,7 +46,7 @@
       <div class="center">POLEDASH · POLESTAR TELEMETRY</div>
       <div class="right">
         <span class="lang-switch">
-          <a class="{% if ui_lang() == 'de' %}active{% endif %}" onclick="setLang('de')">DE</a><span class="sep">/</span><a class="{% if ui_lang() == 'en' %}active{% endif %}" onclick="setLang('en')">EN</a>
+          <button type="button" class="{% if ui_lang() == 'de' %}active{% endif %}" onclick="setLang('de')">DE</button><span class="sep">/</span><button type="button" class="{% if ui_lang() == 'en' %}active{% endif %}" onclick="setLang('en')">EN</button>
         </span>
         <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()">{{ t("Light") }}</button>
         <button class="view-toggle" id="view-btn" onclick="toggleViewMode()">{{ t("Mobile") }}</button>
@@ -173,6 +173,11 @@
       } catch(e) {}
     }
     window.addEventListener('load', () => { pollLive(); setInterval(pollLive, 30000); });
+    // Static assets stay available offline (vendored JS/fonts); pages + API
+    // remain network-only — see /static/sw.js.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   </script>
 </body>
 </html>
