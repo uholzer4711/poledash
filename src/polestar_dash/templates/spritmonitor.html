@@ -12,11 +12,11 @@
   <div class="card mb-6">
     <div class="card-label">{{ t("Step 1 · API access") }}</div>
     <div class="stat-sub mb-4">
-      {{ t("Spritmonitor needs two separate tokens — both free, both generated on their site:") }}
+      {{ t("Only your personal bearer token is required — generated for free on their site:") }}
     </div>
     <ol class="mono-xs" style="line-height:1.8;padding-left:20px;margin:0 0 16px">
       <li>{{ t("<b>Bearer token</b> — your personal access token. Log in at spritmonitor.de, then open the <a href=\"https://www.spritmonitor.de/en/my_account/change_password.html\" target=\"_blank\">Password page</a> and generate one there (it's listed alongside the password-change form).")|safe }}</li>
-      <li>{{ t("<b>App token</b> — identifies poledash as an application. Request one on the <a href=\"https://www.spritmonitor.de/en/request_apptoken.html\" target=\"_blank\">App-Token request page</a> (name it anything, e.g. \"poledash\"). This may take a moment to be approved.")|safe }}</li>
+      <li>{{ t("<b>App token</b> — optional. Spritmonitor no longer answers individual app-token requests, so poledash uses the public community Application-ID (the one the Home Assistant integration ships) by default. Only fill this if you have your own token.")|safe }}</li>
       <li>{{ t("No Spritmonitor account yet? <a href=\"https://www.spritmonitor.de/en/register.html\" target=\"_blank\">Sign up here</a> first, and make sure your vehicle is added there as <b>electric</b> (so kWh/% fields are available).")|safe }}</li>
     </ol>
     <div class="flex gap-4" style="align-items:flex-end;flex-wrap:wrap">
@@ -25,8 +25,8 @@
         <input id="sm_bearer" type="password" placeholder="{{ t('paste token from the Password page') }}" autocomplete="off">
       </div>
       <div class="field" style="flex:1;min-width:220px">
-        <label>{{ t("App token") }}</label>
-        <input id="sm_app_token" type="password" placeholder="{{ t('paste token from the App-Token page') }}" autocomplete="off">
+        <label>{{ t("App token (optional)") }}</label>
+        <input id="sm_app_token" type="password" placeholder="{{ t('leave empty to use the built-in ID') }}" autocomplete="off">
       </div>
       <button class="btn accent" onclick="smSaveCredentials()">{{ t("Save & test") }} <span class="arrow">→</span></button>
       <span id="sm_creds_status" class="mono-xs muted"></span>
@@ -78,9 +78,13 @@
   <div class="card mb-6">
     <div class="flex-between">
       <div class="card-label">{{ t("Pending export") }}</div>
-      <button class="btn ghost" onclick="smLoadSessions()">{{ t("Refresh") }} <span class="arrow">→</span></button>
+      <div class="flex gap-4">
+        <button class="btn accent" onclick="smExportAll(this)">{{ t("Export all (oldest first)") }} <span class="arrow">→</span></button>
+        <button class="btn ghost" onclick="smLoadSessions()">{{ t("Refresh") }} <span class="arrow">→</span></button>
+      </div>
     </div>
-    <div class="stat-sub mb-4">{{ t("Completed sessions not yet sent to Spritmonitor.") }}</div>
+    <div class="stat-sub mb-4">{{ t("Completed sessions not yet sent to Spritmonitor. Exporting oldest-first keeps Spritmonitor's trip chain intact — the bulk button does that for you.") }}</div>
+    <div id="sm_export_all_status" class="mono-xs muted mb-4"></div>
     <div id="sm_pending"><p class="muted">{{ t("Loading…") }}</p></div>
   </div>
 
@@ -101,7 +105,7 @@
       const bearer = document.getElementById('sm_bearer').value.trim();
       const appToken = document.getElementById('sm_app_token').value.trim();
       const st = document.getElementById('sm_creds_status');
-      if (!bearer || !appToken) { st.textContent = {{ t("enter both tokens") | tojson }}; return; }
+      if (!bearer) { st.textContent = {{ t("enter your bearer token") | tojson }}; return; }
       st.textContent = {{ t("saving…") | tojson }};
       try {
         const r = await fetch('/api/spritmonitor/credentials?' + new URLSearchParams({bearer_token: bearer, app_token: appToken}), {method: 'POST'});
@@ -121,7 +125,7 @@
         const j = await r.json();
         smVehicles = j.vehicles || [];
         const sel = document.getElementById('sm_vehicle_sel');
-        sel.innerHTML = smVehicles.map(v => `<option value="${v.id}">${smEsc(v.name || ('#' + v.id))}</option>`).join('') || `<option>{{ t("no vehicles found") }}</option>`;
+        sel.innerHTML = smVehicles.map(v => `<option value="${v.id}">${smEsc(v.name || [v.make, v.model].filter(Boolean).join(' ') || ('#' + v.id))}</option>`).join('') || `<option>{{ t("no vehicles found") }}</option>`;
         sel.disabled = smVehicles.length === 0;
         sel.onchange = smLoadTanks;
         st.textContent = {{ t("connection OK") | tojson }};
@@ -157,6 +161,21 @@
         st.textContent = {{ t("saved") | tojson }};
         setTimeout(() => location.reload(), 800);
       } catch (e) { st.textContent = {{ t("error: ") | tojson }} + e; }
+    }
+
+    async function smExportAll(btn) {
+      const st = document.getElementById('sm_export_all_status');
+      btn.disabled = true;
+      st.textContent = {{ t("exporting…") | tojson }};
+      try {
+        const r = await fetch('/api/spritmonitor/export-all', {method: 'POST'});
+        if (!r.ok) { st.textContent = {{ t("error: ") | tojson }} + (await r.text()); return; }
+        const j = await r.json();
+        st.textContent = `${j.exported} ` + {{ t("exported") | tojson }} +
+          (j.failed ? `, ${j.failed} ` + {{ t("failed") | tojson }} + `: ${j.errors.join(' · ')}` : '');
+        await smLoadSessions();
+      } catch (e) { st.textContent = {{ t("error: ") | tojson }} + e; }
+      finally { btn.disabled = false; }
     }
 
     async function smSaveAutoExport(value) {
@@ -212,5 +231,10 @@
     }
 
     window.addEventListener('load', smLoadSessions);
+    {% if sm_configured_creds %}
+    // Credentials are stored server-side — refill the vehicle/tank selects
+    // without asking the user to re-paste the bearer token after a reload.
+    window.addEventListener('load', smTestConnection);
+    {% endif %}
   </script>
 {% endblock %}

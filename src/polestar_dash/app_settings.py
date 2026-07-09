@@ -311,6 +311,11 @@ def set_automation_config(
 # spritmonitor.py; this is just persistence, mirroring the rest of this file.
 SPRITMONITOR_BEARER_KEY = "spritmonitor_bearer_token"
 SPRITMONITOR_APP_TOKEN_KEY = "spritmonitor_app_token"
+# Public default Application-ID, same one the Home Assistant Spritmonitor
+# integration (matbott/home_assistant_Spritmonitor) ships to all its users.
+# Spritmonitor stopped answering individual app-token requests, so this is the
+# de-facto community token; a user-supplied token in settings still overrides.
+SPRITMONITOR_DEFAULT_APP_TOKEN = "095369dede84c55797c22d4854ca6efe"
 SPRITMONITOR_VEHICLE_ID_KEY = "spritmonitor_vehicle_id"
 SPRITMONITOR_VEHICLE_NAME_KEY = "spritmonitor_vehicle_name"
 SPRITMONITOR_TANK_ID_KEY = "spritmonitor_tank_id"
@@ -323,16 +328,18 @@ SPRITMONITOR_FIRST_DONE_KEY = "spritmonitor_first_export_done"
 
 def get_spritmonitor_credentials() -> tuple[str, str] | None:
     bearer = get_setting(SPRITMONITOR_BEARER_KEY, None)
-    app_token = get_setting(SPRITMONITOR_APP_TOKEN_KEY, None)
-    if not bearer or not app_token:
+    if not bearer:
         return None
+    app_token = get_setting(SPRITMONITOR_APP_TOKEN_KEY, None) or SPRITMONITOR_DEFAULT_APP_TOKEN
     return str(bearer), str(app_token)
 
 
-def set_spritmonitor_credentials(bearer_token: str, app_token: str) -> None:
-    if not bearer_token.strip() or not app_token.strip():
-        raise ValueError("Bearer token and app token must not be empty")
+def set_spritmonitor_credentials(bearer_token: str, app_token: str = "") -> None:
+    if not bearer_token.strip():
+        raise ValueError("Bearer token must not be empty")
     set_setting(SPRITMONITOR_BEARER_KEY, bearer_token.strip())
+    # Empty app token = use SPRITMONITOR_DEFAULT_APP_TOKEN (stored empty so a
+    # later change of the default takes effect without a resave).
     set_setting(SPRITMONITOR_APP_TOKEN_KEY, app_token.strip())
 
 

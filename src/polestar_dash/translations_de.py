@@ -1114,18 +1114,18 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Pushes your charging sessions to <a href=\"https://www.spritmonitor.de\" target=\"_blank\">spritmonitor.de</a> as electric \"fuelings\" — same odometer, kWh, cost and AC/DC tracking you'd enter by hand, done automatically.":
         "Überträgt deine Ladevorgänge als elektrische „Tankvorgänge“ an <a href=\"https://www.spritmonitor.de\" target=\"_blank\">spritmonitor.de</a> — derselbe Kilometerstand, kWh, Kosten und AC/DC-Tracking, die du sonst manuell eintragen würdest, automatisch.",
     "Step 1 · API access": "Schritt 1 · API-Zugang",
-    "Spritmonitor needs two separate tokens — both free, both generated on their site:":
-        "Spritmonitor braucht zwei getrennte Tokens — beide kostenlos, beide auf deren Seite erzeugt:",
+    "Only your personal bearer token is required — generated for free on their site:":
+        "Nur dein persönlicher Bearer-Token ist nötig — kostenlos auf deren Seite erzeugt:",
     "<b>Bearer token</b> — your personal access token. Log in at spritmonitor.de, then open the <a href=\"https://www.spritmonitor.de/en/my_account/change_password.html\" target=\"_blank\">Password page</a> and generate one there (it's listed alongside the password-change form).":
         "<b>Bearer-Token</b> — dein persönliches Zugriffstoken. Bei spritmonitor.de einloggen, dann die <a href=\"https://www.spritmonitor.de/en/my_account/change_password.html\" target=\"_blank\">Passwort-Seite</a> öffnen und dort eines erzeugen (steht neben dem Passwort-ändern-Formular).",
-    "<b>App token</b> — identifies poledash as an application. Request one on the <a href=\"https://www.spritmonitor.de/en/request_apptoken.html\" target=\"_blank\">App-Token request page</a> (name it anything, e.g. \"poledash\"). This may take a moment to be approved.":
-        "<b>App-Token</b> — identifiziert poledash als Anwendung. Auf der <a href=\"https://www.spritmonitor.de/en/request_apptoken.html\" target=\"_blank\">App-Token-Anfrage-Seite</a> eines beantragen (beliebiger Name, z.B. „poledash“). Die Freigabe kann etwas dauern.",
+    "<b>App token</b> — optional. Spritmonitor no longer answers individual app-token requests, so poledash uses the public community Application-ID (the one the Home Assistant integration ships) by default. Only fill this if you have your own token.":
+        "<b>App-Token</b> — optional. Spritmonitor beantwortet individuelle App-Token-Anfragen nicht mehr, daher nutzt poledash standardmäßig die öffentliche Community-Application-ID (dieselbe, die die Home-Assistant-Integration mitliefert). Nur ausfüllen, wenn du einen eigenen Token hast.",
     "No Spritmonitor account yet? <a href=\"https://www.spritmonitor.de/en/register.html\" target=\"_blank\">Sign up here</a> first, and make sure your vehicle is added there as <b>electric</b> (so kWh/% fields are available).":
         "Noch kein Spritmonitor-Konto? Zuerst <a href=\"https://www.spritmonitor.de/en/register.html\" target=\"_blank\">hier registrieren</a> und das Fahrzeug dort als <b>Elektro</b> anlegen (sonst fehlen die kWh/%-Felder).",
     "Bearer token": "Bearer-Token",
     "paste token from the Password page": "Token von der Passwort-Seite einfügen",
-    "App token": "App-Token",
-    "paste token from the App-Token page": "Token von der App-Token-Seite einfügen",
+    "App token (optional)": "App-Token (optional)",
+    "leave empty to use the built-in ID": "leer lassen für die eingebaute ID",
     "Save & test": "Speichern & testen",
     "Tokens saved": "Tokens gespeichert",
     "Step 2 · Vehicle & tank": "Schritt 2 · Fahrzeug & Tank",
@@ -1140,12 +1140,14 @@ TRANSLATIONS_DE: dict[str, str] = {
         "Wenn aktiv, wird jeder Ladevorgang gleich nach Abschluss zu Spritmonitor übertragen — kein manueller Schritt. Wenn aus, den „Export“-Button bei jeder Sitzung unten oder auf ihrer Detailseite nutzen.",
     "Automatically export new sessions": "Neue Ladevorgänge automatisch exportieren",
     "Pending export": "Export ausstehend",
-    "Completed sessions not yet sent to Spritmonitor.": "Abgeschlossene Ladevorgänge, die noch nicht an Spritmonitor gesendet wurden.",
+    "Export all (oldest first)": "Alle exportieren (älteste zuerst)",
+    "Completed sessions not yet sent to Spritmonitor. Exporting oldest-first keeps Spritmonitor's trip chain intact — the bulk button does that for you.":
+        "Abgeschlossene Ladevorgänge, die noch nicht an Spritmonitor gesendet wurden. Export in chronologischer Reihenfolge hält Spritmonitors Strecken-Kette intakt — der Sammel-Button macht das automatisch.",
     "Already exported": "Bereits exportiert",
     "No sessions exported yet.": "Noch keine Ladevorgänge exportiert.",
     "Nothing pending — every completed session is exported.": "Nichts ausstehend — jeder abgeschlossene Ladevorgang ist exportiert.",
     "load error": "Ladefehler",
-    "enter both tokens": "beide Tokens eingeben",
+    "enter your bearer token": "Bearer-Token eingeben",
     "saved — testing connection…": "gespeichert — Verbindung wird getestet…",
     "connection failed: ": "Verbindung fehlgeschlagen: ",
     "no vehicles found": "keine Fahrzeuge gefunden",

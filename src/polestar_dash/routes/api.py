@@ -459,7 +459,7 @@ def spritmonitor_status() -> dict:
 
 @router.post("/spritmonitor/credentials")
 def spritmonitor_set_credentials(
-    bearer_token: str = Query(...), app_token: str = Query(...)
+    bearer_token: str = Query(...), app_token: str = Query("")
 ) -> dict:
     from ..app_settings import set_spritmonitor_credentials
 
@@ -477,7 +477,7 @@ def spritmonitor_test() -> dict:
 
     creds = get_spritmonitor_credentials()
     if creds is None:
-        raise HTTPException(400, "Save bearer token + app token first")
+        raise HTTPException(400, "Save your bearer token first")
     try:
         vehicles = test_connection(*creds)
     except SpritmonitorError as e:
@@ -492,7 +492,7 @@ def spritmonitor_tanks(vehicle_id: str = Query(...)) -> dict:
 
     creds = get_spritmonitor_credentials()
     if creds is None:
-        raise HTTPException(400, "Save bearer token + app token first")
+        raise HTTPException(400, "Save your bearer token first")
     try:
         tanks = list_tanks(*creds, vehicle_id)
     except SpritmonitorError as e:
@@ -551,6 +551,31 @@ def spritmonitor_export_session(session_id: int) -> dict:
     except SpritmonitorError as e:
         raise HTTPException(502, str(e)) from e
     return {"status": "exported", "result": result}
+
+
+@router.post("/spritmonitor/export-all")
+def spritmonitor_export_all() -> dict:
+    """Export every pending session, oldest first — Spritmonitor marks the
+    very first fueling as the trip-chain anchor, so it must be the earliest
+    session, not whichever the user happens to click first."""
+    from ..spritmonitor import (
+        SpritmonitorError,
+        SpritmonitorNotConfigured,
+        export_session,
+        pending_sessions,
+    )
+
+    exported = 0
+    errors: list[str] = []
+    for cs in sorted(pending_sessions(), key=lambda c: c.started_at):
+        try:
+            export_session(cs.id)  # type: ignore[arg-type]
+            exported += 1
+        except SpritmonitorNotConfigured as e:
+            raise HTTPException(400, str(e)) from e
+        except SpritmonitorError as e:
+            errors.append(f"#{cs.id}: {e}")
+    return {"exported": exported, "failed": len(errors), "errors": errors}
 
 
 # --- C3 remote control (shared by dashboard + Battery&Charging panels) --------

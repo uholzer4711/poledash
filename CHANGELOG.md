@@ -3,6 +3,43 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.47.1] — 2026-07-09
+
+### Fixed
+
+- **Spritmonitor vehicle/tank listing was empty.** The client called the
+  singular endpoints (`vehicle.json`, `…/tank.json`) — on this API those are
+  the *create* endpoints, which answer a GET with a validation-error dict and
+  HTTP 200, read as "no vehicles". Now uses `vehicles.json` / `tanks.json`.
+- **Rejected fuelings no longer count as exported.** Spritmonitor rejects
+  invalid fuelings with HTTP 200 + an error body; one backlog session was
+  silently dropped this way while being stamped as exported. Error bodies now
+  raise, and `charging_power` is omitted entirely when a session has no power
+  reading (their validation demands 1–1000 kW, so sending 0 rejected the
+  whole fueling).
+- **Vehicle picker labels.** `vehicles.json` has no `name` field — the
+  dropdown now shows `make model` instead of `#1731732`.
+- **Electric fuel sort detected by API type** (`type == 5`) instead of
+  name-guessing — live names are localized ("Elektrizität", "Ökostrom") and
+  didn't match the old needles.
+
+### Changed
+
+- **App token no longer required.** Spritmonitor stopped answering individual
+  app-token requests; poledash now defaults to the public community
+  Application-ID that the Home Assistant integration ships (verified accepted
+  by the API). A user-supplied token in settings still overrides. Only the
+  personal bearer token remains required.
+- **"Export all (oldest first)" button** on /spritmonitor pushes the whole
+  backlog in chronological order — Spritmonitor anchors its trip chain on the
+  first-ever fueling, so it must be the earliest session, not whichever gets
+  clicked first.
+- **/spritmonitor auto-fills the vehicle/tank selects on load** when
+  credentials are already stored — no re-pasting the bearer token after a
+  reload.
+- Old charge sessions (pre-odometer feature) got their `odometer_km`
+  backfilled from vehicle snapshots so they qualify for export.
+
 ## [1.47.0] — 2026-07-07
 
 ### Fixed
