@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from sqlmodel import Session, select
 
-from polestar_dash.db.models import ChargeSession, VehicleSnapshot
+from polestar_dash.db.models import C3Snapshot, ChargeSession, VehicleSnapshot
 from polestar_dash.db.session import get_engine
 from polestar_dash.polestar.fetcher import Snapshot
 from polestar_dash.sessions import update_session
@@ -54,6 +54,67 @@ def test_inferred_session_survives_soc_plateau(tmp_db):
     assert closed is not None
     assert closed.is_complete is True
     assert closed.energy_kwh is not None and closed.energy_kwh > 0
+
+
+def _c3(ts, *, usage_mode=None, plugged=None):
+    with Session(get_engine()) as s:
+        s.add(C3Snapshot(vin="V", fetched_at=ts, usage_mode=usage_mode,
+                         is_plugged_in=plugged))
+        s.commit()
+
+
+def test_c3_driving_vetoes_inferred_open(tmp_db):
+    """Downhill recuperation looks like a silent charge to the main API (SoC
+    up, odometer frozen mid-drive). A fresh C3 snapshot saying the car is
+    driving / unplugged must veto the inferred open (real case: 2026-07-12,
+    53→58% regen booked as a phantom 4.5 kWh session)."""
+    t0 = datetime(2026, 7, 12, 12, 49, 0)
+    _c3(t0 - timedelta(minutes=2), usage_mode="driving", plugged=False)
+    update_session(_snap(t0, 56, 3868.1),
+                   prev=_prev(t0 - timedelta(minutes=20), 53, 3868.1))
+    assert _open() is None
+
+
+def test_c3_unplugged_vetoes_inferred_open(tmp_db):
+    """Even without usage_mode (older C3 rows), is_plugged_in=False alone
+    rules out a silent charge."""
+    t0 = datetime(2026, 7, 12, 12, 49, 0)
+    _c3(t0 - timedelta(minutes=5), plugged=False)
+    update_session(_snap(t0, 56, 3868.1),
+                   prev=_prev(t0 - timedelta(minutes=20), 53, 3868.1))
+    assert _open() is None
+
+
+def test_c3_plugged_in_allows_inferred_open(tmp_db):
+    """A genuine silent charge (plugged in, parked) must still open — the
+    veto must not suppress the heuristic it was added to protect."""
+    t0 = datetime(2026, 7, 10, 17, 30, 0)
+    _c3(t0 - timedelta(minutes=3), usage_mode="inactive", plugged=True)
+    update_session(_snap(t0, 44, 3719.8),
+                   prev=_prev(t0 - timedelta(minutes=10), 41, 3719.8))
+    cs = _open()
+    assert cs is not None and cs.inferred is True
+
+
+def test_stale_c3_does_not_veto(tmp_db):
+    """A C3 row older than the freshness window (outage) must not veto —
+    behaviour falls back to the pre-C3 heuristic."""
+    t0 = datetime(2026, 7, 12, 12, 49, 0)
+    _c3(t0 - timedelta(hours=3), usage_mode="driving", plugged=False)
+    update_session(_snap(t0, 56, 3868.1),
+                   prev=_prev(t0 - timedelta(minutes=20), 53, 3868.1))
+    assert _open() is not None
+
+
+def test_api_charging_ignores_c3_veto(tmp_db):
+    """When the API itself says Charging, C3 state is irrelevant — the veto
+    only guards the inference path."""
+    t0 = datetime(2026, 7, 12, 12, 49, 0)
+    _c3(t0 - timedelta(minutes=2), usage_mode="driving", plugged=False)
+    update_session(_snap(t0, 56, 3868.1, status="Charging"),
+                   prev=_prev(t0 - timedelta(minutes=20), 53, 3868.1))
+    cs = _open()
+    assert cs is not None and cs.inferred is False
 
 
 def test_api_session_closes_on_idle(tmp_db):

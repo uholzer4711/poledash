@@ -3,6 +3,20 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.47.2] — 2026-07-13
+
+### Fixed
+
+- **Downhill recuperation no longer booked as a phantom charge session.**
+  The inferred-session heuristic ("SoC up while the odometer is unchanged")
+  also matched regen during a descent, because the main API freezes the
+  odometer mid-drive — a 42 km downhill run on 2026-07-12 became a fake
+  4.5 kWh "charge" (peak 0.0 kW) that was even auto-exported to Spritmonitor.
+  Opening an inferred session now consults the freshest C3 snapshot
+  (≤ 15 min): `usage_mode == "driving"` or `is_plugged_in == false` vetoes
+  the open. C3 missing, stale, or disabled falls back to the old behaviour;
+  API-reported charges are unaffected.
+
 ## [1.47.1] — 2026-07-09
 
 ### Fixed

@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 
 from .app_settings import get_calibrated_battery_kwh, get_charging_loss_factor
 from .config import get_settings
-from .db.models import ChargeSession, VehicleSnapshot
+from .db.models import C3Snapshot, ChargeSession, VehicleSnapshot
 from .db.session import get_engine
 from .polestar.fetcher import Snapshot
 
@@ -30,6 +30,36 @@ TERMINAL_STATES = {"Done", "Idle", "Fault", "Error"}
 # a SoC rise while the odometer is stationary as an implicit charge.
 SOC_OPEN_DELTA = 2  # %; threshold to OPEN a synthetic session (noise guard)
 ODO_STATIONARY_TOL_KM = 0.5  # parking-spot wiggle / GPS drift tolerance
+C3_VETO_MAX_AGE = timedelta(minutes=15)  # freshness window for the C3 veto
+
+
+def _c3_vetoes_inferred(s: Session, vin: str, at: datetime) -> bool:
+    """Whether live C3 state rules out a *silent* charge right now.
+
+    The main API freezes the odometer during a drive, so "SoC up while the
+    odometer is unchanged" also matches downhill recuperation — which is
+    exactly how a 42 km descent got booked as a phantom 4.5 kWh charge
+    (session 16, 2026-07-12). C3 disambiguates: a fresh snapshot saying the
+    car is being driven, or not plugged in at all, vetoes opening an
+    inferred session. No C3 row, a stale one (outage), or missing fields
+    mean no veto — pre-C3 behaviour is preserved.
+    """
+    row = s.exec(
+        select(
+            C3Snapshot.fetched_at, C3Snapshot.usage_mode, C3Snapshot.is_plugged_in
+        )
+        .where(C3Snapshot.vin == vin)
+        .order_by(C3Snapshot.fetched_at.desc())
+        .limit(1)
+    ).first()
+    if row is None:
+        return False
+    fetched_at, usage_mode, is_plugged_in = row
+    if abs(at - fetched_at) > C3_VETO_MAX_AGE:
+        return False
+    if usage_mode == "driving":
+        return True
+    return is_plugged_in is False
 
 
 def _open_session(session: Session, vin: str) -> ChargeSession | None:
@@ -333,6 +363,8 @@ def update_session(
             and stationary
             and soc_delta is not None
             and soc_delta >= SOC_OPEN_DELTA
+            # Last so the C3 lookup only runs when everything else matches.
+            and not _c3_vetoes_inferred(s, snap.vin, snap.fetched_at)
         )
         inferred_continue = (
             cs is not None
