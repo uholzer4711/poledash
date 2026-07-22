@@ -356,6 +356,9 @@ def settings_page(request: Request):
     tg_note = (
         "ready" if s.telegram_chat_id else "set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID"
     )
+    wa_note = (
+        "ready" if s.whatsapp_to else "set WHATSAPP_URL + WHATSAPP_API_KEY + WHATSAPP_TO"
+    )
     mqtt_note = f"{s.mqtt_host}:{s.mqtt_port}" if s.mqtt_host else "set MQTT_HOST"
     smtp_note = (
         f"{s.smtp_host}:{s.smtp_port} → {s.smtp_to}" if s.smtp_host and s.smtp_to
@@ -365,6 +368,7 @@ def settings_page(request: Request):
         ("Email (SMTP)", bool(s.smtp_host and s.smtp_to), smtp_note),
         ("ntfy.sh push", bool(s.ntfy_topic), ntfy_note),
         ("Telegram", bool(s.telegram_bot_token and s.telegram_chat_id), tg_note),
+        ("WhatsApp", bool(s.whatsapp_url and s.whatsapp_api_key and s.whatsapp_to), wa_note),
         ("MQTT / Home Assistant", bool(s.mqtt_host), mqtt_note),
     ]
     if not s.demo_mode:

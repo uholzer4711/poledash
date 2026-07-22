@@ -12,6 +12,7 @@ def _settings():
         ntfy_topic="t", ntfy_url="http://x", ntfy_username=None, ntfy_password=None,
         smtp_host=None, smtp_to=None,
         telegram_bot_token=None, telegram_chat_id=None,
+        whatsapp_url=None, whatsapp_api_key=None, whatsapp_to=None,
     )
 
 

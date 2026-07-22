@@ -5,8 +5,8 @@ Polestar consumer API in the background, stores the history in SQLite, and
 serves a single page with SoC, range, charging state, odometer, trips,
 sessions, anomalies and service warnings.
 
-Optional: **Email / ntfy.sh / Telegram** push, **MQTT / Home Assistant**,
-**Prometheus / Grafana**.
+Optional: **Email / ntfy.sh / Telegram / WhatsApp** push, **MQTT / Home
+Assistant**, **Prometheus / Grafana**.
 
 > Unofficial. Not affiliated with Polestar. Uses reverse-engineered endpoints
 > via [pypolestar](https://github.com/pypolestar/pypolestar) and may break.
@@ -139,6 +139,7 @@ See [`.env.example`](.env.example). Most useful:
 | `SMTP_TO` | — | Recipient address |
 | `NTFY_TOPIC` | — | Unguessable string |
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | — | Bot push |
+| `WHATSAPP_URL` / `WHATSAPP_API_KEY` / `WHATSAPP_TO` | — | WhatsApp push via the optional WAHA sidecar (`docker compose --profile whatsapp up -d`, see comment in `docker-compose.yml`). **Not an official API** — runs a real WhatsApp session (GOWS engine: Go/whatsmeow over WebSocket, no browser) under its own number; carries the usual unofficial-automation ban risk, so prefer a dedicated/secondary number over your daily-driver one |
 | `MQTT_HOST` | — | Enables MQTT + HA discovery |
 | `BACKUP_KEEP_DAYS` | `14` | Daily SQLite backups |
 | `LOG_PERSIST_INTERVAL_MIN` / `LOG_RETENTION_DAYS` | `2` / `90` | Activity-log: flush the in-memory ring to the DB every N min; prune persisted rows after N days |

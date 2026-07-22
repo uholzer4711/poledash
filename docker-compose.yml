@@ -21,6 +21,47 @@ services:
       # Auto-update via Watchtower when the "ops" profile is started.
       com.centurylinklabs.watchtower.enable: "true"
 
+  # Optional: run `docker compose --profile whatsapp up -d` to also start the
+  # WhatsApp sidecar (WAHA — github.com/devlikeapro/waha). Not an official
+  # WhatsApp API — it drives a real WhatsApp session under its own number,
+  # with the usual unofficial-automation ban risk (prefer a dedicated/
+  # secondary number). Uses the GOWS engine (Go/whatsmeow over WebSocket, no
+  # browser) instead of WAHA's WEBJS default — the Puppeteer-based engines
+  # (WEBJS here, and open-wa/wa-automate, tried first) were both breaking
+  # against WhatsApp's current web client with a stale-user-agent handshake
+  # timeout as of 2026-07 (see CHANGELOG v1.48.0). First start: `docker
+  # compose --profile whatsapp logs -f waha` and wait for it to report the
+  # "default" session waiting for a scan, then fetch the QR code —
+  # `curl -H "X-Api-Key: $WAHA_API_KEY" http://127.0.0.1:3080/api/default/auth/qr -o qr.png`
+  # (or open that URL in a browser through an SSH tunnel) — and scan it with
+  # the WhatsApp app on the phone that owns the sending number. The session
+  # then persists in the `waha-sessions` volume. Set WAHA_API_KEY in .env
+  # (min. 8 chars, no "$" — unlike polestar-dash's own secrets this one IS
+  # read via compose's ${...} substitution) to the same value as
+  # polestar-dash's WHATSAPP_API_KEY, and point WHATSAPP_URL at
+  # "http://waha:3000" + WHATSAPP_TO at the recipient's chat id (e.g.
+  # "4917612345678@c.us").
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: poledash-waha
+    restart: on-failure
+    profiles: ["whatsapp"]
+    dns:
+      # devlikeapro/waha's own compose file recommends this if the container
+      # struggles to resolve web.whatsapp.com.
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      WHATSAPP_START_SESSION: "default"
+      WAHA_API_KEY: "${WAHA_API_KEY:-}"
+    ports:
+      # Only needed transiently to fetch the QR code (see comment above);
+      # bound to localhost like the main service.
+      - "127.0.0.1:3080:3000"
+    volumes:
+      - waha-sessions:/app/.sessions
+
   # Optional: run `docker compose --profile ops up -d` to also start Watchtower,
   # which periodically pulls the latest image and restarts the container.
   watchtower:
@@ -34,3 +75,8 @@ services:
       WATCHTOWER_POLL_INTERVAL: "21600" # 6h
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  # WAHA's WhatsApp session (survives container recreation so you don't have
+  # to re-scan the QR code on every restart/update).
+  waha-sessions:

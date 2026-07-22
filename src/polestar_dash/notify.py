@@ -36,7 +36,7 @@ def notify(
 ) -> None:
     """Send a deduped notification via all configured channels.
 
-    Channels: ntfy, email, Telegram. Each is skipped if not configured.
+    Channels: ntfy, email, Telegram, WhatsApp. Each is skipped if not configured.
 
     Dedup is per channel: each channel records its own `(kind, key#channel)`
     row only after a successful send, so a transient failure on one channel
@@ -91,6 +91,11 @@ def notify(
         btn_url = action_url if has_action else None
         channel("telegram", lambda: telegram_send(
             f"<b>{title}</b>\n{body}", button_text=btn_text, button_url=btn_url))
+    if s.whatsapp_url and s.whatsapp_api_key and s.whatsapp_to:
+        from .whatsapp import whatsapp_send
+        # Plain text, no native buttons — inline the action link like email.
+        wa_text = f"{title}\n{email_text}"
+        channel("whatsapp", lambda: whatsapp_send(wa_text))
 
 
 def _send_ntfy(  # noqa: ANN001

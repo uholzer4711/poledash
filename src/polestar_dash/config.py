@@ -101,6 +101,17 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
 
+    # --- WhatsApp (self-hosted WAHA sidecar, github.com/devlikeapro/waha) ---
+    # Base URL of the WAHA container, e.g. "http://waha:3000" (compose service
+    # name, see docker-compose.yml "whatsapp" profile). Empty ⇒ channel
+    # disabled. Not an official WhatsApp API — the sidecar runs a real
+    # WhatsApp session (GOWS engine: Go/whatsmeow over WebSocket, no browser).
+    whatsapp_url: str = ""
+    whatsapp_api_key: str = ""
+    # Recipient chat id, e.g. "4917612345678@c.us" (own number incl. country
+    # code, no "+"/leading zeros, no spaces).
+    whatsapp_to: str = ""
+
     # --- Notification thresholds ---
     notify_low_soc: int = Field(default=20, ge=0, le=100)
     notify_service_days: int = Field(default=30, ge=0, le=365)

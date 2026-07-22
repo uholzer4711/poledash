@@ -3,6 +3,32 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.48.0] — 2026-07-22
+
+### Added
+
+- **WhatsApp push** as a fourth notification channel alongside Email/ntfy/
+  Telegram (`notify.py` → `whatsapp.py`), backed by an optional **WAHA**
+  (github.com/devlikeapro/waha) sidecar container (`docker compose --profile
+  whatsapp up -d`), using its GOWS engine (Go/whatsmeow over WebSocket, no
+  browser). Not an official WhatsApp API — the sidecar runs a real WhatsApp
+  session under its own number, carrying the usual unofficial-automation ban
+  risk; prefer a dedicated/secondary number. Configure via `WHATSAPP_URL` /
+  `WHATSAPP_API_KEY` / `WHATSAPP_TO`. The REST contract (`POST /api/sendText`,
+  `X-Api-Key` header) was verified directly against the `devlikeapro/waha`
+  source, not against third-party docs.
+  - First attempt was `open-wa`/`wa-automate` (Puppeteer-based). Ruled out for
+    two independent reasons: (1) `open-wa.org` / `docs.open-wa.org` /
+    `openwa.dev` currently serve a look-alike fork (`rmyndharis/OpenWA`) with
+    a different, incompatible API shape — don't install packages named after
+    them; (2) even the genuine `openwa/wa-automate` v4.76.0 image (verified
+    from `github.com/open-wa` directly) is currently broken against
+    WhatsApp's web client — a stale hardcoded user-agent makes every session
+    hang 30s then crash, a known, still-open, project-wide regression
+    (upstream issues #3330/#3331; the whole v4 line is unmaintained, v5 has
+    no official Docker image yet). GOWS sidesteps the entire bug class by not
+    emulating a browser at all.
+
 ## [1.47.2] — 2026-07-13
 
 ### Fixed
