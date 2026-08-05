@@ -120,15 +120,16 @@ def _check_power_collapse(snap: Snapshot, prev: VehicleSnapshot) -> None:
     )
 
 
-def _recent_range_factors(vin: str, before: Snapshot, minutes: int) -> list[float]:
+def _recent_range_factors(vin: str, before: Snapshot, minutes: int) -> tuple[list[float], float | None, float | None]:
     """Per-sample km/% factors over the last `minutes`, excluding `before`
-    itself (the caller appends the current reading). The Polestar API's
-    `range_km` field occasionally returns a transient garbage value for a
-    single poll, so a one-shot check produces only false positives — we work
-    off the window instead."""
+    itself (the caller appends the current reading), plus the min/max
+    odometer reading in that window. The Polestar API's `range_km` field
+    occasionally returns a transient garbage value for a single poll, so a
+    one-shot check produces only false positives — we work off the window
+    instead."""
     with Session(get_engine()) as s:
         stmt = (
-            select(VehicleSnapshot.range_km, VehicleSnapshot.soc_percent)
+            select(VehicleSnapshot.range_km, VehicleSnapshot.soc_percent, VehicleSnapshot.odometer_km)
             .where(VehicleSnapshot.vin == vin)
             .where(VehicleSnapshot.fetched_at < before.fetched_at)
             .where(VehicleSnapshot.fetched_at >= before.fetched_at - timedelta(minutes=minutes))
@@ -136,7 +137,18 @@ def _recent_range_factors(vin: str, before: Snapshot, minutes: int) -> list[floa
             .where(VehicleSnapshot.soc_percent > 0)
         )
         rows = s.exec(stmt).all()
-    return [rng / soc for rng, soc in rows if rng and soc]
+    factors = [rng / soc for rng, soc, _odo in rows if rng and soc]
+    odos = [odo for _rng, _soc, odo in rows if odo is not None]
+    lo = min(odos) if odos else None
+    hi = max(odos) if odos else None
+    return factors, lo, hi
+
+
+# Above this, we're actively driving within the window rather than resting —
+# uphill / high-speed consumption legitimately tanks the range factor without
+# indicating cold or degradation, so don't alert on it (only meaningful while
+# stationary or gently rolling).
+RANGE_FACTOR_DRIVE_KM = 2.0
 
 
 def _check_range_factor(snap: Snapshot) -> None:
@@ -145,12 +157,16 @@ def _check_range_factor(snap: Snapshot) -> None:
     can't fire a false alert. Daily dedup; informational rather than urgent."""
     if not snap.range_km or not snap.soc_percent:
         return
-    factors = _recent_range_factors(snap.vin, snap, RANGE_FACTOR_WINDOW_MIN)
+    factors, odo_lo, odo_hi = _recent_range_factors(snap.vin, snap, RANGE_FACTOR_WINDOW_MIN)
     factors.append(snap.range_km / snap.soc_percent)
     # Need a stable window: a lone reading (e.g. just after wake) isn't enough
     # to distinguish a real condition from API noise.
     if len(factors) < RANGE_FACTOR_MIN_SAMPLES:
         return
+    if odo_lo is not None and odo_hi is not None and snap.odometer_km is not None:
+        driven = max(odo_hi, snap.odometer_km) - odo_lo
+        if driven > RANGE_FACTOR_DRIVE_KM:
+            return
     factors.sort()
     median = factors[len(factors) // 2]
     if median >= RANGE_FACTOR_FLOOR_KMPP:

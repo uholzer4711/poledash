@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pytest
 from sqlmodel import Session, select
 
 from polestar_dash.db.models import C3Snapshot, ChargeSession, VehicleSnapshot
 from polestar_dash.db.session import get_engine
 from polestar_dash.polestar.fetcher import Snapshot
-from polestar_dash.sessions import update_session
+from polestar_dash.sessions import _integrate_power_kwh, update_session
 
 
 def _snap(ts, soc, odo, status="Idle", **kw):
@@ -115,6 +116,49 @@ def test_api_charging_ignores_c3_veto(tmp_db):
                    prev=_prev(t0 - timedelta(minutes=20), 53, 3868.1))
     cs = _open()
     assert cs is not None and cs.inferred is False
+
+
+def test_dc_fast_head_bridge_capped_tighter(tmp_db):
+    """DC-fast sessions must not extend peak power across the full idle-poll
+    gap the way AC sessions do — see 2026-07-23 session 18, where bridging
+    93 kW over half a 10-min gap alone added ~7.75 kWh (23 %) to a 30-min DC
+    charge. A high first-sample power (> DC_FAST_BRIDGE_POWER_W) caps the
+    head bridge at DC_FAST_BRIDGE_CAP_S (2 min) instead of poll_interval_min."""
+    with Session(get_engine()) as s:
+        t0 = datetime(2026, 7, 23, 6, 9, 43)
+        s.add(VehicleSnapshot(vin="V", fetched_at=t0 - timedelta(minutes=10),
+                              soc_percent=59, odometer_km=100, charging_status="Idle"))
+        s.add(VehicleSnapshot(vin="V", fetched_at=t0, soc_percent=60, odometer_km=100,
+                              charging_status="Charging", charging_power_w=93000))
+        s.add(VehicleSnapshot(vin="V", fetched_at=t0 + timedelta(minutes=2), soc_percent=67,
+                              odometer_km=100, charging_status="Charging", charging_power_w=87000))
+        s.commit()
+
+        kwh = _integrate_power_kwh(s, "V", t0, t0 + timedelta(minutes=2))
+
+    trapezoid_wh = (93000 + 87000) / 2 * (120 / 3600)
+    capped_head_wh = 93000 * (120 / 2) / 3600  # DC_FAST_BRIDGE_CAP_S, not the 10-min gap
+    assert kwh == pytest.approx((trapezoid_wh + capped_head_wh) / 1000, rel=1e-6)
+
+
+def test_ac_head_bridge_uses_full_poll_interval(tmp_db):
+    """Below the DC-fast threshold, the head bridge is unchanged: it still
+    spans up to the full poll_interval_min gap (default 10 min)."""
+    with Session(get_engine()) as s:
+        t0 = datetime(2026, 7, 15, 17, 10, 23)
+        s.add(VehicleSnapshot(vin="V", fetched_at=t0 - timedelta(minutes=10),
+                              soc_percent=45, odometer_km=100, charging_status="Idle"))
+        s.add(VehicleSnapshot(vin="V", fetched_at=t0, soc_percent=46, odometer_km=100,
+                              charging_status="Charging", charging_power_w=11000))
+        s.add(VehicleSnapshot(vin="V", fetched_at=t0 + timedelta(minutes=2), soc_percent=48,
+                              odometer_km=100, charging_status="Charging", charging_power_w=11000))
+        s.commit()
+
+        kwh = _integrate_power_kwh(s, "V", t0, t0 + timedelta(minutes=2))
+
+    trapezoid_wh = (11000 + 11000) / 2 * (120 / 3600)
+    uncapped_head_wh = 11000 * (600 / 2) / 3600  # full 10-min poll_interval_min gap
+    assert kwh == pytest.approx((trapezoid_wh + uncapped_head_wh) / 1000, rel=1e-6)
 
 
 def test_api_session_closes_on_idle(tmp_db):

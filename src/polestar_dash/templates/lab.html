@@ -484,8 +484,15 @@
 
         const cl = j.climate || {};
         document.getElementById('tst_clim').textContent = cl.is_active ? {{ t("ON") | tojson }} : {{ t("off") | tojson }};
-        document.getElementById('tst_clim_sub').textContent =
-          `${esc(cl.action)} · ${esc(cl.running)}` + (cl.time_remaining ? ` · ${cl.time_remaining} min` : '');
+        let climSub = `${esc(cl.action)} · ${esc(cl.running)}` + (cl.time_remaining ? ` · ${cl.time_remaining} min` : '');
+        if (cl.current_temp_c != null || cl.target_temp_c != null) {
+          climSub += ` · ${cl.current_temp_c != null ? cl.current_temp_c.toFixed(1) : '?'}°C → ${cl.target_temp_c != null ? cl.target_temp_c.toFixed(1) : '?'}°C`;
+        }
+        const heatBits = [];
+        [['seat_fl', 'FL'], ['seat_fr', 'FR'], ['seat_rl', 'RL'], ['seat_rr', 'RR'], ['steering_wheel', {{ t("wheel") | tojson }}]]
+          .forEach(([k, label]) => { if (cl[k] && cl[k] !== '—' && cl[k] !== 'off') heatBits.push(`${label} ${escHtml(cl[k])}`); });
+        if (heatBits.length) climSub += ` · ${{ t("heating") | tojson }}: ${heatBits.join(', ')}`;
+        document.getElementById('tst_clim_sub').textContent = climSub;
 
         const air = j.air || {};
         document.getElementById('tst_air').innerHTML = `${escHtml(air.pm25)}<span class="unit">µg · AQI ${escHtml(air.aqi)}</span>`;
@@ -618,7 +625,8 @@
           out.innerHTML = `<span class="accent">${CMDTXT.ok}</span> · ${escHtml(label)} · ${escHtml(j.status)}` +
             (j.message ? ` · ${escHtml(j.message)}` : '');
         } else {
-          out.innerHTML = `<span style="color:var(--ujh-alert)">${CMDTXT.failed}</span> · ${escHtml(label)} · ${escHtml(j.status || j.error)}`;
+          out.innerHTML = `<span style="color:var(--ujh-alert)">${CMDTXT.failed}</span> · ${escHtml(label)} · ${escHtml(j.status || j.error)}` +
+            (j.hint ? `<br><span class="mono-xs muted">${escHtml(j.hint)}</span>` : '');
         }
         setTimeout(() => window.tstLoad(true), 3500);
       };

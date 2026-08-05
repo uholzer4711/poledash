@@ -180,6 +180,11 @@
       airIdle: {{ t("idle") | tojson }},
       lockTitle: {{ t("Central lock") | tojson }},
       minutesShort: {{ t("min") | tojson }},
+      seatFL: {{ t("seat FL") | tojson }},
+      seatFR: {{ t("seat FR") | tojson }},
+      seatRL: {{ t("seat RL") | tojson }},
+      seatRR: {{ t("seat RR") | tojson }},
+      steeringWheel: {{ t("steering wheel") | tojson }},
       parts: {
         door_fl: {{ t("Door FL") | tojson }}, door_fr: {{ t("Door FR") | tojson }},
         door_rl: {{ t("Door RL") | tojson }}, door_rr: {{ t("Door RR") | tojson }},
@@ -308,6 +313,22 @@
       if (j.climate_action) climState.push(esc(j.climate_action));
       if (j.climate_running) climState.push(esc(j.climate_running));
       if (j.climate_time_remaining) climState.push(j.climate_time_remaining + ' ' + LBL.minutesShort);
+      if (j.climate_current_temp_c != null || j.climate_target_temp_c != null) {
+        var curT = j.climate_current_temp_c != null ? j.climate_current_temp_c.toFixed(1) + '°C' : '?';
+        var tgtT = j.climate_target_temp_c != null ? j.climate_target_temp_c.toFixed(1) + '°C' : '?';
+        climState.push(curT + ' → ' + tgtT);
+      }
+      var heatMap = {
+        seat_heat_fl: LBL.seatFL, seat_heat_fr: LBL.seatFR,
+        seat_heat_rl: LBL.seatRL, seat_heat_rr: LBL.seatRR,
+        steering_wheel_heat: LBL.steeringWheel
+      };
+      var heatParts = [];
+      for (var hk in heatMap) {
+        var hv = j[hk];
+        if (hv && hv !== '—' && hv !== 'off') heatParts.push(heatMap[hk] + ' ' + esc(hv));
+      }
+      if (heatParts.length) climState.push(heatParts.join(', '));
       var climText = climKnown
         ? (climOn ? LBL.climateOn : LBL.climateOff) + (climState.length ? ' · ' + climState.join(' · ') : '')
         : '—';

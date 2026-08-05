@@ -354,6 +354,13 @@ class C3Snapshot(SQLModel, table=True):
     climate_action: str | None = None
     climate_running: str | None = None
     climate_time_remaining: int | None = None
+    climate_current_temp_c: float | None = None
+    climate_target_temp_c: float | None = None
+    seat_heat_fl: str | None = None
+    seat_heat_fr: str | None = None
+    seat_heat_rl: str | None = None
+    seat_heat_rr: str | None = None
+    steering_wheel_heat: str | None = None
 
     # Cabin air quality
     air_running: bool | None = None

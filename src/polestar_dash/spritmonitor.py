@@ -179,6 +179,59 @@ def add_fueling(
     return data  # type: ignore[return-value]
 
 
+def update_fueling(
+    bearer: str,
+    app_token: str,
+    vehicle_id: str,
+    tank_id: str,
+    fueling_id: int,
+    *,
+    date_str: str,
+    fueling_type: str,
+    odometer: float,
+    trip: float,
+    quantity: float,
+    quantityunit_id: int,
+    fuelsort_id: int,
+    price_eur: float,
+    currency_id: int,
+    percent: int,
+    charge_power_kw: float,
+    charge_duration_min: int,
+    charge_info: str,
+) -> dict:
+    """Correct an already-exported fueling (e.g. after a session's energy_kwh
+    was recomputed). Same GET-as-write convention and params as add_fueling,
+    plus the fueling id in the path."""
+    params = {
+        "date": date_str,
+        "type": fueling_type,
+        "odometer": odometer,
+        "trip": trip,
+        "quantity": quantity,
+        "quantityunitid": quantityunit_id,
+        "fuelsortid": fuelsort_id,
+        "price": price_eur,
+        "currencyid": currency_id,
+        "percent": percent,
+        "charging_duration": charge_duration_min,
+        "charge_info": charge_info,
+    }
+    if charge_power_kw and charge_power_kw > 0:
+        params["charging_power"] = charge_power_kw
+    data = _get(
+        f"vehicle/{vehicle_id}/tank/{tank_id}/fueling/{fueling_id}.json",
+        bearer,
+        app_token,
+        params=params,
+    )
+    if isinstance(data, dict) and data.get("errors"):
+        raise SpritmonitorError(
+            f"Spritmonitor rejected the update: {str(data.get('errormessages', data))[:300]}"
+        )
+    return data  # type: ignore[return-value]
+
+
 # --- lookup-ID auto-detection --------------------------------------------------
 
 

@@ -78,6 +78,13 @@ def _ensure_columns(engine) -> None:
             ("c3snapshot", "time_to_full", "INTEGER"),
             ("c3snapshot", "time_to_target", "INTEGER"),
             ("c3snapshot", "time_to_min_soc", "INTEGER"),
+            ("c3snapshot", "climate_current_temp_c", "FLOAT"),
+            ("c3snapshot", "climate_target_temp_c", "FLOAT"),
+            ("c3snapshot", "seat_heat_fl", "VARCHAR"),
+            ("c3snapshot", "seat_heat_fr", "VARCHAR"),
+            ("c3snapshot", "seat_heat_rl", "VARCHAR"),
+            ("c3snapshot", "seat_heat_rr", "VARCHAR"),
+            ("c3snapshot", "steering_wheel_heat", "VARCHAR"),
         ]
 
     with engine.begin() as conn:

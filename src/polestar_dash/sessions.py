@@ -32,6 +32,16 @@ SOC_OPEN_DELTA = 2  # %; threshold to OPEN a synthetic session (noise guard)
 ODO_STATIONARY_TOL_KM = 0.5  # parking-spot wiggle / GPS drift tolerance
 C3_VETO_MAX_AGE = timedelta(minutes=15)  # freshness window for the C3 veto
 
+# Above this, treat the bridging sample as DC-fast for head/tail bridging in
+# _integrate_power_kwh: home/public AC tops out around 22 kW (3-phase), so a
+# higher reading means a rapid charger with a curve that ramps up and tapers
+# down within minutes — extending it across a full idle-poll gap overstates
+# energy far more than for a near-constant AC session (see session 18,
+# 2026-07-23: bridging 93 kW across half of a 10-min gap alone added ~7.75 kWh,
+# 23 % of the reported total, to a 30-min DC session).
+DC_FAST_BRIDGE_POWER_W = 22000
+DC_FAST_BRIDGE_CAP_S = 120  # 2 min, vs. the full poll_interval_min otherwise
+
 
 def _c3_vetoes_inferred(s: Session, vin: str, at: datetime) -> bool:
     """Whether live C3 state rules out a *silent* charge right now.
@@ -139,7 +149,11 @@ def _integrate_power_kwh(
     ends. We bridge each boundary by extending the first/last observed power
     across *half* the gap to the adjacent snapshot — the maximum-entropy guess
     that plug-in/unplug happened mid-gap — capping that gap at the idle poll
-    interval so an unusually long quiet stretch can't inflate the estimate.
+    interval so an unusually long quiet stretch can't inflate the estimate
+    (tighter still, `DC_FAST_BRIDGE_CAP_S`, when the bridging sample is above
+    `DC_FAST_BRIDGE_POWER_W`: DC-fast curves ramp and taper within minutes, so
+    "flat at this power for the whole gap" is a much stronger — and worse —
+    assumption than it is for a near-constant AC session).
     This is a heuristic: when plug-in lands early in the gap we under-count,
     when it lands late we over-count, but it is unbiased on average and removes
     the systematic low bias of the truncated integral.
@@ -171,7 +185,8 @@ def _integrate_power_kwh(
     first_t, first_p = rows[0]
     prev = previous_snapshot(s, vin, first_t)
     if prev is not None:
-        gap = min((first_t - prev.fetched_at).total_seconds(), cap_s)
+        head_cap_s = DC_FAST_BRIDGE_CAP_S if first_p > DC_FAST_BRIDGE_POWER_W else cap_s
+        gap = min((first_t - prev.fetched_at).total_seconds(), head_cap_s)
         wh += first_p * (gap / 2.0) / 3600.0
 
     # Tail: bridge to the first snapshot after the last power sample (the
@@ -184,7 +199,8 @@ def _integrate_power_kwh(
         .limit(1)
     ).first()
     if nxt is not None:
-        gap = min((nxt - last_t).total_seconds(), cap_s)
+        tail_cap_s = DC_FAST_BRIDGE_CAP_S if last_p > DC_FAST_BRIDGE_POWER_W else cap_s
+        gap = min((nxt - last_t).total_seconds(), tail_cap_s)
         wh += last_p * (gap / 2.0) / 3600.0
 
     return wh / 1000.0

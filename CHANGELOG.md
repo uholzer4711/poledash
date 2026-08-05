@@ -3,6 +3,48 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.49.0] — 2026-08-05
+
+### Added
+
+- **Cabin climate temperature + seat/steering-wheel heating** now surfaced
+  from C3 (dashboard vehicle-state climate line + Lab page): current/target
+  temperature and heating level (off/1/2/3) for each seat and the steering
+  wheel. These are raw digital-twin protobuf fields (7–13) the installed
+  `unofficial-polestar-api` 0.3.0 already decodes internally to *infer*
+  heat/cool action but discards — fields 7/8 (temperature) reuse exactly the
+  library's own internal field access; fields 9–13 (seat/steering heating)
+  follow the same field order as our existing `start_climate` control call
+  and were confirmed present (all-zero/idle) against the real car. Patched
+  in via `c3._patch_climate_digital_twin` (same technique as the existing
+  gRPC-battery patch in `client.py`) — no new dependency, no upstream
+  release required. New `C3Snapshot` columns for history.
+- **Charge-schedule-conflict hint.** `charge_start`/`charge_stop` can be
+  silently rejected by the car while a charge schedule (timer) is active
+  (community-reported, kildahldev/unofficial-polestar-api#21, 2026-07-31).
+  A failed charge command now checks the last known `charging_status` and,
+  if it was `scheduled`, appends an explanatory hint in the Dashboard/History
+  control panels and the Lab page instead of just showing a bare status code.
+- `spritmonitor.update_fueling()` — corrects an already-exported fueling
+  (e.g. after a session's `energy_kwh` is recomputed). Not wired to a caller
+  yet.
+
+### Fixed
+
+- **"Low range factor" notification fired while driving uphill.** The
+  km-per-%-SoC anomaly check only ever considered whether the median was
+  below the floor, not whether the car was actively consuming energy driving
+  at the time — a mountain climb legitimately tanks the ratio without any
+  cold/degradation cause. `_check_range_factor` now skips the alert when the
+  odometer moved more than 2 km within the observation window.
+- **DC-fast charge sessions overstated energy at the edges.** The head/tail
+  power-integration bridge (`_integrate_power_kwh`) extended the first/last
+  observed power sample across the full idle-poll gap — fine for a
+  near-constant AC session, but a DC-fast curve ramps and tapers within
+  minutes, so treating it as flat for up to 10 minutes overstated energy
+  (session 18, 2026-07-23: +7.75 kWh / 23% from a single bridge). Bridging
+  now caps at 2 minutes when the bridging sample is above 22 kW.
+
 ## [1.48.0] — 2026-07-22
 
 ### Added

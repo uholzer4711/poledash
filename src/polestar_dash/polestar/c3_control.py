@@ -28,10 +28,33 @@ from polestar_api.models import (
 )
 from polestar_api.vehicle import HonkFlashAction
 
+from ..i18n import t
 from . import c3
 
 # wait a touch longer than reads — commands round-trip to the car
 _CMD_TIMEOUT_S = 45.0
+
+# Community-reported (kildahldev/unofficial-polestar-api#21, 2026-07-31):
+# charge_start/charge_stop can be silently rejected while a charge *schedule*
+# (timer) is active — the car won't hand control to a one-off command until
+# the schedule is turned off. We can't fix the upstream behavior, only warn.
+_SCHEDULE_HINT_COMMANDS = {"charge_start", "charge_stop"}
+
+
+def _active_schedule_hint() -> str | None:
+    """Best-effort: was the car last seen with an active charge schedule?
+    Read from the shared read-cache (`c3._cache`), so this costs no extra
+    C3 call and is None if we haven't read the car yet this session."""
+    cache = c3._cache
+    if not cache:
+        return None
+    bat = cache.get("battery") or {}
+    if bat.get("charging_status") == "scheduled":
+        return t(
+            "A charge schedule is active on the car — start/stop can be "
+            "rejected until the schedule is disabled."
+        )
+    return None
 
 _INV_NAME = {int(s): s.name for s in InvocationStatus}
 
@@ -148,4 +171,8 @@ async def run_command(command: str, params: dict | None = None) -> dict:
 
     out = _decode(res)
     out["command"] = command
+    if not out["ok"] and command in _SCHEDULE_HINT_COMMANDS:
+        hint = _active_schedule_hint()
+        if hint:
+            out["hint"] = hint
     return out

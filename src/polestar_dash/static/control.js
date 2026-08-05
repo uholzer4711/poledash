@@ -102,7 +102,8 @@
       if (!j || !j.ok) {
         setStatus(statusEl, '<span style="color:var(--ujh-alert)">' +
           escHtml(label) + ' · ' + escHtml(txt('failed')) + ' · ' +
-          escHtml((j && (j.status || j.error)) || '') + '</span>');
+          escHtml((j && (j.status || j.error)) || '') + '</span>' +
+          (j && j.hint ? '<br><span class="mono-xs muted">' + escHtml(j.hint) + '</span>' : ''));
         return j;
       }
       if (typeof opts.onDone === 'function') opts.onDone(j);

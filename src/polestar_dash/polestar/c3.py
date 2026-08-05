@@ -117,6 +117,50 @@ _api: Any = None
 _vehicle: Any = None
 _cache: dict | None = None
 _cache_at: float = 0.0
+_climate_patched = False
+
+# HeatingIntensity as returned by the car (matches polestar_api's own enum:
+# UNSPECIFIED=0, OFF=1, LEVEL1..3=2..4).
+_HEAT = {0: "—", 1: "off", 2: "level 1", 3: "level 2", 4: "level 3"}
+
+
+def _patch_climate_digital_twin() -> None:
+    """Widen the C3 climate decode with cabin/seat-heating fields the library
+    parses internally but doesn't expose.
+
+    `ClimateServiceClient._parse_digital_twin` already pulls raw protobuf
+    fields 6-8 (ventilation flag, current temp, target temp) out of the
+    digital-twin payload to *infer* a heat/cool action, then throws the
+    numbers away. Fields 9-13 (seat heating FL/FR/RL/RR + steering wheel,
+    same field order as `Vehicle.start_climate`'s parameters — see
+    `c3_control.py`) aren't touched by this library version (0.3.0) at all;
+    a community fork decodes them the same way. We re-decode the same bytes
+    ourselves and attach the extras to the frozen `ClimatizationInfo` via
+    `object.__setattr__`, mirroring the gRPC-battery patch in `client.py`."""
+    global _climate_patched
+    if _climate_patched:
+        return
+    try:
+        from polestar_api.codec import decode
+        from polestar_api.services.climate import ClimateServiceClient
+    except Exception:
+        return
+
+    _orig = ClimateServiceClient._parse_digital_twin.__func__
+
+    def _parse_digital_twin_with_extras(cls, climate_bytes: bytes):
+        info = _orig(cls, climate_bytes)
+        raw = decode(climate_bytes)
+        for name, field in (
+            ("current_temp_c", 7), ("target_temp_c", 8),
+            ("seat_fl", 9), ("seat_fr", 10),
+            ("seat_rl", 11), ("seat_rr", 12), ("steering_wheel", 13),
+        ):
+            object.__setattr__(info, name, raw.get(field))
+        return info
+
+    ClimateServiceClient._parse_digital_twin = classmethod(_parse_digital_twin_with_extras)
+    _climate_patched = True
 
 
 def _g(obj: Any, *names: str, default=None):
@@ -157,6 +201,7 @@ async def _ensure_client():
         return
     from polestar_api import PolestarApi  # lazy
 
+    _patch_climate_digital_twin()
     s = get_settings()
     api = PolestarApi(email=s.polestar_email, password=s.polestar_password)
     await api.async_init()
@@ -232,6 +277,15 @@ async def _collect() -> dict:
         "action": _HEATCOOL.get(int(_g(r, "heat_or_cool_action", default=0)), "?"),
         "running": _CLIMA.get(int(_g(r, "running_status", default=0)), "?"),
         "time_remaining": _g(r, "time_remaining"),
+        # Net-new (community-decoded digital-twin fields, see
+        # _patch_climate_digital_twin): only present while climate is active.
+        "current_temp_c": _g(r, "current_temp_c"),
+        "target_temp_c": _g(r, "target_temp_c"),
+        "seat_fl": _HEAT.get(_g(r, "seat_fl", default=0), "?"),
+        "seat_fr": _HEAT.get(_g(r, "seat_fr", default=0), "?"),
+        "seat_rl": _HEAT.get(_g(r, "seat_rl", default=0), "?"),
+        "seat_rr": _HEAT.get(_g(r, "seat_rr", default=0), "?"),
+        "steering_wheel": _HEAT.get(_g(r, "steering_wheel", default=0), "?"),
     })
     await grab("air", "get_precleaning", lambda r: {
         "is_running": bool(_g(r, "is_running", default=False)),
@@ -453,6 +507,13 @@ def c3_dict_to_row(data: dict) -> dict | None:
         "climate_action": cl.get("action"),
         "climate_running": cl.get("running"),
         "climate_time_remaining": cl.get("time_remaining"),
+        "climate_current_temp_c": cl.get("current_temp_c"),
+        "climate_target_temp_c": cl.get("target_temp_c"),
+        "seat_heat_fl": cl.get("seat_fl"),
+        "seat_heat_fr": cl.get("seat_fr"),
+        "seat_heat_rl": cl.get("seat_rl"),
+        "seat_heat_rr": cl.get("seat_rr"),
+        "steering_wheel_heat": cl.get("steering_wheel"),
         "air_running": air.get("is_running"),
         "air_aqi": air.get("aqi"),
         "air_pm25": air.get("pm25"),
