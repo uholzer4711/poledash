@@ -3,6 +3,23 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.49.1] — 2026-08-05
+
+### Fixed
+
+- **Phantom charge sessions from downhill recuperation, take 2.** The
+  v1.47.2 C3 veto only guarded *opening* an inferred session; a session that
+  had already opened legitimately (e.g. a parked trickle charge) before the
+  car drove off downhill was never protected. The main API freezes the
+  odometer during a drive, so `stationary` stayed `True` and regen kept
+  nudging SoC up — the session was inferred-continued and grown for the
+  entire descent instead of closing when the car left. The C3 veto (fresh
+  `usage_mode=driving` / unplugged) now also gates `inferred_continue` and
+  `_should_close`, so an already-open inferred session closes the moment C3
+  reports the car moving, regardless of what the odometer says. Checked the
+  DB: no already-exported session overlapped a `driving` C3 reading, so
+  nothing needed correcting on Spritmonitor.
+
 ## [1.49.0] — 2026-08-05
 
 ### Added

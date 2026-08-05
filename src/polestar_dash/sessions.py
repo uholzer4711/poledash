@@ -50,9 +50,14 @@ def _c3_vetoes_inferred(s: Session, vin: str, at: datetime) -> bool:
     odometer is unchanged" also matches downhill recuperation — which is
     exactly how a 42 km descent got booked as a phantom 4.5 kWh charge
     (session 16, 2026-07-12). C3 disambiguates: a fresh snapshot saying the
-    car is being driven, or not plugged in at all, vetoes opening an
-    inferred session. No C3 row, a stale one (outage), or missing fields
-    mean no veto — pre-C3 behaviour is preserved.
+    car is being driven, or not plugged in at all, vetoes charging. No C3
+    row, a stale one (outage), or missing fields mean no veto — pre-C3
+    behaviour is preserved.
+
+    Checked both when *opening* an inferred session and on every tick of an
+    already-open one (`inferred_continue` / `_should_close`) — a session that
+    opened legitimately before the car drove off must not be kept alive (and
+    grown) by regen just because the frozen odometer still reads "stationary".
     """
     row = s.exec(
         select(
@@ -317,6 +322,7 @@ def _auto_tag_station(cs: ChargeSession, db: Session) -> None:
 
 
 def _should_close(
+    s: Session,
     cs: ChargeSession,
     status: str | None,
     snap: Snapshot,
@@ -330,13 +336,19 @@ def _should_close(
     never see a terminal status — their status is "Idle" throughout — so a
     plateau (soc_delta == 0) must NOT close them, or a slow AC charge gets
     shredded into many one-tick sessions. They end only when the SoC actually
-    falls, the car is driven away, or the 24 h safety timeout fires."""
+    falls, the car is driven away, or the 24 h safety timeout fires.
+
+    `drove_off` relies on the odometer, which the main API freezes during a
+    drive — useless for a descent, where regen keeps nudging SoC *up* while
+    "stationary" stays true. The C3 veto (fresh usage_mode=driving or
+    unplugged) closes those cases even though the odometer never moved."""
     timed_out = (snap.fetched_at - cs.started_at) > timedelta(hours=24)
     if not cs.inferred:
         return status in TERMINAL_STATES or timed_out
     drove_off = prev is not None and not stationary
     soc_dropped = soc_delta is not None and soc_delta < 0
-    return drove_off or soc_dropped or timed_out
+    c3_says_no = _c3_vetoes_inferred(s, cs.vin, snap.fetched_at)
+    return drove_off or soc_dropped or c3_says_no or timed_out
 
 
 def update_session(
@@ -387,6 +399,9 @@ def update_session(
             and stationary
             and soc_delta is not None
             and soc_delta >= 1
+            # Same C3 veto as opening — a downhill stretch after a legit
+            # inferred-open must not keep extending the session.
+            and not _c3_vetoes_inferred(s, snap.vin, snap.fetched_at)
         )
         is_charging = api_charging or inferred_open or inferred_continue
 
@@ -448,7 +463,7 @@ def update_session(
                 s.commit()
 
         elif cs is not None and (
-            _should_close(cs, status, snap, prev, stationary, soc_delta)
+            _should_close(s, cs, status, snap, prev, stationary, soc_delta)
         ):
             cs.ended_at = snap.fetched_at
             # Don't let post-charge driving regress the peak SoC/range we

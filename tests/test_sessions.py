@@ -118,6 +118,29 @@ def test_api_charging_ignores_c3_veto(tmp_db):
     assert cs is not None and cs.inferred is False
 
 
+def test_c3_driving_closes_already_open_inferred_session(tmp_db):
+    """The open-time veto alone isn't enough: a session opened *before* the
+    car drove off (e.g. a legit trickle charge) must not be kept alive and
+    grown by downhill regen just because the main API keeps freezing the
+    odometer through the whole descent. A fresh C3 'driving' snapshot must
+    close it on the very next tick, even though `stationary` (odometer-based)
+    still reads True and SoC is still rising."""
+    t0 = datetime(2026, 7, 12, 12, 0, 0)
+    # Open inferred session while genuinely parked (no fresh C3 row yet).
+    update_session(_snap(t0, 53, 3868.1), prev=_prev(t0 - timedelta(minutes=10), 50, 3868.1))
+    cs = _open()
+    assert cs is not None and cs.inferred is True
+
+    # Car drives off downhill: main-API odometer frozen, SoC keeps rising from
+    # regen, but a fresh C3 snapshot now says "driving".
+    t1 = t0 + timedelta(minutes=10)
+    _c3(t1 - timedelta(minutes=1), usage_mode="driving")
+    closed = update_session(_snap(t1, 58, 3868.1), prev=_prev(t0, 53, 3868.1))
+    assert closed is not None
+    assert closed.is_complete is True
+    assert _open() is None
+
+
 def test_dc_fast_head_bridge_capped_tighter(tmp_db):
     """DC-fast sessions must not extend peak power across the full idle-poll
     gap the way AC sessions do — see 2026-07-23 session 18, where bridging
