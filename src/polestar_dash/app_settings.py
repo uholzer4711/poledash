@@ -444,3 +444,53 @@ def blended_price_ct(days: int = 90) -> tuple[float, str]:
     if energy <= 0:
         return default, "default"
     return round(weighted / energy, 2), "blended"
+
+
+# --- Notification-channel / integration toggles ------------------------------
+# Each channel is *configured* via env vars (config.py) and, on top of that,
+# can be switched off from the UI without touching .env / restarting — e.g.
+# temporarily muting WhatsApp while still keeping WAHA running. Default is on
+# (unchanged behaviour) so an existing deployment doesn't go silent.
+INTEGRATIONS = ("ntfy", "email", "telegram", "whatsapp", "mqtt")
+INTEGRATION_LABELS = {
+    "ntfy": "ntfy.sh push",
+    "email": "Email",
+    "telegram": "Telegram",
+    "whatsapp": "WhatsApp",
+    "mqtt": "MQTT / Home Assistant",
+}
+
+
+def integration_enabled(name: str) -> bool:
+    return _as_bool(get_setting(f"integration.{name}.enabled", None), True)
+
+
+def set_integration_enabled(name: str, enabled: bool) -> None:
+    if name not in INTEGRATIONS:
+        raise ValueError(f"Unknown integration: {name!r}")
+    set_setting(f"integration.{name}.enabled", "1" if enabled else "0")
+
+
+def all_integration_configs() -> list[dict]:
+    """{id, label, configured, enabled} per channel, for the settings frame.
+    `configured` reflects whether the env vars are set at all — the toggle
+    only matters once a channel is configured."""
+    from .config import get_settings
+
+    s = get_settings()
+    configured = {
+        "ntfy": bool(s.ntfy_topic),
+        "email": bool(s.smtp_host and s.smtp_to),
+        "telegram": bool(s.telegram_bot_token and s.telegram_chat_id),
+        "whatsapp": bool(s.whatsapp_url and s.whatsapp_api_key and s.whatsapp_to),
+        "mqtt": bool(s.mqtt_host),
+    }
+    return [
+        {
+            "id": k,
+            "label": INTEGRATION_LABELS[k],
+            "configured": configured[k],
+            "enabled": integration_enabled(k),
+        }
+        for k in INTEGRATIONS
+    ]

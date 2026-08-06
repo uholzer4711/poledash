@@ -940,16 +940,28 @@
   </div>
 
   <div class="grid grid-2 mb-6">
-    {% for name, enabled, note in integrations %}
-      <div class="card">
+    {% for ig in integrations %}
+      <div class="card" data-integration="{{ ig.id }}">
         <div class="flex-between">
-          <h2>{{ name }}</h2>
-          <span class="badge {% if enabled %}live{% endif %}"><span class="dot"></span>{{ t("enabled") if enabled else t("disabled") }}</span>
+          <h2>{{ ig.label }}</h2>
+          <span class="badge {% if ig.configured and ig.enabled %}live{% endif %}"><span class="dot"></span>{{ t("enabled") if ig.configured and ig.enabled else (t("off") if ig.configured else t("not configured")) }}</span>
         </div>
-        <div class="stat-sub">{{ note }}</div>
+        <div class="stat-sub">{{ ig.note }}</div>
+        {% if ig.id != "prometheus" %}
+        <label class="flex gap-2 mt-4" style="align-items:center;{% if not ig.configured %}opacity:.5{% endif %}">
+          <input type="checkbox" onchange="toggleIntegration('{{ ig.id }}', this.checked)"
+                 {% if ig.enabled %}checked{% endif %} {% if not ig.configured %}disabled{% endif %}>
+          {{ t("Send notifications on this channel") }}
+        </label>
+        {% endif %}
       </div>
     {% endfor %}
   </div>
+  <script>
+    async function toggleIntegration(id, enabled) {
+      await fetch(`/api/app-settings/integration/${id}?enabled=${enabled}`, { method: 'POST' });
+    }
+  </script>
 
   {% if not demo_mode %}
   <div class="card mb-6">

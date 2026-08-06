@@ -24,8 +24,10 @@ _pending: set[asyncio.Task] = set()
 
 
 def _client_kwargs() -> dict | None:
+    from .app_settings import integration_enabled
+
     s = get_settings()
-    if not s.mqtt_host:
+    if not s.mqtt_host or not integration_enabled("mqtt"):
         return None
     kw: dict = {"hostname": s.mqtt_host, "port": s.mqtt_port}
     if s.mqtt_username:

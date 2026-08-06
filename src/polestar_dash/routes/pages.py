@@ -344,6 +344,7 @@ def _broad_label_warnings(labels: dict[str, list[str]]) -> dict[str, dict[str, i
 def settings_page(request: Request):
     from ..app_settings import (
         all_alert_configs,
+        all_integration_configs,
         get_charging_loss_factor,
         get_default_price_ct,
         get_petrol_params,
@@ -352,27 +353,28 @@ def settings_page(request: Request):
     from ..journey_import import get_address_geofences, get_address_labels
 
     s = get_settings()
-    ntfy_note = f"topic: {s.ntfy_topic}" if s.ntfy_topic else "set NTFY_TOPIC to enable"
-    tg_note = (
-        "ready" if s.telegram_chat_id else "set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID"
-    )
-    wa_note = (
-        "ready" if s.whatsapp_to else "set WHATSAPP_URL + WHATSAPP_API_KEY + WHATSAPP_TO"
-    )
-    mqtt_note = f"{s.mqtt_host}:{s.mqtt_port}" if s.mqtt_host else "set MQTT_HOST"
-    smtp_note = (
-        f"{s.smtp_host}:{s.smtp_port} → {s.smtp_to}" if s.smtp_host and s.smtp_to
-        else "set SMTP_HOST + SMTP_TO in .env"
-    )
+    notes = {
+        "email": (
+            f"{s.smtp_host}:{s.smtp_port} → {s.smtp_to}" if s.smtp_host and s.smtp_to
+            else "set SMTP_HOST + SMTP_TO in .env"
+        ),
+        "ntfy": f"topic: {s.ntfy_topic}" if s.ntfy_topic else "set NTFY_TOPIC to enable",
+        "telegram": (
+            "ready" if s.telegram_chat_id else "set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID"
+        ),
+        "whatsapp": (
+            "ready" if s.whatsapp_to else "set WHATSAPP_URL + WHATSAPP_API_KEY + WHATSAPP_TO"
+        ),
+        "mqtt": f"{s.mqtt_host}:{s.mqtt_port}" if s.mqtt_host else "set MQTT_HOST",
+    }
     integrations = [
-        ("Email (SMTP)", bool(s.smtp_host and s.smtp_to), smtp_note),
-        ("ntfy.sh push", bool(s.ntfy_topic), ntfy_note),
-        ("Telegram", bool(s.telegram_bot_token and s.telegram_chat_id), tg_note),
-        ("WhatsApp", bool(s.whatsapp_url and s.whatsapp_api_key and s.whatsapp_to), wa_note),
-        ("MQTT / Home Assistant", bool(s.mqtt_host), mqtt_note),
+        {**cfg, "note": notes[cfg["id"]]} for cfg in all_integration_configs()
     ]
     if not s.demo_mode:
-        integrations.append(("Prometheus /metrics", True, "scrape /metrics"))
+        integrations.append({
+            "id": "prometheus", "label": "Prometheus /metrics",
+            "configured": True, "enabled": True, "note": "scrape /metrics",
+        })
     address_labels = get_address_labels()
     return templates.TemplateResponse(
         request,

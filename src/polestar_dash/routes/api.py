@@ -834,6 +834,31 @@ def app_settings_set_automation(
         default_after=rule.default_after)}
 
 
+@router.get("/app-settings/integrations")
+def app_settings_integrations() -> dict:
+    """Per-channel notification toggle (ntfy/email/telegram/whatsapp/mqtt)."""
+    from ..app_settings import all_integration_configs
+
+    return {"integrations": all_integration_configs()}
+
+
+@router.post("/app-settings/integration/{integration_id}")
+def app_settings_set_integration(
+    integration_id: str,
+    enabled: bool = Query(...),
+) -> dict:
+    from ..app_settings import (
+        INTEGRATIONS,
+        all_integration_configs,
+        set_integration_enabled,
+    )
+
+    if integration_id not in INTEGRATIONS:
+        raise HTTPException(status_code=404, detail=f"Unknown integration: {integration_id}")
+    set_integration_enabled(integration_id, enabled)
+    return next(c for c in all_integration_configs() if c["id"] == integration_id)
+
+
 @router.post("/confirm/{token}")
 async def confirm_action(token: str) -> dict:
     """Run a deferred (suggested) automation command after one-tap confirm.

@@ -416,7 +416,7 @@ All notable changes to **polestar-dash**. Format roughly follows
 ### Changed — basic_auth no longer prompts from the VPN/LAN
 
 - Deployment-only (`/etc/caddy/Caddyfile` on the host, not tracked in this
-  repo): `poledash.example.com` already 403s everyone outside an IP allow-list
+  repo): the deployment host already 403s everyone outside an IP allow-list
   (VPN subnet, LAN, six named admin IPs) *before* `basic_auth` even runs — so
   the password prompt added no security for trusted networks, just friction.
   WebKit/Safari on iOS is known to drop or forget Keychain-stored Basic-Auth

@@ -5,6 +5,7 @@ import logging
 import httpx
 from sqlmodel import Session, select
 
+from .app_settings import integration_enabled
 from .config import get_settings
 from .db.models import NotificationLog
 from .db.session import get_engine
@@ -71,10 +72,10 @@ def notify(
     # Channels without native action buttons (email) get the link inline.
     email_text = body + (f"\n\n{action_label}: {action_url}" if has_action else "")
 
-    if s.ntfy_topic:
+    if s.ntfy_topic and integration_enabled("ntfy"):
         channel("ntfy", lambda: _send_ntfy(
             s, title, body, priority, tags, action_url, action_label))
-    if s.smtp_host and s.smtp_to and not skip_email:
+    if s.smtp_host and s.smtp_to and not skip_email and integration_enabled("email"):
         from .email_notify import email_send
         if email_html is not None:
             channel(
@@ -85,13 +86,14 @@ def notify(
             )
         else:
             channel("email", lambda: email_send(f"[poledash] {title}", email_text))
-    if s.telegram_bot_token and s.telegram_chat_id:
+    if s.telegram_bot_token and s.telegram_chat_id and integration_enabled("telegram"):
         from .telegram import telegram_send
         btn_text = action_label if has_action else None
         btn_url = action_url if has_action else None
         channel("telegram", lambda: telegram_send(
             f"<b>{title}</b>\n{body}", button_text=btn_text, button_url=btn_url))
-    if s.whatsapp_url and s.whatsapp_api_key and s.whatsapp_to:
+    if (s.whatsapp_url and s.whatsapp_api_key and s.whatsapp_to
+            and integration_enabled("whatsapp")):
         from .whatsapp import whatsapp_send
         # Plain text, no native buttons — inline the action link like email.
         wa_text = f"{title}\n{email_text}"

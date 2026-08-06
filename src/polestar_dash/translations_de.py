@@ -882,6 +882,8 @@ TRANSLATIONS_DE: dict[str, str] = {
         "Es regnet — Fenster sollten schließen, aber nicht bestätigt.",
     "Confirmed.": "Bestätigt.",
     "Automation acted": "Automatik ausgeführt",
+    "not configured": "nicht konfiguriert",
+    "Send notifications on this channel": "Benachrichtigungen über diesen Kanal senden",
     "Suggestion": "Vorschlag",
     "Open poledash to confirm.": "Öffne poledash zum Bestätigen.",
     "Windows still open in the evening → close":
