@@ -1,5 +1,18 @@
 # poledash
 
+**Current version: v1.51.0** — 2026-08-06
+
+| Version | Date | What changed |
+|---|---|---|
+| **v1.51.0** | 2026-08-06 | Per-integration notification toggle (mute WhatsApp/ntfy/Telegram/email/MQTT individually); removed unused files ahead of the public release |
+| v1.50.0 | 2026-08-06 | New automation: lock the car if it's still unlocked in the evening |
+| v1.49.1 | 2026-08-05 | Fix: phantom charge sessions from downhill recuperation (take 2) |
+| v1.49.0 | 2026-08-05 | Cabin climate temp + seat/steering heating from C3; charge-schedule-conflict hint |
+| v1.48.0 | 2026-07-22 | WhatsApp push via WAHA sidecar |
+| v1.47.2 | 2026-07-13 | Fix: phantom charge sessions from downhill recuperation |
+
+Full history with details: [`CHANGELOG.md`](CHANGELOG.md).
+
 Self-hosted dashboard for your **Polestar 2**. Polls the (unofficial)
 Polestar consumer API + a separate C3 (live GPS / doors / climate) backend,
 stores everything in SQLite, and serves a single-binary web app: live

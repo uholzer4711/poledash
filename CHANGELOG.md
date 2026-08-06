@@ -3,6 +3,27 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.51.0] — 2026-08-06
+
+### Added
+
+- **Per-integration notification toggle.** Each push channel (ntfy, email,
+  Telegram, WhatsApp, MQTT/HA) can now be switched on/off from `/settings` →
+  *Integrations & ops* independently of whether it's configured via env vars
+  — e.g. muting WhatsApp without touching `.env` or restarting. Backed by
+  `app_settings.integration_enabled()`, checked in `notify()` and
+  `mqtt._client_kwargs()`. New endpoints: `GET /api/app-settings/integrations`,
+  `POST /api/app-settings/integration/{id}?enabled=`.
+
+### Removed
+
+- Dead weight cleared out ahead of the public release: `scripts/introspect_polestar.py`
+  (one-off exploration script, no longer referenced anywhere), `static/ujh-v2.css`
+  (orphaned since the "Design v2" toggle was removed in v1.15.0), a duplicate
+  `deploy/grafana-dashboard.json` (byte-identical to the one under `static/`),
+  and `templates/sessions.html` (unused since Sessions merged into `/history`
+  — `/sessions` has been a redirect for a while).
+
 ## [1.50.0] — 2026-08-06
 
 ### Added
