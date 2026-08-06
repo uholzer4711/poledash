@@ -1089,6 +1089,9 @@ the position only lies mid-drive. Three consumers now use that:
   h1 17→22px), relaxed settings config rows, 2-column quick-action grid for the
   control-panel buttons (≥44px tap targets), and capped map heights on phones.
 
+<details>
+<summary><strong>Older releases (v0.2 – v1.19.0, May–June 2026)</strong> — early history: initial rate/price handling, mobile redesign, C3 GPS/lock/climate integration, control panels, tripbook + insights groundwork. Click to expand.</summary>
+
 ## [1.20.0] — 2026-06-08
 
 ### Added
@@ -2241,3 +2244,5 @@ Prometheus, Telegram, tripbook, daily SQLite backups, adaptive polling,
 charging-session detection, CSV export, PWA manifest, ntfy push.
 
 See `git log` for the path that led here.
+
+</details>
