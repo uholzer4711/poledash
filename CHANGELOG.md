@@ -3,6 +3,19 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.50.0] — 2026-08-06
+
+### Added
+
+- **New automation: "Car still unlocked in the evening → lock."** Mirrors
+  the existing "windows still open → close" rule — fires when the car is
+  parked and still unlocked past a configurable local hour (default 20:00).
+  Same generic engine (opt-in, "vorschlag"/one-tap-confirm by default or
+  "autonom" with verified feedback), toggled under Settings → Alerts &
+  Automations alongside the other rules — no new UI code needed, the
+  settings card renders every registered rule from `automations.RULES`
+  generically, including its hour dropdown.
+
 ## [1.49.1] — 2026-08-05
 
 ### Fixed

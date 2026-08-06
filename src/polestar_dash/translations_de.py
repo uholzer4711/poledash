@@ -893,6 +893,16 @@ TRANSLATIONS_DE: dict[str, str] = {
         "Abends war ein Fenster noch offen — automatisch geschlossen.",
     "Tried to close the windows but couldn't confirm.":
         "Fenster sollten schließen, aber nicht bestätigt.",
+    "Car still unlocked in the evening → lock":
+        "Auto abends noch entriegelt → verriegeln",
+    "Lock after": "Verriegeln ab",
+    "Lock now": "Jetzt verriegeln",
+    "The car is still unlocked after {after}:00. Lock it?":
+        "Das Auto ist nach {after}:00 noch entriegelt. Verriegeln?",
+    "The car was still unlocked in the evening — locked it automatically.":
+        "Abends war das Auto noch entriegelt — automatisch verriegelt.",
+    "Tried to lock the car but couldn't confirm.":
+        "Auto sollte verriegeln, aber nicht bestätigt.",
     "Ø consumption": "Ø Verbrauch",
     # --- Mobile view switch + bottom nav ---
     "Mobile": "Mobil",

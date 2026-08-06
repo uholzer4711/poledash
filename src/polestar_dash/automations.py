@@ -11,8 +11,10 @@ state. Two execution modes (chosen per rule in settings):
   nothing touches the car until the user taps it.
 
 Defaults are conservative — rules are opt-in (disabled) and default to
-*vorschlag*, because every command moves real hardware. The first (and, for
-now, only) rule is *rain → close windows*; adding another is a few lines.
+*vorschlag*, because every command moves real hardware. Adding a new rule is
+a trigger function + a ``Rule(...)`` entry in ``RULES`` — no route/template
+changes needed (the settings card and its hour dropdown render generically
+from the registry).
 
 Relationship to ``c3_anomalies.check_rain_windows``: that stays the *alert*
 (warn that it's raining on open windows). This is the *action* (close them).
@@ -93,6 +95,21 @@ async def _windows_after_time_trigger(row: C3Snapshot, cfg: dict) -> tuple[bool,
     return True, {"open_labels": open_labels, "after": after}
 
 
+async def _unlocked_after_time_trigger(row: C3Snapshot, cfg: dict) -> tuple[bool, dict]:
+    """The car is still unlocked, parked, and it's past the configured local
+    hour (e.g. 20:00). Mirrors _windows_after_time_trigger for the lock."""
+    after = cfg.get("after")
+    if after is None:
+        return False, {}
+    if row.is_locked is not False:  # None (unknown) or True → nothing to do
+        return False, {}
+    if not _is_parked(row):
+        return False, {}
+    if _local_hour(row) < after:
+        return False, {}
+    return True, {"after": after}
+
+
 # --- registry -----------------------------------------------------------------
 RAIN_CLOSE_WINDOWS = Rule(
     id="rain_close_windows",
@@ -122,7 +139,22 @@ WINDOWS_CLOSE_AFTER_TIME = Rule(
     failed_body="Tried to close the windows but couldn't confirm.",
 )
 
-RULES: list[Rule] = [RAIN_CLOSE_WINDOWS, WINDOWS_CLOSE_AFTER_TIME]
+CAR_UNLOCKED_AFTER_TIME = Rule(
+    id="car_unlocked_after_time",
+    title="Car still unlocked in the evening → lock",
+    command="lock",
+    trigger=_unlocked_after_time_trigger,
+    default_enabled=False,
+    default_mode="vorschlag",
+    time_label="Lock after",
+    default_after=20,
+    suggest_label="Lock now",
+    suggest_body="The car is still unlocked after {after}:00. Lock it?",
+    acted_body="The car was still unlocked in the evening — locked it automatically.",
+    failed_body="Tried to lock the car but couldn't confirm.",
+)
+
+RULES: list[Rule] = [RAIN_CLOSE_WINDOWS, WINDOWS_CLOSE_AFTER_TIME, CAR_UNLOCKED_AFTER_TIME]
 
 
 def rule_by_id(rule_id: str) -> Rule | None:
