@@ -3,6 +3,27 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.52.0] — 2026-08-08
+
+### Added
+
+- **Detect the car's own modem/SIM going offline, not just a degraded C3
+  login.** The existing "connection lost/restored" alert only covered the
+  PERMISSION_DENIED case (every C3 section fails, no state at all). A real
+  overnight outage went unnoticed because the C3 backend kept "succeeding"
+  with the last cached door/lock/GPS state frozen in place — the car itself
+  reported `unavailable_reason: "no internet"`, but nothing read that field.
+  `c3_anomalies.py` now tracks the car-reported connectivity reason
+  independently of whether state fields are populated, and fires the same
+  `c3_disconnected`/`c3_reconnected` alert pair (same settings toggle) once
+  it's been down longer than the existing outage threshold.
+
+### Fixed
+
+- Backfilled a home charge session (58.1 kWh, 00:35–05:56) that fell inside
+  an unnoticed ~12h "no internet" outage — added manually and exported to
+  Spritmonitor.
+
 ## [1.51.0] — 2026-08-06
 
 ### Added

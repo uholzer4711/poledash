@@ -1,10 +1,11 @@
 # poledash
 
-**Current version: v1.51.0** — 2026-08-06
+**Current version: v1.52.0** — 2026-08-08
 
 | Version | Date | What changed |
 |---|---|---|
-| **v1.51.0** | 2026-08-06 | Per-integration notification toggle (mute WhatsApp/ntfy/Telegram/email/MQTT individually); removed unused files ahead of the public release |
+| **v1.52.0** | 2026-08-08 | Detect the car's own modem/SIM going offline ("no internet"), not just a degraded C3 login — the connection lost/restored alert now covers both |
+| v1.51.0 | 2026-08-06 | Per-integration notification toggle (mute WhatsApp/ntfy/Telegram/email/MQTT individually); removed unused files ahead of the public release |
 | v1.50.0 | 2026-08-06 | New automation: lock the car if it's still unlocked in the evening |
 | v1.49.1 | 2026-08-05 | Fix: phantom charge sessions from downhill recuperation (take 2) |
 | v1.49.0 | 2026-08-05 | Cabin climate temp + seat/steering heating from C3; charge-schedule-conflict hint |
@@ -89,8 +90,10 @@ on-car weather. It feeds the dashboard diagram, trip/session GPS + on-car
 temperature, MQTT (incl. a Home Assistant `device_tracker`), and drives a few
 alerts — rain with a window open, door/boot left open, car left unlocked,
 health warnings (12V battery, fluids, tyres, lights), and a *connection
-lost/restored* pair when the C3 login itself degrades. Disable with
-`C3_ENABLED=false`.
+lost/restored* pair — covering both the C3 login itself degrading and the
+car's own modem/SIM going offline (it keeps serving the last cached state
+in that case, so the alert watches the car-reported connectivity reason,
+not just missing data). Disable with `C3_ENABLED=false`.
 
 ### Remote control & automations
 

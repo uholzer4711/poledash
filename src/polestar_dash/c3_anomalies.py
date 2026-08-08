@@ -341,6 +341,80 @@ def check_c3_disconnected(vin: str, now: datetime) -> None:
     )
 
 
+def _last_online_at(vin: str, *, before: datetime | None = None) -> datetime | None:
+    """Newest poll where the *car itself* reported a live connection
+    (``unavailable_reason`` other than ``"no internet"``). Distinct from
+    ``_last_stateful_at``: when the car's modem/TCU drops out, the C3 backend
+    keeps serving the last cached state (state fields stay non-`None`, so
+    ``_c3_has_state`` sees a normal poll) — only ``unavailable_reason`` shows
+    it. Rows predating that field (`None`) count as online, not as a drop."""
+    online = or_(
+        C3Snapshot.unavailable_reason.is_(None),
+        C3Snapshot.unavailable_reason != "no internet",
+    )
+    with Session(get_engine()) as s:
+        stmt = (
+            select(C3Snapshot.fetched_at)
+            .where(C3Snapshot.vin == vin)
+            .where(online)
+            .order_by(C3Snapshot.fetched_at.desc())
+            .limit(1)
+        )
+        if before is not None:
+            stmt = stmt.where(C3Snapshot.fetched_at < before)
+        return s.exec(stmt).first()
+
+
+def _check_c3_no_internet(row: C3Snapshot) -> None:
+    """Alert when the car reports ``unavailable_reason == "no internet"``
+    (its own modem/SIM is down) for longer than ``disconnect_gap()``, and clear
+    it on recovery. This is a second, independent outage mode from
+    ``check_c3_disconnected``'s PERMISSION_DENIED case: here the C3 backend
+    keeps returning a "successful" poll with the last cached door/lock/GPS
+    state frozen in place, so the all-`None` detector never sees it — a
+    multi-hour real-world outage went unnoticed and unnotified this way.
+    Shares the ``c3_disconnected``/``c3_reconnected`` kind + toggle: from the
+    owner's perspective it's the same 'car unreachable' event."""
+    if not alert_enabled("c3_disconnected"):
+        return
+    if row.unavailable_reason == "no internet":
+        last_online = _last_online_at(row.vin, before=row.fetched_at)
+        if last_online is None:
+            return  # never seen online — nothing to compare against
+        if row.fetched_at - last_online < disconnect_gap():
+            return  # transient — wait for it to persist past a blip
+        notify(
+            kind="c3_disconnected",
+            key=f"{row.vin}-{last_online:%Y%m%d-%H%M}",
+            title=t("Vehicle connection lost"),
+            body=t(
+                "The car has been reporting 'no internet' since around {time} "
+                "— door/lock/GPS state is frozen and may be stale. Check the "
+                "car's mobile connection.",
+                time=fmt_local(last_online),
+            ),
+            vin=row.vin,
+            priority="high",
+            tags=["warning", "car"],
+        )
+        return
+    prev_online = _last_online_at(row.vin, before=row.fetched_at)
+    if prev_online is None:
+        return  # first-ever poll — not a recovery
+    if row.fetched_at - prev_online < disconnect_gap():
+        return  # normal cadence gap — no confirmed outage just ended
+    notify(
+        kind="c3_reconnected",
+        key=f"{row.vin}-{prev_online:%Y%m%d-%H%M}",
+        title=t("Vehicle connection restored"),
+        body=t("The car is returning live data again — door/lock/GPS state is "
+               "back. The connection was lost around {time}.",
+               time=fmt_local(prev_online)),
+        vin=row.vin,
+        tags=["car"],
+    )
+
+
 def _check_c3_reconnected(row: C3Snapshot) -> None:
     """All-clear when C3 starts returning live data again after a confirmed
     outage. Fires once, on the first connected poll whose gap to the previous good
@@ -378,6 +452,7 @@ def run_c3_anomaly_checks(row: C3Snapshot, *, prev: C3Snapshot | None = None) ->
     # The disconnect alert fires from the scheduler's outage branch (no row to
     # pass there); here we only emit the reconnect all-clear on a good poll.
     _check_c3_reconnected(row)
+    _check_c3_no_internet(row)
     _check_openings(row, prev)
     _check_unlocked(row, prev)
     _check_health(row, prev)
