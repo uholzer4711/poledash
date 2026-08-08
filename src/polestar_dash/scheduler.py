@@ -586,7 +586,7 @@ async def c3_poll_once() -> None:
         except Exception:  # noqa: BLE001
             log.exception("C3 rain/windows check failed for VIN %s", vin)
         try:
-            await run_automations(row)
+            await run_automations(row, driving=driving)
         except Exception:  # noqa: BLE001
             log.exception("C3 automations failed for VIN %s", vin)
         try:

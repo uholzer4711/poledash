@@ -1,10 +1,11 @@
 # poledash
 
-**Current version: v1.52.0** — 2026-08-08
+**Current version: v1.52.1** — 2026-08-08
 
 | Version | Date | What changed |
 |---|---|---|
-| **v1.52.0** | 2026-08-08 | Detect the car's own modem/SIM going offline ("no internet"), not just a degraded C3 login — the connection lost/restored alert now covers both |
+| **v1.52.1** | 2026-08-08 | Fix: windows/lock-after-time automations could fire while the car was actively being driven (flaky `speed` field read as "parked") — now vetoed by the same robust driving detector used for poll cadence |
+| v1.52.0 | 2026-08-08 | Detect the car's own modem/SIM going offline ("no internet"), not just a degraded C3 login — the connection lost/restored alert now covers both |
 | v1.51.0 | 2026-08-06 | Per-integration notification toggle (mute WhatsApp/ntfy/Telegram/email/MQTT individually); removed unused files ahead of the public release |
 | v1.50.0 | 2026-08-06 | New automation: lock the car if it's still unlocked in the evening |
 | v1.49.1 | 2026-08-05 | Fix: phantom charge sessions from downhill recuperation (take 2) |

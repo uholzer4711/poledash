@@ -3,6 +3,23 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.52.1] — 2026-08-08
+
+### Fixed
+
+- **Automations (windows/lock-after-time) could fire while the car was
+  actively being driven.** Their trigger only checked `_is_parked()`, which
+  reads the raw C3 `speed` field — documented to often report 0 (or `None`,
+  which the check also treats as parked) mid-drive. A rule's one-shot
+  per-day action guard could get spent on that false read, closing windows
+  or locking the doors while the car was genuinely in use — and then stay
+  silent for the rest of the day, including the actual "forgot to lock up
+  before bed" moment the rule exists for. `run_automations` now takes the
+  same multi-signal `driving` flag `c3_poll_once` already computes for poll
+  cadence and phantom-session vetoing (GPS movement, SoC-drop-with-frozen-fix,
+  car-reported `usage_mode`) and skips every rule outright whenever it's
+  `True`, regardless of the configured hour.
+
 ## [1.52.0] — 2026-08-08
 
 ### Added

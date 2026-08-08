@@ -1,7 +1,7 @@
 # Datenquellen & Steuerung — die Grundlagen
 
 > Wie psapi an die Fahrzeugdaten kommt und wie Befehle ans Auto gehen.
-> Stand: v1.52.0 (2026-08). Es gibt **keine offizielle Polestar-API und kein SDK** —
+> Stand: v1.52.1 (2026-08). Es gibt **keine offizielle Polestar-API und kein SDK** —
 > alles Folgende ist reverse-engineered über zwei unabhängige Community-Bibliotheken.
 
 ---

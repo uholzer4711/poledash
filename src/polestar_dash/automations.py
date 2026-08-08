@@ -251,9 +251,23 @@ async def _emit_suggestion(rule: Rule, row: C3Snapshot, ctx: dict) -> None:
     )
 
 
-async def run_automations(row: C3Snapshot) -> None:
+async def run_automations(row: C3Snapshot, *, driving: bool = False) -> None:
     """Evaluate every enabled rule against the fresh snapshot. Each rule is
-    isolated — one failing rule never blocks the others or the poll."""
+    isolated — one failing rule never blocks the others or the poll.
+
+    ``driving`` is a hard veto, computed by the caller from the same
+    multi-signal detector used for poll cadence / phantom-session vetoing
+    (speed, GPS movement, SoC-drop-with-frozen-fix, or the car's own
+    ``usage_mode``) — *not* the individual triggers' own ``_is_parked()``,
+    which only reads the raw ``speed`` field. That field is documented to
+    often read 0/None mid-drive, so a rule evaluated purely on it can treat
+    an actively-driven car as parked and fire (close windows / lock doors)
+    while the car is in use. Each rule's one-shot per-day claim (see
+    ``_claim_once``) is meant for "the owner already went to bed and forgot"
+    — spending it on a false-positive mid-drive read means it can't fire
+    again later that day when the car is genuinely left parked."""
+    if driving:
+        return
     for rule in RULES:
         try:
             cfg = get_automation_config(
