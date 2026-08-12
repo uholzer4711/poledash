@@ -72,10 +72,16 @@
         {% endif %}
         <div class="config-window">
           <span class="mono-xs muted">{{ t("Mode") }}</span>
+          {% if au.allow_autonomous %}
           <select class="inline-select" data-field="mode">
             <option value="vorschlag" {% if au.mode == 'vorschlag' %}selected{% endif %}>{{ t("Suggest (1-tap)") }}</option>
             <option value="autonom" {% if au.mode == 'autonom' %}selected{% endif %}>{{ t("Autonomous") }}</option>
           </select>
+          {% else %}
+          <select class="inline-select" data-field="mode" disabled title="{{ t('No signal tells us whether the key is inside the car — this action always asks first.') }}">
+            <option value="vorschlag" selected>{{ t("Suggest (1-tap) — locked") }}</option>
+          </select>
+          {% endif %}
         </div>
         <button class="btn ghost" type="button" onclick="saveAutomation(this)">{{ t("Save") }} <span class="arrow">→</span></button>
         <span class="config-status" data-field="status"></span>

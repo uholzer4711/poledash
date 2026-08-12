@@ -828,6 +828,14 @@ def app_settings_set_automation(
         raise HTTPException(status_code=404, detail=f"Unknown automation: {rule_id}")
     if mode is not None and mode not in ("autonom", "vorschlag"):
         raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
+    if mode == "autonom" and not rule.allow_autonomous:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{rule_id} cannot run autonomously — no signal tells us whether "
+                "the key is inside the car, so this rule is suggestion-only."
+            ),
+        )
     set_automation_config(rule_id, enabled=enabled, mode=mode, after=after)
     return {"id": rule_id, **get_automation_config(
         rule_id, default_enabled=rule.default_enabled, default_mode=rule.default_mode,

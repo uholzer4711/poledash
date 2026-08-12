@@ -55,6 +55,14 @@ class Rule:
     params: dict = field(default_factory=dict)
     default_enabled: bool = False
     default_mode: str = "vorschlag"
+    # Hard safety cap — independent of the stored per-rule "mode". False means
+    # this rule may NEVER execute unattended, no matter what a user (or old
+    # data) has it configured to. Use for commands where a wrong autonomous
+    # fire can strand the owner (locking the car) — there is no signal from
+    # C3 that tells us whether the key/phone is inside the cabin, so "car is
+    # unlocked and parked past 20:00" is not sufficient evidence to lock it
+    # without a human tapping confirm. See incident 2026-08-12.
+    allow_autonomous: bool = True
     # Time-triggered rules expose an "act from this local hour" dropdown in
     # settings; time_label is its i18n caption, default_after its default hour.
     time_label: str = ""
@@ -146,6 +154,7 @@ CAR_UNLOCKED_AFTER_TIME = Rule(
     trigger=_unlocked_after_time_trigger,
     default_enabled=False,
     default_mode="vorschlag",
+    allow_autonomous=False,  # never lock unattended — key-in-car risk, see Rule docstring
     time_label="Lock after",
     default_after=20,
     suggest_label="Lock now",
@@ -163,20 +172,30 @@ def rule_by_id(rule_id: str) -> Rule | None:
 
 def all_automation_configs() -> list[dict]:
     """{id, title, enabled, mode} per rule, for the settings frame."""
-    return [
-        {
-            "id": r.id,
-            "title": r.title,
-            "time_label": r.time_label,
-            **get_automation_config(
-                r.id,
-                default_enabled=r.default_enabled,
-                default_mode=r.default_mode,
-                default_after=r.default_after,
-            ),
-        }
-        for r in RULES
-    ]
+    result = []
+    for r in RULES:
+        cfg = get_automation_config(
+            r.id,
+            default_enabled=r.default_enabled,
+            default_mode=r.default_mode,
+            default_after=r.default_after,
+        )
+        if not r.allow_autonomous and cfg["mode"] == "autonom":
+            # Stale/legacy data (or a direct DB edit) still says "autonom" —
+            # clamp what the UI shows to match what run_automations() will
+            # actually do (see hard veto there), rather than displaying a
+            # mode that's silently ignored.
+            cfg["mode"] = "vorschlag"
+        result.append(
+            {
+                "id": r.id,
+                "title": r.title,
+                "time_label": r.time_label,
+                "allow_autonomous": r.allow_autonomous,
+                **cfg,
+            }
+        )
+    return result
 
 
 # --- runtime ------------------------------------------------------------------
@@ -281,9 +300,15 @@ async def run_automations(row: C3Snapshot, *, driving: bool = False) -> None:
             should, ctx = await rule.trigger(row, cfg)
             if not should:
                 continue
-            if cfg["mode"] == "autonom":
+            if cfg["mode"] == "autonom" and rule.allow_autonomous:
                 await _run_autonomous(rule, row, ctx)
             else:
+                if cfg["mode"] == "autonom" and not rule.allow_autonomous:
+                    log.warning(
+                        "automation %s stored as autonom but allow_autonomous=False "
+                        "— downgrading to suggestion for safety",
+                        rule.id,
+                    )
                 await _emit_suggestion(rule, row, ctx)
         except Exception:  # noqa: BLE001
             log.exception("automation %s failed for VIN %s", rule.id, row.vin)

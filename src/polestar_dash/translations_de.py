@@ -834,6 +834,10 @@ TRANSLATIONS_DE: dict[str, str] = {
         "handelt erst nach deiner Bestätigung. Fenster können klemmen — lass es auf Vorschlag, "
         "außer du bist sicher.",
     "Suggest (1-tap)": "Vorschlag (1-Tipp)",
+    "Suggest (1-tap) — locked": "Vorschlag (1-Tipp) — festgelegt",
+    "No signal tells us whether the key is inside the car — this action always asks first.":
+        "Es gibt kein Signal, ob der Schlüssel im Auto liegt — diese Aktion fragt "
+        "deshalb immer zuerst nach.",
     "Autonomous": "Autonom",
     "error": "Fehler",
     "06.2 / PRICING & ENERGY": "06.2 / PREISE & ENERGIE",

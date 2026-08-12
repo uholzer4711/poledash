@@ -3,6 +3,33 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.52.2] — 2026-08-12
+
+### Fixed
+
+- **The "car still unlocked in the evening → lock" automation could run in
+  "Autonom" mode and lock the car with no human confirmation** — and did:
+  it fired unattended while the owner's key was still inside, locking them
+  out of their own car. There is no signal anywhere in the C3 API that says
+  whether a key/phone is in the cabin, so "unlocked + parked + past a
+  configured hour" is not enough evidence to lock the doors without a
+  person confirming first. This rule can no longer be set to Autonom at
+  all — enforced at three layers: the automation engine hard-vetoes it at
+  execution time regardless of what's stored, the settings API rejects
+  `mode=autonom` for it with a 400, and the Settings UI shows its mode
+  locked to "Suggest (1-tap)" with an explanation. The previously-stored
+  Autonom setting was reset. Added `tests/test_automations.py` to lock the
+  guarantee in place.
+- Clarified what **"Suggest (1-tap)"** mode actually does, since it's now
+  the only mode available for locking the car: when the rule's condition is
+  met, poledash sends you a push notification with an action button (e.g.
+  "Lock now") instead of touching the car. Tapping it opens a one-tap
+  confirmation page (`/confirm/<token>`) that sends the command and waits
+  for the car to verify it happened — nothing on the vehicle changes until
+  you actively tap. "Autonom" mode (available for the window rules) skips
+  that tap and acts immediately; it remains off by default everywhere and
+  is now permanently unavailable for the lock rule specifically.
+
 ## [1.52.1] — 2026-08-08
 
 ### Fixed
