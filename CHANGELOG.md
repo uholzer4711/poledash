@@ -3,6 +3,58 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.52.3] — 2026-08-31
+
+### Fixed
+
+- **`unofficial-polestar-api` was pinned to a version that has silently stopped
+  working against the live Polestar backend.** Polestar's app-backend now
+  hard-rejects the client's spoofed app-version header with HTTP 426
+  ("Upgrade Required"); the library's maintainer fixed this in `0.3.1`
+  (2026-08-20), but our container was still built against `0.3.0`. This
+  wasn't visible in the running dashboard because `c3._ensure_client()`
+  caches the vehicle handle as a process-lifetime singleton — the container
+  had been up since before the backend started rejecting the old version, so
+  it kept polling on the already-established session. The **next restart,
+  rebuild, or host reboot would have called `get_vehicles()` again and
+  failed immediately**, silently killing all C3 features (GPS trail,
+  doors/locks, climate, health, software/OTA) while the separate
+  `pypolestar`-based main poll loop (SoC/charging) kept working — easy to
+  mistake for a fresh C3 outage. Verified live before and after: a one-off
+  `get_vehicles()` call failed with `ApiError: Vehicle list failed
+  (app-backend: 426)` on `0.3.0`, succeeded after upgrading. Bumped the
+  dependency floor to `unofficial-polestar-api>=0.3.1,<1.0` and rebuilt.
+- **Rebuilding onto `0.3.1` immediately surfaced a second, independent
+  breaking change**, live and in production: `get_vehicles()` started
+  failing with `Cannot query field "content" on type "VehicleInformation"`
+  plus five more removed fields (`curbWeight`, `edition`, `features`,
+  `maxTrailerWeight`, `software`) — matches upstream issue
+  kildahldev/unofficial-polestar-api#30, opened the same day. A first attempt
+  to patch around it by stripping the offending field from our local copy of
+  the query string had **no effect** — the error persisted unchanged, citing
+  all six fields at line numbers far beyond our ~12-line query. That's
+  conclusive: Polestar's backend runs a **server-side persisted/trusted
+  query** keyed by operation name (`GetVDMSCars`) and ignores whatever query
+  text the client actually sends — editing the query is a dead end.
+  Reverted that attempt.
+- **The actual fix** (from a comment on issue #30 by a Home Assistant
+  integration user hitting the same break): `get_vehicles()` is a *separate*
+  app-backend GraphQL call that lists the account's vehicles — it has nothing
+  to do with the gRPC/C3 connection `async_init()` already establishes for
+  every other C3 feature (battery, climate, locks, GPS, control), which was
+  never broken. `c3._ensure_client()` now catches `ApiError` from
+  `get_vehicles()` specifically and, on failure, builds the `Vehicle` object
+  directly from the VIN of the most recent successful `C3Snapshot` plus the
+  already-working connection — skipping the broken listing call entirely.
+  Verified live: C3 polling recovered immediately (`Stored C3 snapshot for
+  VIN …` with a fresh timestamp), no more `ApiError`s in the logs. Only
+  cosmetic loss: `internal_id`/`registration_no`/`model_year`/`model_name`
+  are unset while this fallback is active (used nowhere but the Lab page's
+  vehicle line) — self-heals the moment Polestar's registered query works
+  again, since the primary `get_vehicles()` path is tried first on every
+  fresh client init. The `pypolestar`-based main poll loop (SoC/charging)
+  was never affected by any of this — separate backend.
+
 ## [1.52.2] — 2026-08-12
 
 ### Fixed

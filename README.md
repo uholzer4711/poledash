@@ -1,10 +1,12 @@
 # poledash
 
-**Current version: v1.52.1** — 2026-08-08
+**Current version: v1.52.3** — 2026-08-31
 
 | Version | Date | What changed |
 |---|---|---|
-| **v1.52.1** | 2026-08-08 | Fix: windows/lock-after-time automations could fire while the car was actively being driven (flaky `speed` field read as "parked") — now vetoed by the same robust driving detector used for poll cadence |
+| **v1.52.3** | 2026-08-31 | Fix: `unofficial-polestar-api` bumped to `0.3.1` (stale pin was silently failing `get_vehicles()` with HTTP 426) + worked around a second, server-side Polestar breaking change (broken `VehicleInformation` query) by building the C3 vehicle handle from a known VIN instead of the broken vehicle-listing call — C3 fully recovered |
+| v1.52.2 | 2026-08-12 | Fix: the evening auto-lock automation could run in unattended "Autonom" mode and lock the car with the key still inside — that mode is now permanently unavailable for this rule |
+| v1.52.1 | 2026-08-08 | Fix: windows/lock-after-time automations could fire while the car was actively being driven (flaky `speed` field read as "parked") — now vetoed by the same robust driving detector used for poll cadence |
 | v1.52.0 | 2026-08-08 | Detect the car's own modem/SIM going offline ("no internet"), not just a degraded C3 login — the connection lost/restored alert now covers both |
 | v1.51.0 | 2026-08-06 | Per-integration notification toggle (mute WhatsApp/ntfy/Telegram/email/MQTT individually); removed unused files ahead of the public release |
 | v1.50.0 | 2026-08-06 | New automation: lock the car if it's still unlocked in the evening |

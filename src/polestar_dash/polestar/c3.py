@@ -195,21 +195,58 @@ def _door(d: Any) -> dict:
     }
 
 
+def _last_known_vin() -> str | None:
+    """VIN from the most recent successful C3 poll — used only as a fallback
+    when the vehicle-listing call itself is broken (see below); the DB always
+    has one once C3 has synced successfully at least once."""
+    from sqlmodel import Session, select
+
+    from ..db.models import C3Snapshot
+    from ..db.session import get_engine
+
+    with Session(get_engine()) as s:
+        return s.exec(
+            select(C3Snapshot.vin).order_by(C3Snapshot.fetched_at.desc()).limit(1)
+        ).first()
+
+
 async def _ensure_client():
     global _api, _vehicle
     if _api is not None and _vehicle is not None:
         return
-    from polestar_api import PolestarApi  # lazy
+    from polestar_api import PolestarApi, Vehicle  # lazy
+    from polestar_api.exceptions import ApiError
 
     _patch_climate_digital_twin()
     s = get_settings()
     api = PolestarApi(email=s.polestar_email, password=s.polestar_password)
     await api.async_init()
-    vehicles = await api.get_vehicles()
-    if not vehicles:
-        await _safe_close(api)
-        raise RuntimeError("C3 returned no vehicles")
-    _api, _vehicle = api, vehicles[0]
+    try:
+        vehicles = await api.get_vehicles()
+        if not vehicles:
+            raise RuntimeError("C3 returned no vehicles")
+        vehicle = vehicles[0]
+    except ApiError:
+        # get_vehicles() runs a separate app-backend GraphQL query
+        # (GetVDMSCars/VehicleInformation) that Polestar can break independently
+        # of the gRPC/C3 connection async_init() just established above — e.g.
+        # 2026-08-31, Polestar removed fields from VehicleInformation
+        # server-side. Editing our copy of the query text has no effect: the
+        # backend runs its own persisted/trusted copy of the operation
+        # regardless of what we send (confirmed by testing; also reported
+        # independently in kildahldev/unofficial-polestar-api#30). Skip the
+        # broken listing call and build the Vehicle straight from a VIN we
+        # already know plus the working connection instead — same workaround
+        # the HA integration maintainer shipped for the same break. Loses
+        # internal_id/registration_no/model_year/model_name (cosmetic only:
+        # the Lab page's vehicle line); everything gRPC-backed (battery,
+        # climate, locks, GPS, control) is unaffected.
+        vin = _last_known_vin()
+        if not vin:
+            await _safe_close(api)
+            raise
+        vehicle = Vehicle(vin=vin, connection=api._connection)
+    _api, _vehicle = api, vehicle
 
 
 async def _safe_close(api: Any):
