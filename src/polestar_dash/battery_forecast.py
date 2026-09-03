@@ -37,8 +37,13 @@ from .sessions import DEFAULT_BATTERY_KWH
 from .tripbook import detect_trips
 from .util import utcnow
 
-# AC onboard charger on a Polestar 2 tops out at 11 kW (16 A / phase, see
-# cards.html). Anything reported above that had to come from a DC charger.
+# The Polestar 2's onboard charger hard-caps AC draw at 11 kW (16 A / phase,
+# see cards.html) regardless of what the charge point can supply — so, unlike
+# the 11-22 kW "could be either" zone treated as ambiguous elsewhere in this
+# app (multi-vehicle cost bucketing in insights_extras.py), a Polestar 2 can
+# physically never pull more than ~11.2 kW (measurement rounding) over AC.
+# Real data confirms this: every AC session on this account reads 11.0-11.2 kW,
+# every DC session 49 kW+, nothing in between. 15 kW sits safely in that gap.
 DC_THRESHOLD_W = 15_000
 
 KM_MAX = 250_000
@@ -155,22 +160,23 @@ def _current_odometer_km() -> float | None:
         return s.exec(stmt).first()
 
 
-def _soh_curve(km_grid: list[int], fast_frac: float, annual_km: int) -> list[float]:
+def _rate_pct_per_km(fast_frac: float, annual_km: int) -> float:
     annual_pct = RATE_AC_PCT_PER_YEAR + (RATE_DC_PCT_PER_YEAR - RATE_AC_PCT_PER_YEAR) * fast_frac
-    rate_pct_per_km = annual_pct / annual_km
-    out = []
-    for km in km_grid:
-        early = EARLY_LOSS_PCT * math.sqrt(min(km, EARLY_KM) / EARLY_KM)
-        linear = rate_pct_per_km * km
-        out.append(round(max(FLOOR_PCT, 100 - early - linear), 1))
-    return out
+    return annual_pct / annual_km
+
+
+def _soh_at_rate(km: int, rate_pct_per_km: float) -> float:
+    early = EARLY_LOSS_PCT * math.sqrt(min(km, EARLY_KM) / EARLY_KM)
+    return round(max(FLOOR_PCT, 100 - early - rate_pct_per_km * km), 1)
+
+
+def _soh_curve(km_grid: list[int], fast_frac: float, annual_km: int) -> list[float]:
+    rate = _rate_pct_per_km(fast_frac, annual_km)
+    return [_soh_at_rate(km, rate) for km in km_grid]
 
 
 def _soh_at(km: int, fast_frac: float, annual_km: int) -> float:
-    annual_pct = RATE_AC_PCT_PER_YEAR + (RATE_DC_PCT_PER_YEAR - RATE_AC_PCT_PER_YEAR) * fast_frac
-    rate_pct_per_km = annual_pct / annual_km
-    early = EARLY_LOSS_PCT * math.sqrt(min(km, EARLY_KM) / EARLY_KM)
-    return round(max(FLOOR_PCT, 100 - early - rate_pct_per_km * km), 1)
+    return _soh_at_rate(km, _rate_pct_per_km(fast_frac, annual_km))
 
 
 def compute_degradation_forecast() -> dict:

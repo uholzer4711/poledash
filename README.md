@@ -71,7 +71,7 @@ auto-updates.
 
 | Page | What it does |
 |---|---|
-| **/** Dashboard | Live SoC, range, charging state, a **vehicle-state diagram** (doors/windows/frunk/boot/sunroof, lock, climate, cabin air, weather) with live GPS on a mini-map, a **battery-health (SoH)** estimate, and a **remote-control panel** (lock, windows, climate, pre-cleaning, flash/honk, wake) with verified command feedback |
+| **/** Dashboard | Live SoC, range, charging state, a **vehicle-state diagram** (doors/windows/frunk/boot/sunroof, lock, climate, cabin air, weather) with live GPS on a mini-map, a **battery-health (SoH)** estimate, a **battery life forecast** (0–250,000 km projection, scenarios for the current vs. mostly-fast vs. mostly-slow charging mix), and a **remote-control panel** (lock, windows, climate, pre-cleaning, flash/honk, wake) with verified command feedback |
 | **/history** Battery & Charging | Telemetry time-series, charging-session list + curves, SoH trend, and a **charging control panel** (start/stop, amp limit, target SoC) |
 | **/tripbook** | Trips detected from the odometer, monthly summaries, iCal feed, plus an importer for the official Polestar-app journey-log CSV |
 | **/insights** | Answer-first cost & efficiency page — five themed sections (cost, efficiency, battery health, energy waste, environment/patterns) with plain-language auto-generated takeaways, charts as supporting evidence |
@@ -196,6 +196,20 @@ pack capacity (`energy_kwh ÷ ΔSoC`), each driven month the same from
 consumption; the median of recent samples is shown against the nominal 78 kWh
 pack, capped at 100%. It's an estimate — AC losses bias it high, so a healthy
 pack reads ~100% until real degradation shows.
+
+**Battery life forecast.** An illustrative 0–250,000 km capacity-retention
+model, not a spec: an early formation-loss term (~2.5% by 30,000 km, same for
+every scenario) plus a linear per-km term whose annual rate is interpolated
+between published fleet-degradation figures for AC-only (~1.3%/year) and
+heavy DC fast-charging (~2.8%/year), scaled by *this car's own* measured
+DC-fast-charge energy share (sessions with a peak power above the Polestar
+2's 11 kW AC onboard-charger ceiling) and its own driven
+km/year (from the continuously-polled odometer, extrapolated from its actual
+covered span — not journey imports, which are a curated subset and would
+understate mileage whenever they don't cover a full year). Shown alongside
+"heavy fast" (85% DC) and "heavy slow" (5% DC) comparison curves and
+Polestar's warranty floor (70% SoH within 8 years / 160,000 km) as a
+reference line.
 
 </details>
 

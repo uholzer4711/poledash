@@ -3,6 +3,51 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.53.2] — 2026-09-03
+
+### Fixed
+
+- **Battery-forecast checkpoint table rendered a broken `data-label` on
+  mobile.** The table-row template used `${{ t("Scenario") | tojson }}`
+  inside a JS template literal — `${` (JS interpolation) immediately
+  followed by `{{` (Jinja) is the exact footgun this repo's own CLAUDE.md
+  warns about: Jinja's `{{ ... }}` matcher swallows the JS `${`'s opening
+  brace, so the tag renders to a bare `"Szenario"` instead of substituting
+  into `${...}`, leaving `data-label="$"Szenario""` — a malformed attribute
+  confirmed live in the served HTML. Only visible in the mobile card-folding
+  view (`td[data-label]::before`), invisible on desktop. Fixed to the
+  documented pattern: inline `{{ t("Scenario") }}` directly, no `${}`
+  wrapper, since the value is static server-side text.
+- Added a missing German catalog entry for `"warranty"` (used in the new
+  checkpoint table's column header) — fell back to the English word rather
+  than crashing, but was incomplete.
+
+### Verified
+
+- Re-derived every scenario's SoH-at-checkpoint value by hand against
+  production data and confirmed an exact match (current mix: 90.6 / 86.4 /
+  80.2 % at 100k / 160k / 250k km; heavy-fast: 86.8 / 80.4 / 70.8 %;
+  heavy-slow: 91.8 / 88.4 / 83.2 %).
+- Audited the DC-fast-charge classification (peak power > 15 kW) against
+  this account's actual charge sessions: every AC session reads 11.0-11.2 kW
+  ("Heim" home charging), every DC session 49 kW+ (public rapid chargers),
+  nothing in between — confirms the threshold cleanly separates the two with
+  no ambiguous readings, and (documented in code now) is physically
+  guaranteed for any Polestar 2 since its onboard charger hard-caps AC draw
+  at 11 kW regardless of what the charge point can supply.
+- Full end-to-end simulation of the dashboard's forecast JavaScript (Node
+  `vm`, mocked DOM/Chart.js, real production API response) to catch runtime
+  template/rendering bugs the Python tests can't reach — table markup,
+  chart datasets, and headline/summary text all verified correct.
+
+### Changed
+
+- Refactored `battery_forecast.py`'s duplicated rate/curve math into shared
+  `_rate_pct_per_km` / `_soh_at_rate` helpers (no behavior change, re-verified
+  identical output before/after).
+- README: documented the battery life forecast feature (dashboard table +
+  "How the numbers are computed").
+
 ## [1.53.1] — 2026-09-03
 
 ### Fixed

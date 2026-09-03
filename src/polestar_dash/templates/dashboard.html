@@ -101,7 +101,7 @@
         ];
         document.getElementById('batfc-table').innerHTML = rows.map(r => `
           <tr style="border-top:1px solid var(--ujh-line)">
-            <td style="padding:8px 0;border-left:2px solid ${r.color};padding-left:8px" data-label="${{ t("Scenario") | tojson }}">${r.label}</td>
+            <td style="padding:8px 0;border-left:2px solid ${r.color};padding-left:8px" data-label="{{ t("Scenario") }}">${r.label}</td>
             ${CHECKPOINTS.map(km => `<td style="padding:8px 0" data-label="${fmtKm(km)} km">${r.sc.at[km]}%</td>`).join('')}
           </tr>`).join('');
       }

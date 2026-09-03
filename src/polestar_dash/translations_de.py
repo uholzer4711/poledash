@@ -1199,6 +1199,7 @@ TRANSLATIONS_DE: dict[str, str] = {
     "heavy fast-charging": "viel Schnellladen",
     "heavy slow-charging": "viel Langsamladen",
     "warranty floor": "Garantiegrenze",
+    "warranty": "Garantie",
     "at 160,000 km": "bei 160.000 km",
     "Scenario": "Szenario",
     "Today: {km} km · {pct}% SoH (measured)": "Heute: {km} km · {pct} % SoH (gemessen)",
