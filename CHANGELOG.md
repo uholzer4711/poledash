@@ -3,6 +3,38 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.53.1] — 2026-09-03
+
+### Fixed
+
+- **Battery forecast (1.53.0) was reading a wildly-too-low annual mileage**,
+  making every scenario collapse to the 55 % sanity floor by ~65,000 km
+  (visibly wrong — spotted live at "65 % by 50,000 km"). Root cause:
+  `_annual_km()` summed `JourneyImport` distance over the last 365 days and
+  divided by a hardcoded `365`, but journey imports only cover a partial
+  window (curated CSV uploads, not continuous telemetry) — on this account
+  that produced ≈2,529 km/year against a real pace of ≈24,000 km/year, a
+  ~10× understatement that fed directly into the per-km degradation rate.
+  Switched the primary source to the car's own **odometer** (`VehicleSnapshot
+  .odometer_km`, polled continuously — no coverage gaps), extrapolating from
+  the actual first/last reading span rather than an assumed 365 days;
+  journey imports and detected trips remain as fallbacks, now with the same
+  actual-span fix. Added a sanity clamp (1,000–60,000 km/year) and a minimum
+  14-day span before extrapolating at all, so a short/sparse history falls
+  through to the existing "assumed" default instead of extrapolating noise.
+  Verified against production data: annual_km now reads 24,080 (source
+  "odometer") vs. the previous 2,529 ("imports"); current-mix SoH at
+  160,000 km reads 86.4 % (was floored at 55 %).
+
+### Changed
+
+- **Presentation cleanup**: the km grid step widened from 5,000 to 10,000 km
+  (fewer, more legible x-axis ticks, `de-DE`-formatted with thousands
+  separators); replaced the single dense summary sentence with a compact
+  checkpoint table (100,000 / 160,000 / 250,000 km × the three scenarios,
+  each row color-coded to its chart line) plus a "Today" line anchoring the
+  model to this car's actual current odometer reading and measured SoH.
+
 ## [1.53.0] — 2026-09-03
 
 ### Added

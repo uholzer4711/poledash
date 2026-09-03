@@ -1200,8 +1200,12 @@ TRANSLATIONS_DE: dict[str, str] = {
     "heavy slow-charging": "viel Langsamladen",
     "warranty floor": "Garantiegrenze",
     "at 160,000 km": "bei 160.000 km",
-    "Based on {kwh} kWh charged fast, {kwh2} kWh slow, over {n} sessions · ≈ {akm} km/year driven ({src}).":
-        "Basierend auf {kwh} kWh schnell- und {kwh2} kWh langsamgeladen über {n} Ladevorgänge · ≈ {akm} km/Jahr gefahren ({src}).",
+    "Scenario": "Szenario",
+    "Today: {km} km · {pct}% SoH (measured)": "Heute: {km} km · {pct} % SoH (gemessen)",
+    "Collecting SoH samples — the model below starts from a new pack.":
+        "SoH-Messwerte werden noch gesammelt — das Modell unten startet vom Neuzustand.",
+    "Basis: {kwh} kWh charged fast, {kwh2} kWh slow, over {n} sessions · ≈ {akm} km/year driven ({src}).":
+        "Basis: {kwh} kWh schnell- und {kwh2} kWh langsamgeladen über {n} Ladevorgänge · ≈ {akm} km/Jahr gefahren ({src}).",
     "assumed": "angenommen",
     "measured": "gemessen",
     "Could not load forecast.": "Prognose konnte nicht geladen werden.",

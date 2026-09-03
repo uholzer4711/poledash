@@ -36,11 +36,26 @@
         <span class="muted mono-xs" id="batfc-headline">{{ t("to 250,000 km") }}</span>
         <span class="veh-more mono-xs">{{ t("details") }} →</span>
       </summary>
-      <div class="stat-sub mt-3" id="batfc-sub">{{ t("Loading…") }}</div>
-      <div style="position:relative;height:280px;margin-top:16px">
+
+      <div class="mono-xs muted mt-3" id="batfc-today">{{ t("Loading…") }}</div>
+
+      <div style="position:relative;height:300px;margin-top:16px">
         <canvas id="batfc_chart"></canvas>
       </div>
-      <div class="mono-xs muted mt-2">
+
+      <table class="index mt-4" style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr class="mono-xs" style="text-align:left;color:var(--ujh-ink-3)">
+            <th style="padding:8px 0">{{ t("Scenario") }}</th>
+            <th style="padding:8px 0">100.000 km</th>
+            <th style="padding:8px 0">160.000 km ({{ t("warranty") }})</th>
+            <th style="padding:8px 0">250.000 km</th>
+          </tr>
+        </thead>
+        <tbody id="batfc-table"></tbody>
+      </table>
+
+      <div class="mono-xs muted mt-4">
         {{ t("Illustrative model, not a warranty spec: {kwh} kWh NMC pack (liquid-cooled), fleet degradation studies scaled by this car's own measured DC-fast-charge share and driven km/year.", kwh="%g"|format(soh.nominal_kwh)) }}
         {{ t("Heavy-fast / heavy-slow show the same model at an 85% vs. 5% DC fast-charge share, for comparison.") }}
         {{ t("Dashed line = Polestar's warranty floor (70% SoH within 8 years / 160,000 km) — real packs typically stay well above it.") }}
@@ -56,6 +71,7 @@
       const details = document.getElementById('batfc-details');
       if (!details) return;
       let data = null, chart = null;
+      const CHECKPOINTS = [100000, 160000, 250000];
 
       function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
       function palette() {
@@ -67,6 +83,28 @@
           line: cssVar('--ujh-line') || '#2a2c30',
         };
       }
+      function fmtKm(n) { return Math.round(n).toLocaleString('de-DE'); }
+
+      function curLabel() {
+        const cur = data.scenarios.current;
+        return cur.measured
+          ? {{ t("current mix ({pct}% DC fast)") | tojson }}.replace('{pct}', Math.round(cur.fast_frac * 100))
+          : {{ t("current mix (assumed)") | tojson }};
+      }
+
+      function renderTable(p) {
+        const cur = data.scenarios.current, fast = data.scenarios.heavy_fast, slow = data.scenarios.heavy_slow;
+        const rows = [
+          { label: curLabel(), sc: cur, color: p.orange },
+          { label: {{ t("heavy fast-charging") | tojson }}, sc: fast, color: p.ink2 },
+          { label: {{ t("heavy slow-charging") | tojson }}, sc: slow, color: p.ink3 },
+        ];
+        document.getElementById('batfc-table').innerHTML = rows.map(r => `
+          <tr style="border-top:1px solid var(--ujh-line)">
+            <td style="padding:8px 0;border-left:2px solid ${r.color};padding-left:8px" data-label="${{ t("Scenario") | tojson }}">${r.label}</td>
+            ${CHECKPOINTS.map(km => `<td style="padding:8px 0" data-label="${fmtKm(km)} km">${r.sc.at[km]}%</td>`).join('')}
+          </tr>`).join('');
+      }
 
       function render() {
         if (!data) return;
@@ -75,9 +113,6 @@
         const p = palette();
         const km = data.km_grid;
         const cur = data.scenarios.current, fast = data.scenarios.heavy_fast, slow = data.scenarios.heavy_slow;
-        const curLabel = cur.measured
-          ? {{ t("current mix ({pct}% DC fast)") | tojson }}.replace('{pct}', Math.round(cur.fast_frac * 100))
-          : {{ t("current mix (assumed)") | tojson }};
         const warrantyLine = km.map(() => data.warranty_floor_pct);
         if (chart) chart.destroy();
         chart = new Chart(c, {
@@ -85,29 +120,41 @@
           data: {
             labels: km,
             datasets: [
-              { label: curLabel, data: cur.soh, borderColor: p.orange, backgroundColor: p.orange + '30', pointRadius: 0, tension: 0.2, fill: false },
-              { label: {{ t("heavy fast-charging") | tojson }}, data: fast.soh, borderColor: p.ink2, backgroundColor: 'transparent', borderDash: [4, 3], pointRadius: 0, tension: 0.2, fill: false },
-              { label: {{ t("heavy slow-charging") | tojson }}, data: slow.soh, borderColor: p.ink3, backgroundColor: 'transparent', borderDash: [2, 2], pointRadius: 0, tension: 0.2, fill: false },
+              { label: curLabel(), data: cur.soh, borderColor: p.orange, backgroundColor: p.orange + '30', borderWidth: 2, pointRadius: 0, tension: 0.25, fill: false },
+              { label: {{ t("heavy fast-charging") | tojson }}, data: fast.soh, borderColor: p.ink2, backgroundColor: 'transparent', borderDash: [4, 3], pointRadius: 0, tension: 0.25, fill: false },
+              { label: {{ t("heavy slow-charging") | tojson }}, data: slow.soh, borderColor: p.ink3, backgroundColor: 'transparent', borderDash: [2, 2], pointRadius: 0, tension: 0.25, fill: false },
               { label: {{ t("warranty floor") | tojson }}, data: warrantyLine, borderColor: p.line, backgroundColor: 'transparent', borderDash: [1, 4], pointRadius: 0, borderWidth: 1, tension: 0, fill: false },
             ],
           },
           options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } } } },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 }, boxWidth: 16 } },
+              tooltip: { callbacks: {
+                title: (items) => fmtKm(items[0].label) + ' km',
+                label: (item) => `${item.dataset.label}: ${item.formattedValue}%`,
+              } },
+            },
             scales: {
-              x: { grid: { color: p.line }, ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 }, maxTicksLimit: 11 }, title: { display: true, text: 'km', color: p.ink3 } },
-              y: { grid: { color: p.line }, ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } }, title: { display: true, text: '%', color: p.ink3 }, min: 50, max: 100 },
+              x: { grid: { color: p.line }, ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 }, callback: (v, i) => fmtKm(km[i]) }, title: { display: true, text: 'km', color: p.ink3 } },
+              y: { grid: { color: p.line }, ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } }, title: { display: true, text: '% SoH', color: p.ink3 }, min: 50, max: 100 },
             },
           },
         });
-        const at160 = cur.soh[data.km_grid.indexOf(160000)];
+        renderTable(p);
         document.getElementById('batfc-headline').textContent =
-          (at160 != null ? at160 + '% ' + {{ t("at 160,000 km") | tojson }} + ' · ' : '') + {{ t("to 250,000 km") | tojson }};
-        document.getElementById('batfc-sub').textContent =
-          {{ t("Based on {kwh} kWh charged fast, {kwh2} kWh slow, over {n} sessions · ≈ {akm} km/year driven ({src}).") | tojson }}
-            .replace('{kwh}', data.charge_mix.fast_kwh).replace('{kwh2}', data.charge_mix.slow_kwh)
-            .replace('{n}', data.charge_mix.sessions).replace('{akm}', data.annual_km.toLocaleString())
-            .replace('{src}', data.annual_km_source === 'assumed' ? {{ t("assumed") | tojson }} : {{ t("measured") | tojson }});
+          cur.at[160000] + '% ' + {{ t("at 160,000 km") | tojson }} + ' · ' + {{ t("to 250,000 km") | tojson }};
+
+        const today = data.today;
+        const todayLine = today
+          ? {{ t("Today: {km} km · {pct}% SoH (measured)") | tojson }}.replace('{km}', fmtKm(today.km)).replace('{pct}', today.soh_pct)
+          : {{ t("Collecting SoH samples — the model below starts from a new pack.") | tojson }};
+        const basisLine = {{ t("Basis: {kwh} kWh charged fast, {kwh2} kWh slow, over {n} sessions · ≈ {akm} km/year driven ({src}).") | tojson }}
+          .replace('{kwh}', data.charge_mix.fast_kwh).replace('{kwh2}', data.charge_mix.slow_kwh)
+          .replace('{n}', data.charge_mix.sessions).replace('{akm}', fmtKm(data.annual_km))
+          .replace('{src}', data.annual_km_source === 'assumed' ? {{ t("assumed") | tojson }} : {{ t("measured") | tojson }});
+        document.getElementById('batfc-today').innerHTML = todayLine + '<br>' + basisLine;
       }
 
       details.addEventListener('toggle', async () => {
@@ -117,7 +164,7 @@
           data = await r.json();
           render();
         } catch (e) {
-          document.getElementById('batfc-sub').textContent = {{ t("Could not load forecast.") | tojson }};
+          document.getElementById('batfc-today').textContent = {{ t("Could not load forecast.") | tojson }};
         }
       });
       window.addEventListener('themechange', () => { if (data) render(); });
