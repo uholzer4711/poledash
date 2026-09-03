@@ -1186,4 +1186,23 @@ TRANSLATIONS_DE: dict[str, str] = {
     "Spritmonitor setup": "Spritmonitor-Einrichtung",
     "Exported to Spritmonitor": "Zu Spritmonitor exportiert",
     "finish charging first": "erst Ladevorgang abschließen",
+    "BATTERY LIFE FORECAST": "AKKU-LANGZEITPROGNOSE",
+    "to 250,000 km": "bis 250.000 km",
+    "Illustrative model, not a warranty spec: {kwh} kWh NMC pack (liquid-cooled), fleet degradation studies scaled by this car's own measured DC-fast-charge share and driven km/year.":
+        "Illustratives Modell, keine Garantiezusage: {kwh}-kWh-NMC-Akku (flüssiggekühlt), Degradations-Studien aus Flottendaten, skaliert mit dem gemessenen DC-Schnelllade-Anteil und den gefahrenen km/Jahr dieses Autos.",
+    "Heavy-fast / heavy-slow show the same model at an 85% vs. 5% DC fast-charge share, for comparison.":
+        "Viel-Schnellladen / viel-Langsamladen zeigen dasselbe Modell mit 85 % bzw. 5 % DC-Schnelllade-Anteil zum Vergleich.",
+    "Dashed line = Polestar's warranty floor (70% SoH within 8 years / 160,000 km) — real packs typically stay well above it.":
+        "Gestrichelte Linie = Polestar-Garantiegrenze (70 % SoH innerhalb von 8 Jahren / 160.000 km) — reale Akkus bleiben meist deutlich darüber.",
+    "current mix ({pct}% DC fast)": "aktueller Mix ({pct} % DC-schnell)",
+    "current mix (assumed)": "aktueller Mix (angenommen)",
+    "heavy fast-charging": "viel Schnellladen",
+    "heavy slow-charging": "viel Langsamladen",
+    "warranty floor": "Garantiegrenze",
+    "at 160,000 km": "bei 160.000 km",
+    "Based on {kwh} kWh charged fast, {kwh2} kWh slow, over {n} sessions · ≈ {akm} km/year driven ({src}).":
+        "Basierend auf {kwh} kWh schnell- und {kwh2} kWh langsamgeladen über {n} Ladevorgänge · ≈ {akm} km/Jahr gefahren ({src}).",
+    "assumed": "angenommen",
+    "measured": "gemessen",
+    "Could not load forecast.": "Prognose konnte nicht geladen werden.",
 }

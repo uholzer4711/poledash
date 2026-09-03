@@ -3,6 +3,27 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.53.0] — 2026-09-03
+
+### Added
+
+- **Battery life forecast** on the dashboard, in a new collapsible section
+  under SoH: an illustrative 0–250,000 km capacity-retention projection
+  (`battery_forecast.py`, `GET /api/battery-forecast`). Models an early
+  SEI/formation loss (~2.5 % by 30,000 km, chemistry-driven, same for every
+  scenario) plus a linear per-km term whose annual rate is interpolated
+  between 1.3 %/year (AC-only) and 2.8 %/year (heavy DC fast-charging) —
+  anchored to the 78 kWh Long Range NMC pack (CATL/LG, liquid-cooled) this
+  app is configured for and published fleet-degradation studies (Geotab's
+  ~10k-EV analysis). The "current mix" curve uses this car's own measured
+  DC-fast-charge energy share (`ChargeSession.peak_power_w` above the
+  Polestar 2's 11 kW AC onboard-charger ceiling ⇒ DC) and its own driven
+  km/year (from journey imports/detected trips), alongside "heavy fast" (85 %
+  DC) and "heavy slow" (5 % DC) comparison curves and Polestar's warranty
+  floor (70 % SoH within 8 years / 160,000 km) as a reference line. Clearly
+  labeled as an illustrative model, not a warranty spec — the API exposes no
+  real SoH/chemistry data. Chart lazy-loads on first expand.
+
 ## [1.52.3] — 2026-08-31
 
 ### Fixed

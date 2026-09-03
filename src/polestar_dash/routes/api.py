@@ -1075,6 +1075,13 @@ def _drain_dict(d) -> dict:
     }
 
 
+@router.get("/battery-forecast")
+def battery_forecast() -> dict:
+    from ..battery_forecast import compute_degradation_forecast
+
+    return compute_degradation_forecast()
+
+
 @router.get("/idle-drain")
 def idle_drain(days: int = Query(60, ge=1, le=365), vin: str | None = None) -> dict:
     diag = diagnose_idle_drains(vin=vin, days=days)
