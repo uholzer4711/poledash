@@ -62,8 +62,39 @@
     </details>
   </div>
 
+  <div id="costs" class="section-head" style="margin-top:48px">
+    <div class="num-tag">{{ t("03 / CHARGING COST") }}</div>
+    <h1>{{ t("Monthly spend")|safe }}</h1>
+  </div>
+
+  <div class="card mb-6">
+    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
+      <div class="field">
+        <label>{{ t("Time range") }}</label>
+        <select id="costMonths">
+          <option value="3">{{ t("3 months") }}</option>
+          <option value="6" selected>{{ t("6 months") }}</option>
+          <option value="12">{{ t("12 months") }}</option>
+          <option value="36">{{ t("3 years") }}</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="costTotals" class="grid grid-4 mb-6">
+    <div class="card"><div class="card-label">{{ t("Total cost") }}</div><div class="stat num">€ <span id="c_cost">—</span></div></div>
+    <div class="card"><div class="card-label">{{ t("Avg. price (paid)") }}</div><div class="stat num" id="c_ct">—<span class="unit">ct/kWh</span></div></div>
+    <div class="card"><div class="card-label">{{ t("Avg. per 100 km") }}</div><div class="stat num">€ <span id="c_per100">—</span></div></div>
+    <div class="card"><div class="card-label">{{ t("Free charging") }}</div><div class="stat num" id="c_free">—<span class="unit">%</span></div><div class="stat-sub" id="c_free_kwh">—</div></div>
+  </div>
+
+  <div class="card mb-6"><canvas id="costChart" height="110"></canvas></div>
+
+  <div class="card-label mb-4">{{ t("Price levels in this period") }}</div>
+  <div id="priceBreakdown" class="grid grid-3 mb-6"><p class="muted">{{ t("Loading…") }}</p></div>
+
   <div id="sessions" class="section-head" style="margin-top:48px">
-    <div class="num-tag">{{ t("03 / SESSIONS") }}</div>
+    <div class="num-tag">{{ t("04 / SESSIONS") }}</div>
     <h1>{{ t("Charging sessions")|safe }}</h1>
   </div>
 
@@ -375,5 +406,78 @@
     document.getElementById('days').addEventListener('change', refresh);
     window.addEventListener('load', () => setTimeout(refresh, 200));
     window.addEventListener('themechange', refresh);
+  </script>
+
+  <script>
+    let costChart;
+    function _fmtMonth(key) {
+      const [y, m] = key.split('-').map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+    }
+    function renderPriceBreakdown(rows) {
+      const el = document.getElementById('priceBreakdown');
+      if (!rows.length) { el.innerHTML = '<p class="muted">' + {{ t("No charging sessions in this period.") | tojson }} + '</p>'; return; }
+      el.innerHTML = rows.map(p => `
+        <div class="card" style="padding:16px">
+          <div class="flex-between" style="align-items:center">
+            <span class="mono-xs">${p.other ? {{ t("Other") | tojson }} : p.ct.toFixed(1) + ' ct/kWh'}</span>
+            ${p.free ? `<span class="badge"><span class="dot"></span>${ {{ t("free") | tojson }} }</span>` : ''}
+          </div>
+          <div class="stat num" style="font-size:22px;margin-top:6px">${p.kwh}<span class="unit">kWh</span></div>
+          <div class="stat-sub">€ ${p.cost_eur.toFixed(2)} · ${p.share_pct}% · ${p.sessions} ${ {{ t("sessions") | tojson }} }</div>
+        </div>
+      `).join('');
+    }
+    async function loadCosts() {
+      readTheme();
+      const months = document.getElementById('costMonths').value;
+      let j;
+      try {
+        const r = await fetch(`/api/charging-cost?months=${months}`);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        j = await r.json();
+      } catch (e) {
+        document.getElementById('priceBreakdown').innerHTML =
+          '<p class="muted">' + {{ t("Could not load charging cost data.") | tojson }} + '</p>';
+        console.error('loadCosts failed', e);
+        return;
+      }
+      document.getElementById('c_cost').textContent = j.totals.cost_eur.toFixed(2);
+      document.getElementById('c_ct').innerHTML = `${j.totals.avg_ct_per_kwh_paid != null ? j.totals.avg_ct_per_kwh_paid.toFixed(1) : '—'}<span class="unit">ct/kWh</span>`;
+      document.getElementById('c_per100').textContent = j.totals.eur_per_100km != null ? j.totals.eur_per_100km.toFixed(2) : '—';
+      document.getElementById('c_free').innerHTML = `${j.totals.free_share_pct}<span class="unit">%</span>`;
+      document.getElementById('c_free_kwh').textContent = `${j.totals.free_kwh} kWh ${ {{ t("of") | tojson }} } ${j.totals.kwh} kWh`;
+      renderPriceBreakdown(j.price_breakdown);
+
+      const labels = j.months.map(m => _fmtMonth(m.month));
+      const data = {
+        labels,
+        datasets: [
+          { label: {{ t("Paid (kWh)") | tojson }}, data: j.months.map(m => m.paid_kwh),
+            backgroundColor: INK, stack: 'kwh', yAxisID: 'y' },
+          { label: {{ t("Free (kWh)") | tojson }}, data: j.months.map(m => m.free_kwh),
+            backgroundColor: 'rgba(138,141,147,.35)', stack: 'kwh', yAxisID: 'y' },
+          { type: 'line', label: {{ t("Cost (€)") | tojson }}, data: j.months.map(m => m.cost_eur),
+            borderColor: INK, backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 3],
+            tension: 0, pointRadius: 2, yAxisID: 'y1' },
+        ]
+      };
+      if (costChart) costChart.destroy();
+      costChart = new Chart(document.getElementById('costChart'), {
+        type: 'bar', data,
+        options: {
+          responsive: true,
+          scales: {
+            x: { stacked: true, ticks: { color: INK3, font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: LINE } },
+            y: { stacked: true, ticks: { color: INK3, font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: LINE }, title: { display: true, text: 'kWh', color: INK3 } },
+            y1: { position: 'right', ticks: { color: INK3, font: { family: 'JetBrains Mono', size: 10 } }, grid: { display: false }, title: { display: true, text: '€', color: INK3 } },
+          },
+          plugins: { legend: { labels: { color: INK, font: { family: 'JetBrains Mono', size: 10 } } } },
+        }
+      });
+    }
+    document.getElementById('costMonths').addEventListener('change', loadCosts);
+    window.addEventListener('load', () => setTimeout(loadCosts, 200));
+    window.addEventListener('themechange', loadCosts);
   </script>
 {% endblock %}

@@ -31,6 +31,7 @@ TRANSLATIONS_EN = {
     "Charging curve": 'Charging <em class="accent">curve</em>',
     "Last {n} days": 'Last <em class="accent">{n}</em> days',
     "Import complete": 'Import <em class="accent">complete</em>',
+    "Monthly spend": 'Monthly <em class="accent">spend</em>',
 }
 
 # English source strings → translated. "en" only needs the accent overrides;

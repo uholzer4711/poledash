@@ -585,6 +585,152 @@ def charge_price_split(days: int = 365, vin: str | None = None) -> dict | None:
     return out or None
 
 
+def compute_monthly_charging_cost(months: int = 12, vin: str | None = None) -> dict:
+    """Charging spend bucketed per calendar month, free vs paid split.
+
+    Zero-fills every month in the window (not just months with a session) so
+    the chart x-axis is a continuous timeline. km per month comes from
+    odometer min/max (cheap SQL aggregate — mirrors /api/daily), independent
+    of session data, so a month with driving but no charge still shows km.
+    """
+    from sqlalchemy import func as sa_func
+    from sqlalchemy import select as sa_select
+
+    from .app_settings import get_default_price_ct
+    from .db.models import VehicleSnapshot
+
+    months = max(1, min(months, 60))
+    now = utcnow()
+    # First day of the month `months - 1` months back, so "3" means "this
+    # month + the 2 before it".
+    since = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    for _ in range(months - 1):
+        since = (since - timedelta(days=1)).replace(day=1)
+
+    default_ct = get_default_price_ct()
+
+    with Session(get_engine()) as s:
+        stmt = (
+            select(ChargeSession)
+            .where(ChargeSession.started_at >= since)
+            .where(ChargeSession.is_complete.is_(True))  # noqa: E712
+            .where(ChargeSession.energy_kwh.is_not(None))
+        )
+        if vin:
+            stmt = stmt.where(ChargeSession.vin == vin)
+        sessions = list(s.exec(stmt).all())
+
+        month_col = sa_func.strftime("%Y-%m", VehicleSnapshot.fetched_at)
+        km_stmt = sa_select(
+            month_col.label("month"),
+            sa_func.min(VehicleSnapshot.odometer_km).label("odo_min"),
+            sa_func.max(VehicleSnapshot.odometer_km).label("odo_max"),
+        ).where(VehicleSnapshot.fetched_at >= since).where(
+            VehicleSnapshot.odometer_km.is_not(None)
+        ).group_by(month_col)
+        if vin:
+            km_stmt = km_stmt.where(VehicleSnapshot.vin == vin)
+        km_by_month = {
+            row.month: round(max(0.0, (row.odo_max or 0) - (row.odo_min or 0)), 1)
+            for row in s.exec(km_stmt)
+        }
+
+    # Zero-filled month scaffold, oldest → newest.
+    buckets: dict[str, dict] = {}
+    cursor = since
+    while cursor <= now:
+        key = cursor.strftime("%Y-%m")
+        buckets[key] = {
+            "month": key, "kwh": 0.0, "free_kwh": 0.0, "paid_kwh": 0.0,
+            "cost_eur": 0.0, "km": km_by_month.get(key, 0.0), "sessions": 0,
+        }
+        # Advance to the 1st of next month.
+        cursor = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+    price_points: dict[float, dict] = {}  # rounded ct/kWh -> {kwh, cost_eur, sessions}
+    for cs in sessions:
+        key = cs.started_at.strftime("%Y-%m")
+        b = buckets.get(key)
+        if b is None:
+            continue
+        kwh = cs.energy_kwh or 0
+        if kwh <= 0:
+            continue
+        ct = cs.price_ct_per_kwh if cs.price_ct_per_kwh is not None else default_ct
+        cost = kwh * ct / 100.0
+        b["kwh"] += kwh
+        b["cost_eur"] += cost
+        b["sessions"] += 1
+        if ct <= 0:
+            b["free_kwh"] += kwh
+        else:
+            b["paid_kwh"] += kwh
+        pkey = round(ct, 1)
+        pp = price_points.setdefault(pkey, {"ct": pkey, "kwh": 0.0, "cost_eur": 0.0, "sessions": 0})
+        pp["kwh"] += kwh
+        pp["cost_eur"] += cost
+        pp["sessions"] += 1
+
+    month_rows = []
+    for b in sorted(buckets.values(), key=lambda r: r["month"]):
+        b["kwh"] = round(b["kwh"], 1)
+        b["free_kwh"] = round(b["free_kwh"], 1)
+        b["paid_kwh"] = round(b["paid_kwh"], 1)
+        b["cost_eur"] = round(b["cost_eur"], 2)
+        b["avg_ct_per_kwh"] = round(b["cost_eur"] * 100 / b["kwh"], 1) if b["kwh"] > 0 else None
+        b["eur_per_100km"] = round(b["cost_eur"] / b["km"] * 100, 2) if b["km"] > 0 else None
+        month_rows.append(b)
+
+    total_kwh = sum(b["kwh"] for b in month_rows)
+    total_free_kwh = sum(b["free_kwh"] for b in month_rows)
+    total_paid_kwh = sum(b["paid_kwh"] for b in month_rows)
+    total_cost = sum(b["cost_eur"] for b in month_rows)
+    total_km = sum(b["km"] for b in month_rows)
+    n_sessions = sum(b["sessions"] for b in month_rows)
+
+    # Top price levels by kWh, capped at 6 + an "other" rollup — keeps the
+    # breakdown legible instead of one row per fractional-cent override.
+    ranked = sorted(price_points.values(), key=lambda p: -p["kwh"])
+    top, rest = ranked[:6], ranked[6:]
+    breakdown = [
+        {
+            "ct": p["ct"], "kwh": round(p["kwh"], 1), "cost_eur": round(p["cost_eur"], 2),
+            "sessions": p["sessions"],
+            "share_pct": round(p["kwh"] / total_kwh * 100, 1) if total_kwh > 0 else 0,
+            "free": p["ct"] <= 0,
+        }
+        for p in top
+    ]
+    if rest:
+        rest_kwh = sum(p["kwh"] for p in rest)
+        rest_cost = sum(p["cost_eur"] for p in rest)
+        breakdown.append({
+            "ct": None, "kwh": round(rest_kwh, 1), "cost_eur": round(rest_cost, 2),
+            "sessions": sum(p["sessions"] for p in rest),
+            "share_pct": round(rest_kwh / total_kwh * 100, 1) if total_kwh > 0 else 0,
+            "free": False, "other": True,
+        })
+
+    return {
+        "months": month_rows,
+        "price_breakdown": breakdown,
+        "default_price_ct_per_kwh": default_ct,
+        "totals": {
+            "kwh": round(total_kwh, 1),
+            "free_kwh": round(total_free_kwh, 1),
+            "paid_kwh": round(total_paid_kwh, 1),
+            "cost_eur": round(total_cost, 2),
+            "km": round(total_km, 1),
+            "sessions": n_sessions,
+            "free_share_pct": round(total_free_kwh / total_kwh * 100, 1) if total_kwh > 0 else 0,
+            "avg_ct_per_kwh_paid": (
+                round(total_cost * 100 / total_paid_kwh, 1) if total_paid_kwh > 0 else None
+            ),
+            "eur_per_100km": round(total_cost / total_km * 100, 2) if total_km > 0 else None,
+        },
+    }
+
+
 # NOTE: the old `idle_loss_summary` (kWh/€ across sparse, weakly-attributed
 # discrete parked draws) was removed in favour of `idle_drain.standby_baseline`
 # — an aggregate %/day parasitic-standby rate that doesn't hang the headline on

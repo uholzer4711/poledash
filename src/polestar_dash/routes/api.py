@@ -48,6 +48,7 @@ from ..insights_extras import (
     compute_charge_temp_scatter,
     compute_co2,
     compute_forecast,
+    compute_monthly_charging_cost,
     compute_range_factor,
     compute_soh,
     compute_temp_scatter,
@@ -1073,6 +1074,11 @@ def _drain_dict(d) -> dict:
         "lat": d.lat,
         "lng": d.lng,
     }
+
+
+@router.get("/charging-cost")
+def charging_cost(months: int = Query(12, ge=1, le=36), vin: str | None = None) -> dict:
+    return compute_monthly_charging_cost(months=months, vin=vin)
 
 
 @router.get("/battery-forecast")
