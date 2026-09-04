@@ -1,10 +1,14 @@
 # poledash
 
-**Current version: v1.52.3** — 2026-08-31
+**Current version: v1.54.0** — 2026-09-04
 
 | Version | Date | What changed |
 |---|---|---|
-| **v1.52.3** | 2026-08-31 | Fix: `unofficial-polestar-api` bumped to `0.3.1` (stale pin was silently failing `get_vehicles()` with HTTP 426) + worked around a second, server-side Polestar breaking change (broken `VehicleInformation` query) by building the C3 vehicle handle from a known VIN instead of the broken vehicle-listing call — C3 fully recovered |
+| **v1.54.0** | 2026-09-04 | Battery & Charging page redesigned as collapsible accordions (was one long flat scroll); new monthly charging-cost chart (paid vs. free kWh, price-level breakdown); battery life forecast moved from Dashboard to Battery & Charging; clearer +/− toggle affordance and visible inline text links |
+| v1.53.2 | 2026-09-03 | Fix: `${{ }}` Jinja/JS footgun in the forecast checkpoint table broke its mobile `data-label` |
+| v1.53.1 | 2026-09-03 | Fix: annual-km bug in the battery forecast + presentation cleanup |
+| v1.53.0 | 2026-09-03 | Battery life forecast (0–250,000 km capacity-retention model under SoH) |
+| v1.52.3 | 2026-08-31 | Fix: `unofficial-polestar-api` bumped to `0.3.1` (stale pin was silently failing `get_vehicles()` with HTTP 426) + worked around a second, server-side Polestar breaking change (broken `VehicleInformation` query) by building the C3 vehicle handle from a known VIN instead of the broken vehicle-listing call — C3 fully recovered |
 | v1.52.2 | 2026-08-12 | Fix: the evening auto-lock automation could run in unattended "Autonom" mode and lock the car with the key still inside — that mode is now permanently unavailable for this rule |
 | v1.52.1 | 2026-08-08 | Fix: windows/lock-after-time automations could fire while the car was actively being driven (flaky `speed` field read as "parked") — now vetoed by the same robust driving detector used for poll cadence |
 | v1.52.0 | 2026-08-08 | Detect the car's own modem/SIM going offline ("no internet"), not just a degraded C3 login — the connection lost/restored alert now covers both |
@@ -12,8 +16,6 @@
 | v1.50.0 | 2026-08-06 | New automation: lock the car if it's still unlocked in the evening |
 | v1.49.1 | 2026-08-05 | Fix: phantom charge sessions from downhill recuperation (take 2) |
 | v1.49.0 | 2026-08-05 | Cabin climate temp + seat/steering heating from C3; charge-schedule-conflict hint |
-| v1.48.0 | 2026-07-22 | WhatsApp push via WAHA sidecar |
-| v1.47.2 | 2026-07-13 | Fix: phantom charge sessions from downhill recuperation |
 
 Full history with details: [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -71,8 +73,8 @@ auto-updates.
 
 | Page | What it does |
 |---|---|
-| **/** Dashboard | Live SoC, range, charging state, a **vehicle-state diagram** (doors/windows/frunk/boot/sunroof, lock, climate, cabin air, weather) with live GPS on a mini-map, a **battery-health (SoH)** estimate, a **battery life forecast** (0–250,000 km projection, scenarios for the current vs. mostly-fast vs. mostly-slow charging mix), and a **remote-control panel** (lock, windows, climate, pre-cleaning, flash/honk, wake) with verified command feedback |
-| **/history** Battery & Charging | Telemetry time-series, charging-session list + curves, SoH trend, and a **charging control panel** (start/stop, amp limit, target SoC) |
+| **/** Dashboard | Live SoC, range, charging state, a **vehicle-state diagram** (doors/windows/frunk/boot/sunroof, lock, climate, cabin air, weather) with live GPS on a mini-map, a **battery-health (SoH)** estimate, and a **remote-control panel** (lock, windows, climate, pre-cleaning, flash/honk, wake) with verified command feedback |
+| **/history** Battery & Charging | Collapsible sections: telemetry time-series, daily driving, SoH trend, a **battery life forecast** (0–250,000 km projection, scenarios for the current vs. mostly-fast vs. mostly-slow charging mix), a **monthly charging-cost chart** (paid vs. free kWh, price-level breakdown), a **charging control panel** (start/stop, amp limit, target SoC), and the charging-session list + curves |
 | **/tripbook** | Trips detected from the odometer, monthly summaries, iCal feed, plus an importer for the official Polestar-app journey-log CSV |
 | **/insights** | Answer-first cost & efficiency page — five themed sections (cost, efficiency, battery health, energy waste, environment/patterns) with plain-language auto-generated takeaways, charts as supporting evidence |
 | **/routes** | Repeated routes aggregated from imported trips, most/least-efficient leaderboard |
