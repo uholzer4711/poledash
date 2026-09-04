@@ -396,7 +396,9 @@ def settings_page(request: Request):
 
 @router.get("/history", response_class=HTMLResponse)
 def history_page(request: Request):
-    return templates.TemplateResponse(request, "history.html", {})
+    from .dashboard import _soh
+
+    return templates.TemplateResponse(request, "history.html", {"soh": _soh()})
 
 
 @router.get("/spritmonitor", response_class=HTMLResponse)

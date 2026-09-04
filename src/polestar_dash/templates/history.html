@@ -40,15 +40,37 @@
 
   {% include "partials/control_charging.html" %}
 
-  <div class="card mb-6"><canvas id="chart" height="120"></canvas></div>
+  {# Every block below is a collapsible .lab-acc card: a bordered +/− toggle
+     in the summary makes it unmistakably clickable (design system has no
+     icons, so the box-drawn mark stands in for one). Primary, frequently
+     checked views (timeseries, cost overview, session list) start open;
+     secondary/detail views start collapsed to keep the page scannable. #}
 
+  <details class="card lab-acc mb-4" id="tsAcc" open>
+    <summary>
+      <span class="lab-acc-title">{{ t("Timeseries chart") }}</span>
+      <span class="lab-acc-meta mono-xs muted" id="tsMeta"></span>
+      <span class="lab-acc-mark" aria-hidden="true"></span>
+    </summary>
+    <div class="lab-acc-body">
+      <canvas id="chart" height="120"></canvas>
+    </div>
+  </details>
 
-  <div class="card-label mb-4">{{ t("Daily driving") }}</div>
-  <div class="card mb-6"><canvas id="dailyChart" height="100"></canvas></div>
+  <details class="card lab-acc mb-4" id="dailyAcc">
+    <summary>
+      <span class="lab-acc-title">{{ t("Daily driving") }}</span>
+      <span class="lab-acc-meta mono-xs muted">km/day · kWh</span>
+      <span class="lab-acc-mark" aria-hidden="true"></span>
+    </summary>
+    <div class="lab-acc-body">
+      <canvas id="dailyChart" height="100"></canvas>
+    </div>
+  </details>
 
   {# Collapsed by default: a healthy pack draws a flat ~100 % line, so the
      chart earns its full-width slot only when the owner asks for it. #}
-  <div id="sohWrap" class="mb-6" style="display:none">
+  <div id="sohWrap" class="mb-4" style="display:none">
     <details class="card lab-acc" id="sohAcc">
       <summary>
         <span class="lab-acc-title">{{ t("Battery health") }}</span>
@@ -62,14 +84,49 @@
     </details>
   </div>
 
-  <div id="costs" class="section-head" style="margin-top:48px">
-    <div class="num-tag">{{ t("03 / CHARGING COST") }}</div>
-    <h1>{{ t("Monthly spend")|safe }}</h1>
-  </div>
+  {% if soh %}
+  <details class="card lab-acc mb-4" id="batfc-details">
+    <summary>
+      <span class="lab-acc-title">{{ t("BATTERY LIFE FORECAST") }}</span>
+      <span class="lab-acc-meta mono-xs muted" id="batfc-headline">{{ t("to 250,000 km") }}</span>
+      <span class="lab-acc-mark" aria-hidden="true"></span>
+    </summary>
+    <div class="lab-acc-body">
+      <div class="mono-xs muted" id="batfc-today">{{ t("Loading…") }}</div>
 
-  <div class="card mb-6">
-    <div class="flex gap-4" style="flex-wrap:wrap;align-items:flex-end">
-      <div class="field">
+      <div style="position:relative;height:300px;margin-top:16px">
+        <canvas id="batfc_chart"></canvas>
+      </div>
+
+      <table class="index mt-4" style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr class="mono-xs" style="text-align:left;color:var(--ujh-ink-3)">
+            <th style="padding:8px 0">{{ t("Scenario") }}</th>
+            <th style="padding:8px 0">100.000 km</th>
+            <th style="padding:8px 0">160.000 km ({{ t("warranty") }})</th>
+            <th style="padding:8px 0">250.000 km</th>
+          </tr>
+        </thead>
+        <tbody id="batfc-table"></tbody>
+      </table>
+
+      <div class="mono-xs muted mt-4">
+        {{ t("Illustrative model, not a warranty spec: {kwh} kWh NMC pack (liquid-cooled), fleet degradation studies scaled by this car's own measured DC-fast-charge share and driven km/year.", kwh="%g"|format(soh.nominal_kwh)) }}
+        {{ t("Heavy-fast / heavy-slow show the same model at an 85% vs. 5% DC fast-charge share, for comparison.") }}
+        {{ t("Dashed line = Polestar's warranty floor (70% SoH within 8 years / 160,000 km) — real packs typically stay well above it.") }}
+      </div>
+    </div>
+  </details>
+  {% endif %}
+
+  <details class="card lab-acc mb-4" id="costAcc" open>
+    <summary>
+      <span class="lab-acc-title">{{ t("Charging cost") }}</span>
+      <span class="lab-acc-meta mono-xs muted" id="costMeta"></span>
+      <span class="lab-acc-mark" aria-hidden="true"></span>
+    </summary>
+    <div class="lab-acc-body">
+      <div class="field mb-4" style="max-width:220px">
         <label>{{ t("Time range") }}</label>
         <select id="costMonths">
           <option value="3">{{ t("3 months") }}</option>
@@ -78,34 +135,38 @@
           <option value="36">{{ t("3 years") }}</option>
         </select>
       </div>
+
+      <div id="costTotals" class="grid grid-4 mb-4">
+        <div class="card"><div class="card-label">{{ t("Total cost") }}</div><div class="stat num">€ <span id="c_cost">—</span></div></div>
+        <div class="card"><div class="card-label">{{ t("Avg. price (paid)") }}</div><div class="stat num" id="c_ct">—<span class="unit">ct/kWh</span></div></div>
+        <div class="card"><div class="card-label">{{ t("Avg. per 100 km") }}</div><div class="stat num">€ <span id="c_per100">—</span></div></div>
+        <div class="card"><div class="card-label">{{ t("Free charging") }}</div><div class="stat num" id="c_free">—<span class="unit">%</span></div><div class="stat-sub" id="c_free_kwh">—</div></div>
+      </div>
+
+      <canvas id="costChart" height="110"></canvas>
+
+      <div class="card-label mt-4 mb-3">{{ t("Price levels in this period") }}</div>
+      <div id="priceBreakdown" class="grid grid-3"><p class="muted">{{ t("Loading…") }}</p></div>
     </div>
-  </div>
+  </details>
 
-  <div id="costTotals" class="grid grid-4 mb-6">
-    <div class="card"><div class="card-label">{{ t("Total cost") }}</div><div class="stat num">€ <span id="c_cost">—</span></div></div>
-    <div class="card"><div class="card-label">{{ t("Avg. price (paid)") }}</div><div class="stat num" id="c_ct">—<span class="unit">ct/kWh</span></div></div>
-    <div class="card"><div class="card-label">{{ t("Avg. per 100 km") }}</div><div class="stat num">€ <span id="c_per100">—</span></div></div>
-    <div class="card"><div class="card-label">{{ t("Free charging") }}</div><div class="stat num" id="c_free">—<span class="unit">%</span></div><div class="stat-sub" id="c_free_kwh">—</div></div>
-  </div>
+  <details class="card lab-acc mb-4" id="sessAcc" open>
+    <summary>
+      <span class="lab-acc-title">{{ t("Charging sessions")|safe }}</span>
+      <span class="lab-acc-meta mono-xs muted" id="sessMeta"></span>
+      <span class="lab-acc-mark" aria-hidden="true"></span>
+    </summary>
+    <div class="lab-acc-body">
+      <div id="sessTotals" class="grid grid-4 mb-6">
+        <div class="card"><div class="card-label">{{ t("Sessions") }}</div><div class="stat num" id="t_count">—</div></div>
+        <div class="card"><div class="card-label">{{ t("Energy total") }}</div><div class="stat num" id="t_kwh">—<span class="unit">kWh</span></div></div>
+        <div class="card"><div class="card-label">{{ t("Cost total") }}</div><div class="stat num">€ <span id="t_cost">—</span></div></div>
+        <div class="card"><div class="card-label">{{ t("Default price") }}</div><div class="stat num" id="t_default">—<span class="unit">ct/kWh</span></div><div class="stat-sub"><a href="/settings" class="text-link">{{ t("change in settings") }}</a></div></div>
+      </div>
 
-  <div class="card mb-6"><canvas id="costChart" height="110"></canvas></div>
-
-  <div class="card-label mb-4">{{ t("Price levels in this period") }}</div>
-  <div id="priceBreakdown" class="grid grid-3 mb-6"><p class="muted">{{ t("Loading…") }}</p></div>
-
-  <div id="sessions" class="section-head" style="margin-top:48px">
-    <div class="num-tag">{{ t("04 / SESSIONS") }}</div>
-    <h1>{{ t("Charging sessions")|safe }}</h1>
-  </div>
-
-  <div id="sessTotals" class="grid grid-4 mb-6">
-    <div class="card"><div class="card-label">{{ t("Sessions") }}</div><div class="stat num" id="t_count">—</div></div>
-    <div class="card"><div class="card-label">{{ t("Energy total") }}</div><div class="stat num" id="t_kwh">—<span class="unit">kWh</span></div></div>
-    <div class="card"><div class="card-label">{{ t("Cost total") }}</div><div class="stat num">€ <span id="t_cost">—</span></div></div>
-    <div class="card"><div class="card-label">{{ t("Default price") }}</div><div class="stat num" id="t_default">—<span class="unit">ct/kWh</span></div><div class="stat-sub"><a href="/settings">{{ t("change in settings") }}</a></div></div>
-  </div>
-
-  <div id="sessList" class="grid"><p class="muted">{{ t("Loading…") }}</p></div>
+      <div id="sessList" class="grid"><p class="muted">{{ t("Loading…") }}</p></div>
+    </div>
+  </details>
 
   <script>
     function _asUTC(s) { return /[zZ]|[+\-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z'; }
@@ -211,7 +272,7 @@
             </div>
             <button class="btn ghost" onclick="saveSession(${s.id}, this)">${ {{ t("Save") | tojson }} } <span class="arrow">→</span></button>
             <button class="btn ghost" onclick="clearOverride(${s.id}, this)" title="${ {{ t("Use default price") | tojson }} }">${ {{ t("Reset") | tojson }} } <span class="arrow">→</span></button>
-            <a class="mono-xs" href="/sessions/${s.id}" style="margin-left:auto">${ {{ t("View curve →") | tojson }} }</a>
+            <a class="mono-xs text-link" href="/sessions/${s.id}" style="margin-left:auto">${ {{ t("View curve →") | tojson }} }</a>
           </div>
         </div>
       `).join('');
@@ -238,6 +299,8 @@
         document.getElementById('t_kwh').innerHTML = `${j.totals.kwh.toFixed(1)}<span class="unit">kWh</span>`;
         document.getElementById('t_cost').textContent = j.totals.cost_eur.toFixed(2);
         document.getElementById('t_default').innerHTML = `${DEFAULT_PRICE.toFixed(1)}<span class="unit">ct/kWh</span>`;
+        const sessMeta = document.getElementById('sessMeta');
+        if (sessMeta) sessMeta.textContent = j.totals.count + ' · € ' + j.totals.cost_eur.toFixed(0);
         window._sessItems = j.items;
         renderSessions(j.items);
       } catch (e) {
@@ -298,8 +361,15 @@
       INK    = cssVar('--ujh-ink')    || '#e8e8ea';
     }
 
+    function updateTsMeta() {
+      const f = document.getElementById('field'), d = document.getElementById('days');
+      const meta = document.getElementById('tsMeta');
+      if (meta && f && d) meta.textContent = f.selectedOptions[0].textContent + ' · ' + d.selectedOptions[0].textContent;
+    }
+
     async function load() {
       readTheme();
+      updateTsMeta();
       const field = document.getElementById('field').value;
       const days = document.getElementById('days').value;
       const r = await fetch(`/api/history?field=${field}&days=${days}`);
@@ -329,11 +399,19 @@
       });
     }
 
+    // Daily-driving accordion starts closed; Chart.js can't size a hidden
+    // canvas, so the fetch only stores the rows and the chart draws on
+    // first open (mirrors the SoH accordion below).
+    let _dailyRows = null;
     async function loadDaily() {
+      const r = await fetch(`/api/daily?days=${document.getElementById('days').value}`);
+      _dailyRows = await r.json();
+      if (document.getElementById('dailyAcc').open) drawDaily();
+    }
+    function drawDaily() {
+      if (!_dailyRows) return;
       readTheme();
-      const days = document.getElementById('days').value;
-      const r = await fetch(`/api/daily?days=${days}`);
-      const rows = await r.json();
+      const rows = _dailyRows;
       // Ink tones only — orange is a signal colour, not a series colour
       // (design rule: ≤ 5 % orange surface). Solid vs outlined bars keep the
       // two series apart without a second hue.
@@ -359,6 +437,10 @@
         }
       });
     }
+    document.getElementById('dailyAcc').addEventListener('toggle', function () {
+      if (this.open) drawDaily();
+    });
+
     // The accordion starts closed; Chart.js can't size a hidden canvas, so the
     // fetch only decides visibility + summary and the chart draws on first open.
     let _sohData = null;
@@ -405,8 +487,114 @@
     document.getElementById('field').addEventListener('change', load);
     document.getElementById('days').addEventListener('change', refresh);
     window.addEventListener('load', () => setTimeout(refresh, 200));
-    window.addEventListener('themechange', refresh);
+    window.addEventListener('themechange', () => { refresh(); if (_dailyRows) drawDaily(); });
   </script>
+
+  {% if soh %}
+  <script>
+    (function () {
+      const details = document.getElementById('batfc-details');
+      if (!details) return;
+      let data = null, chart = null;
+      const CHECKPOINTS = [100000, 160000, 250000];
+
+      function palette() {
+        return {
+          orange: cssVar('--ujh-orange') || '#ff5b14',
+          ink: cssVar('--ujh-ink') || '#e8e8ea',
+          ink2: cssVar('--ujh-ink-2') || '#b8babf',
+          ink3: cssVar('--ujh-ink-3') || '#8a8d93',
+          line: cssVar('--ujh-line') || '#2a2c30',
+        };
+      }
+      function fmtKm(n) { return Math.round(n).toLocaleString('de-DE'); }
+
+      function curLabel() {
+        const cur = data.scenarios.current;
+        return cur.measured
+          ? {{ t("current mix ({pct}% DC fast)") | tojson }}.replace('{pct}', Math.round(cur.fast_frac * 100))
+          : {{ t("current mix (assumed)") | tojson }};
+      }
+
+      function renderTable(p) {
+        const cur = data.scenarios.current, fast = data.scenarios.heavy_fast, slow = data.scenarios.heavy_slow;
+        const rows = [
+          { label: curLabel(), sc: cur, color: p.orange },
+          { label: {{ t("heavy fast-charging") | tojson }}, sc: fast, color: p.ink2 },
+          { label: {{ t("heavy slow-charging") | tojson }}, sc: slow, color: p.ink3 },
+        ];
+        document.getElementById('batfc-table').innerHTML = rows.map(r => `
+          <tr style="border-top:1px solid var(--ujh-line)">
+            <td style="padding:8px 0;border-left:2px solid ${r.color};padding-left:8px" data-label="{{ t("Scenario") }}">${r.label}</td>
+            ${CHECKPOINTS.map(km => `<td style="padding:8px 0" data-label="${fmtKm(km)} km">${r.sc.at[km]}%</td>`).join('')}
+          </tr>`).join('');
+      }
+
+      function render() {
+        if (!data) return;
+        const c = document.getElementById('batfc_chart');
+        if (!c) return;
+        const p = palette();
+        const km = data.km_grid;
+        const cur = data.scenarios.current, fast = data.scenarios.heavy_fast, slow = data.scenarios.heavy_slow;
+        const warrantyLine = km.map(() => data.warranty_floor_pct);
+        if (chart) chart.destroy();
+        chart = new Chart(c, {
+          type: 'line',
+          data: {
+            labels: km,
+            datasets: [
+              { label: curLabel(), data: cur.soh, borderColor: p.orange, backgroundColor: p.orange + '30', borderWidth: 2, pointRadius: 0, tension: 0.25, fill: false },
+              { label: {{ t("heavy fast-charging") | tojson }}, data: fast.soh, borderColor: p.ink2, backgroundColor: 'transparent', borderDash: [4, 3], pointRadius: 0, tension: 0.25, fill: false },
+              { label: {{ t("heavy slow-charging") | tojson }}, data: slow.soh, borderColor: p.ink3, backgroundColor: 'transparent', borderDash: [2, 2], pointRadius: 0, tension: 0.25, fill: false },
+              { label: {{ t("warranty floor") | tojson }}, data: warrantyLine, borderColor: p.line, backgroundColor: 'transparent', borderDash: [1, 4], pointRadius: 0, borderWidth: 1, tension: 0, fill: false },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { labels: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 }, boxWidth: 16 } },
+              tooltip: { callbacks: {
+                title: (items) => fmtKm(items[0].label) + ' km',
+                label: (item) => `${item.dataset.label}: ${item.formattedValue}%`,
+              } },
+            },
+            scales: {
+              x: { grid: { color: p.line }, ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 }, callback: (v, i) => fmtKm(km[i]) }, title: { display: true, text: 'km', color: p.ink3 } },
+              y: { grid: { color: p.line }, ticks: { color: p.ink2, font: { family: 'JetBrains Mono', size: 10 } }, title: { display: true, text: '% SoH', color: p.ink3 }, min: 50, max: 100 },
+            },
+          },
+        });
+        renderTable(p);
+        document.getElementById('batfc-headline').textContent =
+          cur.at[160000] + '% ' + {{ t("at 160,000 km") | tojson }} + ' · ' + {{ t("to 250,000 km") | tojson }};
+
+        const today = data.today;
+        const todayLine = today
+          ? {{ t("Today: {km} km · {pct}% SoH (measured)") | tojson }}.replace('{km}', fmtKm(today.km)).replace('{pct}', today.soh_pct)
+          : {{ t("Collecting SoH samples — the model below starts from a new pack.") | tojson }};
+        const basisLine = {{ t("Basis: {kwh} kWh charged fast, {kwh2} kWh slow, over {n} sessions · ≈ {akm} km/year driven ({src}).") | tojson }}
+          .replace('{kwh}', data.charge_mix.fast_kwh).replace('{kwh2}', data.charge_mix.slow_kwh)
+          .replace('{n}', data.charge_mix.sessions).replace('{akm}', fmtKm(data.annual_km))
+          .replace('{src}', data.annual_km_source === 'assumed' ? {{ t("assumed") | tojson }} : {{ t("measured") | tojson }});
+        document.getElementById('batfc-today').innerHTML = todayLine + '<br>' + basisLine;
+      }
+
+      details.addEventListener('toggle', async () => {
+        if (!details.open || data) return;
+        try {
+          const r = await fetch('/api/battery-forecast');
+          data = await r.json();
+          render();
+        } catch (e) {
+          document.getElementById('batfc-today').textContent = {{ t("Could not load forecast.") | tojson }};
+        }
+      });
+      window.addEventListener('themechange', () => { if (data) render(); });
+    })();
+  </script>
+  {% endif %}
 
   <script>
     let costChart;
@@ -447,6 +635,8 @@
       document.getElementById('c_per100').textContent = j.totals.eur_per_100km != null ? j.totals.eur_per_100km.toFixed(2) : '—';
       document.getElementById('c_free').innerHTML = `${j.totals.free_share_pct}<span class="unit">%</span>`;
       document.getElementById('c_free_kwh').textContent = `${j.totals.free_kwh} kWh ${ {{ t("of") | tojson }} } ${j.totals.kwh} kWh`;
+      const costMeta = document.getElementById('costMeta');
+      if (costMeta) costMeta.textContent = '€ ' + j.totals.cost_eur.toFixed(0) + ' · ' + j.totals.free_share_pct + '% ' + {{ t("free") | tojson }};
       renderPriceBreakdown(j.price_breakdown);
 
       const labels = j.months.map(m => _fmtMonth(m.month));

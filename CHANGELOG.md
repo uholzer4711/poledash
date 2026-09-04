@@ -3,6 +3,66 @@
 All notable changes to **polestar-dash**. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/); dates are UTC.
 
+## [1.54.0] — 2026-09-04
+
+### Added
+
+- **Monthly charging-cost chart on Battery & Charging** (`/history`):
+  new `/api/charging-cost?months=N` endpoint (`insights_extras.
+  compute_monthly_charging_cost`) aggregates every completed
+  `ChargeSession` per calendar month (3 / 6 / 12 / 36-month range,
+  zero-filled so gaps stay visible), split into paid vs. free kWh
+  with a stacked bar + cost-€ overlay line, plus a price-level
+  breakdown (top 6 distinct ct/kWh tariffs + "other") so different
+  contracts and free charging are visually distinct instead of
+  blending into one average.
+
+### Changed
+
+- **Battery & Charging page redesigned as collapsible accordions.**
+  What used to be a long flat scroll (timeseries chart, daily-driving
+  chart, SoH chart, sessions list, now also the cost chart) is now a
+  stack of `.lab-acc` cards — collapse/expand what you're not looking
+  at. Timeseries, charging cost and the session list start open
+  (primary views); daily driving, battery health and the battery-life
+  forecast start collapsed (detail views), consistent with the
+  existing Lab-tab pattern.
+- **Battery life forecast moved from Dashboard to Battery & Charging.**
+  It's degradation-model detail, not live telemetry — belongs next to
+  SoH history and charging cost, not on the at-a-glance dashboard.
+  `history_page` now computes the same `soh` context Dashboard did
+  (`routes/dashboard._soh()`), so the forecast's `{% if soh %}` gate
+  and its `nominal_kwh` text keep working unchanged; only the
+  markup+script moved, the `/api/battery-forecast` logic didn't.
+- **Accordion toggle affordance made obvious.** `.lab-acc-mark` (the
+  +/− indicator) is now a bordered 22×22 box instead of bare mono
+  text — reads as a button, not a stray character. The dashboard's
+  SoH "Details →" summary pill (`.veh-more`) got the same bordered
+  treatment. Both already turn orange on hover (unchanged).
+- **Inline text links got a visible affordance.** Design system links
+  inherit body text colour with no underline (`a { color: inherit }`)
+  — fine for buttons/badges, invisible for inline prose links like
+  "Trend on Battery & Charging →" or "View curve →". New `.text-link`
+  utility (muted underline, orange on hover) applied to those.
+
+### Verified
+
+- Backend: `compute_monthly_charging_cost` exercised against a copy
+  of the production DB (never the live file) — correct free/paid
+  split, zero-filled months, price-level buckets summing to 100 %.
+- Full page render smoke-tested via `TestClient` against a DB copy:
+  `/history` and `/` both 200, all six accordion ids present, forecast
+  markup confirmed absent from the dashboard.
+- Playwright screenshots (desktop 1400px + mobile 390px, both
+  `html.view-mobile` bottom-nav layout) confirm: accordions collapse/
+  expand with no console errors, lazy-drawn charts (daily driving,
+  battery forecast) render correctly on first open, translated labels
+  render in German end-to-end (chart legends included), and the
+  bordered toggle marks/pill are clearly visible in both themes.
+- Ruff clean, full test suite green (86 tests), i18n coverage checked
+  programmatically — every `t("…")` key in the touched templates has
+  a German catalog entry.
+
 ## [1.53.2] — 2026-09-03
 
 ### Fixed

@@ -416,14 +416,26 @@ html.view-mobile .trip-list { display: block; }
 }
 .veh-details > summary::-webkit-details-marker { display: none; }
 .veh-more {
-  color: var(--ujh-ink-3); letter-spacing: 0.12em;
-  transition: color var(--ujh-t-base);
+  color: var(--ujh-ink-3); letter-spacing: 0.08em;
+  border: 1px solid var(--ujh-line); padding: 3px 10px;
+  transition: color var(--ujh-t-base), border-color var(--ujh-t-base);
 }
-.veh-details > summary:hover .veh-more { color: var(--ujh-orange); }
+.veh-details > summary:hover .veh-more { color: var(--ujh-orange); border-color: var(--ujh-orange); }
 .veh-details[open] > summary .veh-more { color: var(--ujh-ink-4); }
 
 .meta-row { display: flex; gap: var(--ujh-s-3); align-items: baseline; color: var(--ujh-ink-3); }
 .meta-row .mono-xs { color: var(--ujh-ink-4); }
+
+/* Inline text links (not buttons/badges/accordion toggles) inherit body color
+   by default (design system: `a { color: inherit }`), which reads as plain
+   text — no underline, no hue shift. `.text-link` gives them a visible,
+   theme-safe affordance without introducing a new colour. */
+.text-link {
+  color: var(--ujh-ink-2); text-decoration: underline;
+  text-decoration-color: var(--ujh-line); text-underline-offset: 3px;
+  transition: color var(--ujh-t-base), text-decoration-color var(--ujh-t-base);
+}
+.text-link:hover { color: var(--ujh-orange); text-decoration-color: var(--ujh-orange); }
 
 /* ---------- Lab accordion (consolidated Raw/Lab/Test frames) ---------- */
 /* A .card whose <summary> is the clickable header; body holds the payload.
@@ -432,16 +444,22 @@ html.view-mobile .trip-list { display: block; }
 .lab-acc + .lab-acc { margin-top: var(--ujh-s-4); }
 .lab-acc > summary {
   cursor: pointer; list-style: none; display: flex;
-  align-items: baseline; gap: var(--ujh-s-3);
+  align-items: center; gap: var(--ujh-s-3);
   padding: var(--ujh-s-4) var(--ujh-s-5);
 }
 .lab-acc > summary::-webkit-details-marker { display: none; }
 .lab-acc-title { font: 500 15px/1.2 var(--ujh-sans); letter-spacing: -0.01em; color: var(--ujh-ink); }
 .lab-acc-meta { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lab-acc-mark { font: 400 18px/1 var(--ujh-mono); color: var(--ujh-ink-3); transition: color var(--ujh-t-base); }
+.lab-acc-mark {
+  font: 500 14px/1 var(--ujh-mono); color: var(--ujh-ink-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; flex: 0 0 auto;
+  border: 1px solid var(--ujh-line);
+  transition: color var(--ujh-t-base), border-color var(--ujh-t-base);
+}
 .lab-acc-mark::before { content: "+"; }
 .lab-acc[open] > summary .lab-acc-mark::before { content: "\2212"; }
-.lab-acc > summary:hover .lab-acc-mark { color: var(--ujh-orange); }
+.lab-acc > summary:hover .lab-acc-mark { color: var(--ujh-orange); border-color: var(--ujh-orange); }
 .lab-acc[open] > summary { border-bottom: 1px solid var(--ujh-line); }
 .lab-acc-body { padding: var(--ujh-s-5); }
 html.view-mobile .lab-acc > summary { padding: var(--ujh-s-3) var(--ujh-s-4); }

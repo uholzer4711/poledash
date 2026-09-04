@@ -1210,10 +1210,10 @@ TRANSLATIONS_DE: dict[str, str] = {
     "assumed": "angenommen",
     "measured": "gemessen",
     "Could not load forecast.": "Prognose konnte nicht geladen werden.",
+    # --- Battery & Charging page redesign: collapsible sections (v1.54) ---
+    "Timeseries chart": "Verlaufsdiagramm",
     # --- Monthly charging cost chart (history.html) ---
-    "03 / CHARGING COST": "03 / LADEKOSTEN",
-    "04 / SESSIONS": "04 / LADEVORGÄNGE",
-    "Monthly spend": "Monatliche <em class=\"accent\">Ausgaben</em>",
+    "Charging cost": "Ladekosten",
     "3 months": "3 Monate",
     "6 months": "6 Monate",
     "12 months": "12 Monate",
