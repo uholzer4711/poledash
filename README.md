@@ -1,10 +1,11 @@
 # poledash
 
-**Current version: v1.54.0** — 2026-09-04
+**Current version: v1.55.0** — 2026-11-16
 
 | Version | Date | What changed |
 |---|---|---|
-| **v1.54.0** | 2026-09-04 | Battery & Charging page redesigned as collapsible accordions (was one long flat scroll); new monthly charging-cost chart (paid vs. free kWh, price-level breakdown); battery life forecast moved from Dashboard to Battery & Charging; clearer +/− toggle affordance and visible inline text links |
+| **v1.55.0** | 2026-11-16 | New dashboard climate mini-chart: cabin vs. outside vs. target temperature, shown only while climate is actively running (new `/api/c3/climate-history` endpoint walks the current `climate_active` streak) |
+| v1.54.0 | 2026-09-04 | Battery & Charging page redesigned as collapsible accordions (was one long flat scroll); new monthly charging-cost chart (paid vs. free kWh, price-level breakdown); battery life forecast moved from Dashboard to Battery & Charging; clearer +/− toggle affordance and visible inline text links |
 | v1.53.2 | 2026-09-03 | Fix: `${{ }}` Jinja/JS footgun in the forecast checkpoint table broke its mobile `data-label` |
 | v1.53.1 | 2026-09-03 | Fix: annual-km bug in the battery forecast + presentation cleanup |
 | v1.53.0 | 2026-09-03 | Battery life forecast (0–250,000 km capacity-retention model under SoH) |

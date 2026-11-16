@@ -129,6 +129,13 @@
     <div class="stat num" id="c3_wx">—</div><div class="stat-sub" id="c3_wx_sub">—</div></div>
 </div>
 
+<div class="card mb-6" id="c3_clim_chart_card" style="display:none">
+  <div class="card-label">{{ t("Climate — cabin vs. outside temperature") }}</div>
+  <div style="position:relative;height:160px;margin-top:8px">
+    <canvas id="c3_clim_chart"></canvas>
+  </div>
+</div>
+
 <details class="veh-acc mb-6">
   <summary><span class="veh-acc-mark">→</span> <span class="veh-acc-title">{{ t("Health & warnings") }}</span></summary>
   <div class="card">
@@ -143,7 +150,8 @@
 <script src="/static/map.js"></script>
 <script>
   (function () {
-    var c3Map = null, c3Pin = null, c3Parked = null, c3Trail = null;
+    var c3Map = null, c3Pin = null, c3Parked = null, c3Trail = null, c3ClimChart = null;
+    function cssVar(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
     var OPEN_STATES = ['open', 'ajar'];
     // Labels kept as consts so a Jinja expression never sits right after a
     // dollar-brace in a template literal (parser collision — see the project conventions).
@@ -185,6 +193,9 @@
       seatRL: {{ t("seat RL") | tojson }},
       seatRR: {{ t("seat RR") | tojson }},
       steeringWheel: {{ t("steering wheel") | tojson }},
+      cabinTemp: {{ t("Cabin") | tojson }},
+      outsideTemp: {{ t("Outside") | tojson }},
+      targetTemp: {{ t("Target") | tojson }},
       parts: {
         door_fl: {{ t("Door FL") | tojson }}, door_fr: {{ t("Door FR") | tojson }},
         door_rl: {{ t("Door RL") | tojson }}, door_rr: {{ t("Door RR") | tojson }},
@@ -339,6 +350,82 @@
       el.innerHTML =
         '<span class="mono-xs">' + LBL.climateName + '</span> ' + climText +
         ' <span class="mono-xs climate-line-sep">' + LBL.airName + '</span> ' + airText;
+    }
+
+    // Cabin-vs-outside temperature chart, shown only while climate is active —
+    // climate_current_temp_c only exists on the car's digital twin during an
+    // active run, so /api/c3/climate-history returns [] the moment it's off
+    // and the card hides itself again. Guarded on window.Chart because this
+    // inline script can run before the deferred chart.umd.min.js (base.html)
+    // has loaded; the next 60s load() cycle picks it up instead of retrying.
+    async function updateClimateChart(j) {
+      var card = document.getElementById('c3_clim_chart_card');
+      if (!card) return;
+      if (!j.climate_active || !window.Chart) {
+        card.style.display = 'none';
+        return;
+      }
+      var hist;
+      try {
+        var r = await fetch('/api/c3/climate-history' + (j.vin ? ('?vin=' + encodeURIComponent(j.vin)) : ''));
+        hist = await r.json();
+      } catch (e) { return; }
+      if (!hist || !hist.length) { card.style.display = 'none'; return; }
+      card.style.display = '';
+
+      var orange = cssVar('--ujh-orange') || '#ff5b14';
+      var ink2 = cssVar('--ujh-ink-2') || '#b8babf';
+      var ink3 = cssVar('--ujh-ink-3') || '#8a8d93';
+      var line = cssVar('--ujh-line') || '#2a2c30';
+      var line2 = cssVar('--ujh-line-2') || '#36393e';
+      var bg = cssVar('--ujh-bg-3') || '#1d1e21';
+      var ink = cssVar('--ujh-ink') || '#e8e8ea';
+
+      var labels = hist.map(function (p) { return p.t; });
+      var cabin = hist.map(function (p) { return p.cabin; });
+      var target = hist.map(function (p) { return p.target; });
+      var outside = hist.map(function (p) { return p.outside; });
+
+      if (c3ClimChart) {
+        c3ClimChart.data.labels = labels;
+        c3ClimChart.data.datasets[0].data = cabin;
+        c3ClimChart.data.datasets[1].data = outside;
+        c3ClimChart.data.datasets[2].data = target;
+        c3ClimChart.update('none');
+        return;
+      }
+      c3ClimChart = new Chart(document.getElementById('c3_clim_chart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: LBL.cabinTemp, data: cabin, borderColor: orange, backgroundColor: orange + '22',
+              borderWidth: 2, pointRadius: 0, tension: 0.25, fill: true, spanGaps: true },
+            { label: LBL.outsideTemp, data: outside, borderColor: ink2,
+              borderWidth: 1.5, pointRadius: 0, tension: 0.25, spanGaps: true },
+            { label: LBL.targetTemp, data: target, borderColor: ink3, borderDash: [4, 3],
+              borderWidth: 1, pointRadius: 0, tension: 0, spanGaps: true },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { labels: { color: ink2, font: { family: 'JetBrains Mono', size: 10 } } },
+            tooltip: { backgroundColor: bg, titleColor: ink, bodyColor: ink,
+              borderColor: line2, borderWidth: 1,
+              titleFont: { family: 'JetBrains Mono', size: 10 }, bodyFont: { family: 'Inter Tight' } },
+          },
+          scales: {
+            x: { type: 'time', time: { tooltipFormat: 'HH:mm', displayFormats: { minute: 'HH:mm', hour: 'HH:mm' } },
+              grid: { color: line, drawBorder: false },
+              ticks: { color: ink3, font: { family: 'JetBrains Mono', size: 10 } } },
+            y: { title: { display: true, text: '°C', color: ink3, font: { family: 'JetBrains Mono', size: 10 } },
+              grid: { color: line },
+              ticks: { color: ink2, font: { family: 'JetBrains Mono', size: 10 } } },
+          },
+        },
+      });
     }
 
     // Status chips placed around the car photo (frunk top, four corners,
@@ -532,6 +619,7 @@
       document.getElementById('c3_clim_sub').textContent =
         esc(j.climate_action) + ' · ' + esc(j.climate_running) +
         (j.climate_time_remaining ? ' · ' + j.climate_time_remaining + ' min' : '');
+      updateClimateChart(j);
 
       // Air
       document.getElementById('c3_air').innerHTML =
@@ -614,7 +702,12 @@
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
     else init();
     // Repaint map colors when the theme toggles (markers cache CSS vars).
-    window.addEventListener('themechange', function () { setTimeout(load, 50); });
+    window.addEventListener('themechange', function () {
+      // Chart colors are baked in at creation, not re-read per frame like the
+      // map's — drop it so the next load() cycle rebuilds with the new palette.
+      if (c3ClimChart) { c3ClimChart.destroy(); c3ClimChart = null; }
+      setTimeout(load, 50);
+    });
     // Repaint the diagram shortly after a control command actuates the car.
     window.addEventListener('c3-refresh', function () { setTimeout(load, 2000); });
   })();

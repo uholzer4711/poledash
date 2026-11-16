@@ -1566,6 +1566,38 @@ async def c3_latest(vin: str | None = None, live: bool = False) -> dict:
     return {**fresh, "connected": True} if fresh is not None else dict(meta)
 
 
+@router.get("/c3/climate-history")
+def c3_climate_history(vin: str | None = None, lookback: int = Query(200, ge=1, le=2000)) -> list[dict]:
+    """Cabin/outside/target temperature for the dashboard's climate mini-chart.
+
+    `climate_current_temp_c` only exists on the car's own digital twin while
+    climate is actively running, so this walks the current contiguous
+    `climate_active=True` streak at the tail of recent polls — not a fixed
+    time window — and returns [] the moment climate is off (the dashboard
+    hides the chart on an empty list). `lookback` bounds how many recent rows
+    to scan so a long-idle car doesn't walk its entire history for nothing."""
+    with Session(get_engine()) as s:
+        stmt = select(C3Snapshot).order_by(C3Snapshot.fetched_at.desc()).limit(lookback)
+        if vin:
+            stmt = stmt.where(C3Snapshot.vin == vin)
+        rows = s.exec(stmt).all()
+    run: list[C3Snapshot] = []
+    for row in rows:
+        if not row.climate_active:
+            break
+        run.append(row)
+    run.reverse()
+    return [
+        {
+            "t": row.fetched_at.isoformat(),
+            "cabin": row.climate_current_temp_c,
+            "target": row.climate_target_temp_c,
+            "outside": row.weather_temp_c,
+        }
+        for row in run
+    ]
+
+
 @router.get("/weather/current")
 async def weather_current(vin: str | None = None) -> dict:
     """Current weather at the car's latest known GPS (Open-Meteo, key-less).
