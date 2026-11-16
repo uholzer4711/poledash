@@ -16,6 +16,12 @@ dependencies = [
     "sqlmodel>=0.0.22",
     "apscheduler>=3.10",
     "pypolestar>=1.12,<2.0",
+    # pypolestar==1.12.7 imports `backoff` in graphql.py but doesn't declare it
+    # (upstream issue pypolestar/pypolestar#81 — gql>=4.4.0 switched from
+    # backoff to tenacity, so it's no longer pulled in transitively; the fix
+    # landed on upstream main but was never tagged as a release). Pin it here
+    # directly until a pypolestar release past 1.12.7 ships the fix.
+    "backoff>=2.2",
     "python-multipart>=0.0.12",
     "prometheus-client>=0.21",
     "aiomqtt>=2.3",
