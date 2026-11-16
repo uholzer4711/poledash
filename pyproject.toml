@@ -13,7 +13,14 @@ dependencies = [
     "jinja2>=3.1",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
-    "sqlmodel>=0.0.22",
+    # sqlmodel==0.0.45 (2026-09-21) made datetime columns require
+    # timezone-aware values by default (new UTCDateTime type) — this app
+    # stores naive UTC datetimes throughout, so an unpinned build picks up
+    # the breaking change and every naive-datetime write/compare raises
+    # ValueError/TypeError (tripbook, routes, SoH, dashboard C3 card all
+    # 500). Pin below it until the storage layer is migrated to aware
+    # datetimes (or NaiveDatetime annotations) deliberately.
+    "sqlmodel>=0.0.22,<0.0.45",
     "apscheduler>=3.10",
     "pypolestar>=1.12,<2.0",
     # pypolestar==1.12.7 imports `backoff` in graphql.py but doesn't declare it
